@@ -34,7 +34,7 @@ export function Header() {
     >
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-20">
-          {/* Logo */}
+          {/* Логотип */}
           <Link href="/" className="flex items-center space-x-3 group">
             <Logo className="w-12 h-12 transition-transform group-hover:scale-105" />
             <span className="hidden md:block text-lg font-semibold text-gray-900 transition-colors group-hover:text-emerald-600">
@@ -42,7 +42,7 @@ export function Header() {
             </span>
           </Link>
 
-          {/* Desktop Navigation */}
+          {/* Навигация для десктопа */}
           <nav className="hidden md:flex items-center space-x-8">
             {navLinks.map((link) => (
               <Link
@@ -54,7 +54,7 @@ export function Header() {
               </Link>
             ))}
 
-            {/* Search Icon */}
+            {/* Иконка поиска */}
             <button
               className="p-2 text-gray-700 hover:text-emerald-600 transition-colors"
               aria-label="Поиск"
@@ -74,13 +74,13 @@ export function Header() {
               </svg>
             </button>
 
-            {/* CTA Button */}
+            {/* Кнопка призыва к действию */}
             <Button href="/booking" variant="primary">
               Забронировать тур
             </Button>
           </nav>
 
-          {/* Mobile Menu Button */}
+          {/* Кнопка мобильного меню */}
           <button
             className="md:hidden p-2 text-gray-700 hover:text-emerald-600 transition-colors"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -111,7 +111,7 @@ export function Header() {
           </button>
         </div>
 
-        {/* Mobile Menu */}
+        {/* Мобильное меню */}
         {isMobileMenuOpen && (
           <div className="md:hidden py-4 border-t border-gray-200 animate-fadeIn">
             <nav className="flex flex-col space-y-4">

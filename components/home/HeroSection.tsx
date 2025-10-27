@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/Button';
 export function HeroSection() {
   return (
     <section className="relative h-screen min-h-[600px] flex items-center justify-center overflow-hidden">
-      {/* Background Image */}
+      {/* Фоновое изображение */}
       <div className="absolute inset-0 z-0">
         <Image
           src="/hero-tatarstan.jpg"
@@ -15,7 +15,7 @@ export function HeroSection() {
           placeholder="blur"
           blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAAAAX/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwA/ABEAAA//2Q=="
         />
-        {/* Overlay */}
+        {/* Затемнение */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 via-black/30 to-black/50" />
       </div>
 
@@ -30,29 +30,29 @@ export function HeroSection() {
         </svg>
       </div>
 
-      {/* Content */}
+      {/* Контент */}
       <div className="relative z-10 container mx-auto px-4 text-center">
         <div className="max-w-4xl mx-auto space-y-8 animate-fadeInUp">
-          {/* Subtitle */}
+          {/* Подзаголовок */}
           <div className="inline-block">
             <span className="px-4 py-2 bg-emerald-600/90 text-white text-sm font-medium rounded-full backdrop-blur-sm">
               Откройте для себя Татарстан
             </span>
           </div>
 
-          {/* Main Heading */}
+          {/* Главный заголовок */}
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white leading-tight">
             Путешествие по{' '}
             <span className="text-emerald-400">Татарстану</span>
           </h1>
 
-          {/* Description */}
+          {/* Описание */}
           <p className="text-lg md:text-xl text-gray-200 max-w-2xl mx-auto">
             Исследуйте богатую историю, уникальную культуру и захватывающие пейзажи 
             республики с нашими экспертными гидами
           </p>
 
-          {/* Features */}
+          {/* Особенности */}
           <div className="flex flex-wrap justify-center gap-6 pt-4">
             <div className="flex items-center space-x-2 text-white bg-white/10 backdrop-blur-md px-4 py-3 rounded-lg">
               <svg className="w-6 h-6 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -77,7 +77,7 @@ export function HeroSection() {
             </div>
           </div>
 
-          {/* CTA Buttons */}
+          {/* Кнопки призыва к действию */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
             <Button href="/tours" variant="primary" size="lg" className="shadow-xl hover:shadow-2xl">
               Посмотреть туры
@@ -87,7 +87,7 @@ export function HeroSection() {
             </Button>
           </div>
 
-          {/* Scroll Indicator */}
+          {/* Индикатор прокрутки */}
           <div className="pt-12 animate-bounce">
             <svg className="w-6 h-6 mx-auto text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />

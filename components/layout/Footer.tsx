@@ -8,7 +8,7 @@ export function Footer() {
     <footer className="bg-gray-900 text-gray-300">
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-          {/* Company Info */}
+          {/* Информация о компании */}
           <div>
             <div className="flex items-center space-x-3 mb-4">
               <Logo className="w-10 h-10" />
@@ -19,7 +19,7 @@ export function Footer() {
             <p className="text-sm text-gray-400 leading-relaxed">
               Откройте для себя красоту и культуру Татарстана с нашими уникальными турами
             </p>
-            {/* Social Media */}
+            {/* Социальные сети */}
             <div className="flex space-x-4 mt-6">
               <a
                 href="#"
@@ -51,7 +51,7 @@ export function Footer() {
             </div>
           </div>
 
-          {/* Quick Links */}
+          {/* Быстрые ссылки */}
           <div>
             <h3 className="text-white font-semibold mb-4">Быстрые ссылки</h3>
             <ul className="space-y-2">
@@ -78,7 +78,7 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Popular Tours */}
+          {/* Популярные туры */}
           <div>
             <h3 className="text-white font-semibold mb-4">Популярные туры</h3>
             <ul className="space-y-2">
@@ -105,7 +105,7 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* Contact Info */}
+          {/* Контактная информация */}
           <div>
             <h3 className="text-white font-semibold mb-4">Контакты</h3>
             <ul className="space-y-3 text-sm">
@@ -136,7 +136,7 @@ export function Footer() {
           </div>
         </div>
 
-        {/* Bottom Bar */}
+        {/* Нижняя панель */}
         <div className="border-t border-gray-800 mt-8 pt-8 flex flex-col md:flex-row justify-between items-center">
           <p className="text-sm text-gray-400">
             © {currentYear} Туры по Татарстану. Все права защищены.
