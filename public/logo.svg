@@ -1,0 +1,30 @@
+<svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- PLACEHOLDER LOGO - Замени на свой! -->
+  <!-- Круглый фон -->
+  <circle cx="24" cy="24" r="23" stroke="#1a4d2e" stroke-width="2" fill="white"/>
+  
+  <!-- Мечеть (упрощенная) -->
+  <path d="M12 30 L12 22 L16 22 L16 30 Z" fill="#1a4d2e"/>
+  <circle cx="14" cy="20" r="3" fill="#1a4d2e"/>
+  <path d="M14 17 L14 15 L15 14" stroke="#d4af37" stroke-width="1" fill="none"/>
+  
+  <!-- Минарет -->
+  <rect x="19" y="18" width="2" height="12" fill="#1a4d2e"/>
+  <path d="M20 16 L20 14 L21 13" stroke="#d4af37" stroke-width="1" fill="none"/>
+  
+  <!-- Горы -->
+  <path d="M28 30 L32 20 L36 30 Z" fill="#1a4d2e"/>
+  <path d="M32 30 L35 23 L38 30 Z" fill="#1a4d2e"/>
+  
+  <!-- Полумесяц -->
+  <path d="M36 14 Q 38 12 40 14 Q 38 11 36 14 Z" fill="#d4af37"/>
+  
+  <!-- Звезды -->
+  <circle cx="35" cy="10" r="0.8" fill="#d4af37"/>
+  <circle cx="39" cy="11" r="0.8" fill="#d4af37"/>
+  <circle cx="37" cy="17" r="0.8" fill="#d4af37"/>
+  
+  <!-- Золотая дуга сверху -->
+  <path d="M10 10 Q 24 5 38 10" stroke="#d4af37" stroke-width="1.5" fill="none"/>
+</svg>
+
