@@ -12,6 +12,12 @@ interface ProfileContentProps {
 export default function ProfileContent({ profile, user }: ProfileContentProps) {
   const [isEditing, setIsEditing] = useState(false);
 
+  // Получаем данные из profile или user_metadata (fallback)
+  const firstName = profile?.first_name || user.user_metadata?.first_name || 'Имя';
+  const lastName = profile?.last_name || user.user_metadata?.last_name || 'Фамилия';
+  const middleName = profile?.middle_name || user.user_metadata?.middle_name || '';
+  const avatarUrl = profile?.avatar_url || user.user_metadata?.avatar_url;
+
   const getRoleName = (role: string) => {
     const roles: Record<string, string> = {
       user: 'Пользователь',
@@ -49,16 +55,16 @@ export default function ProfileContent({ profile, user }: ProfileContentProps) {
         <div className="grid md:grid-cols-2 gap-6">
           {/* Аватар */}
           <div className="md:col-span-2 flex items-center gap-6">
-            {profile?.avatar_url ? (
+            {avatarUrl ? (
               <img
-                src={profile.avatar_url}
+                src={avatarUrl}
                 alt="Avatar"
                 className="w-24 h-24 rounded-full object-cover border-4 border-emerald-100 shadow-lg"
               />
             ) : (
-              <div className="relative group">
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-400 via-emerald-500 to-emerald-600 flex items-center justify-center text-white text-4xl font-bold shadow-lg ring-4 ring-emerald-100">
-                  {profile?.first_name?.[0] || 'U'}{profile?.last_name?.[0] || ''}
+              <div className="relative group cursor-pointer">
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg ring-4 ring-emerald-100">
+                  {firstName[0]}{lastName[0]}
                 </div>
                 <div className="absolute inset-0 rounded-full bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center">
                   <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium">
@@ -69,7 +75,7 @@ export default function ProfileContent({ profile, user }: ProfileContentProps) {
             )}
             <div>
               <h3 className="text-2xl font-bold text-gray-900 mb-1">
-                {profile?.first_name || 'Не указано'} {profile?.middle_name || ''} {profile?.last_name || ''}
+                {firstName} {middleName} {lastName}
               </h3>
               <p className="text-gray-600 flex items-center gap-2">
                 <Mail className="w-4 h-4" />
@@ -86,7 +92,7 @@ export default function ProfileContent({ profile, user }: ProfileContentProps) {
             </label>
             <input
               type="text"
-              value={profile?.first_name || ''}
+              value={firstName}
               disabled={!isEditing}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg disabled:bg-gray-50 disabled:text-gray-600"
             />
@@ -100,7 +106,7 @@ export default function ProfileContent({ profile, user }: ProfileContentProps) {
             </label>
             <input
               type="text"
-              value={profile?.last_name || ''}
+              value={lastName}
               disabled={!isEditing}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg disabled:bg-gray-50 disabled:text-gray-600"
             />
@@ -114,7 +120,7 @@ export default function ProfileContent({ profile, user }: ProfileContentProps) {
             </label>
             <input
               type="text"
-              value={profile?.middle_name || ''}
+              value={middleName}
               disabled={!isEditing}
               placeholder="Не указано"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg disabled:bg-gray-50 disabled:text-gray-600"
