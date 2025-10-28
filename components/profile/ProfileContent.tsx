@@ -53,18 +53,28 @@ export default function ProfileContent({ profile, user }: ProfileContentProps) {
               <img
                 src={profile.avatar_url}
                 alt="Avatar"
-                className="w-24 h-24 rounded-full object-cover"
+                className="w-24 h-24 rounded-full object-cover border-4 border-emerald-100 shadow-lg"
               />
             ) : (
-              <div className="w-24 h-24 rounded-full bg-emerald-600 flex items-center justify-center text-white text-3xl font-bold">
-                {profile?.first_name?.[0]}{profile?.last_name?.[0]}
+              <div className="relative group">
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-400 via-emerald-500 to-emerald-600 flex items-center justify-center text-white text-4xl font-bold shadow-lg ring-4 ring-emerald-100">
+                  {profile?.first_name?.[0] || 'U'}{profile?.last_name?.[0] || ''}
+                </div>
+                <div className="absolute inset-0 rounded-full bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center">
+                  <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium">
+                    Загрузить фото
+                  </span>
+                </div>
               </div>
             )}
             <div>
-              <h3 className="text-xl font-semibold text-gray-900">
-                {profile?.first_name} {profile?.middle_name} {profile?.last_name}
+              <h3 className="text-2xl font-bold text-gray-900 mb-1">
+                {profile?.first_name || 'Не указано'} {profile?.middle_name || ''} {profile?.last_name || ''}
               </h3>
-              <p className="text-gray-600">{user.email}</p>
+              <p className="text-gray-600 flex items-center gap-2">
+                <Mail className="w-4 h-4" />
+                {user.email}
+              </p>
             </div>
           </div>
 
@@ -196,6 +206,40 @@ export default function ProfileContent({ profile, user }: ProfileContentProps) {
         <div className="bg-white shadow rounded-lg p-6">
           <div className="text-3xl font-bold text-emerald-600 mb-2">0 ₽</div>
           <div className="text-gray-600">Потрачено на туры</div>
+        </div>
+      </div>
+
+      {/* Мои бронирования */}
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-2xl font-semibold text-gray-900 mb-6">
+          Мои бронирования
+        </h2>
+        <div className="text-center py-12">
+          <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <p className="text-lg text-gray-600 mb-2">У вас пока нет бронирований</p>
+          <p className="text-gray-500 mb-6">
+            Выберите тур и забронируйте свое первое путешествие
+          </p>
+          <a
+            href="/tours"
+            className="inline-block bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-lg font-medium transition-colors"
+          >
+            Посмотреть туры
+          </a>
+        </div>
+      </div>
+
+      {/* Мои отзывы */}
+      <div className="bg-white shadow rounded-lg p-6">
+        <h2 className="text-2xl font-semibold text-gray-900 mb-6">
+          Мои отзывы
+        </h2>
+        <div className="text-center py-12">
+          <Shield className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+          <p className="text-lg text-gray-600 mb-2">У вас пока нет отзывов</p>
+          <p className="text-gray-500">
+            Отзывы появятся после завершения туров
+          </p>
         </div>
       </div>
     </div>

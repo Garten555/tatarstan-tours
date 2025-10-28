@@ -78,11 +78,11 @@ export default function UserMenu() {
           <img
             src={profile.avatar_url}
             alt="Avatar"
-            className="w-10 h-10 rounded-full object-cover"
+            className="w-10 h-10 rounded-full object-cover border-2 border-emerald-200"
           />
         ) : (
-          <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white font-semibold">
-            {profile?.first_name?.[0]}{profile?.last_name?.[0]}
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white font-bold shadow-md">
+            {profile?.first_name?.[0] || 'U'}{profile?.last_name?.[0] || ''}
           </div>
         )}
         <span className="hidden md:block font-medium text-gray-900">

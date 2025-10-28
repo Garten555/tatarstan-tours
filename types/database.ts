@@ -17,30 +17,39 @@ export interface Database {
         Row: {
           id: string
           email: string
-          full_name: string | null
+          first_name: string
+          last_name: string
+          middle_name: string | null
           phone: string | null
           role: 'user' | 'tour_admin' | 'support_admin' | 'super_admin'
           avatar_url: string | null
+          avatar_path: string | null
           created_at: string
           updated_at: string
         }
         Insert: {
           id: string
           email: string
-          full_name?: string | null
+          first_name: string
+          last_name: string
+          middle_name?: string | null
           phone?: string | null
           role?: 'user' | 'tour_admin' | 'support_admin' | 'super_admin'
           avatar_url?: string | null
+          avatar_path?: string | null
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
           email?: string
-          full_name?: string | null
+          first_name?: string
+          last_name?: string
+          middle_name?: string | null
           phone?: string | null
           role?: 'user' | 'tour_admin' | 'support_admin' | 'super_admin'
           avatar_url?: string | null
+          avatar_path?: string | null
           created_at?: string
           updated_at?: string
         }
