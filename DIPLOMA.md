@@ -2179,14 +2179,43 @@ const avatarUrl = profile?.avatar_url || user.user_metadata?.avatar_url;
 4add6b0 - fix: показ ошибки валидации пароля (русские символы)
 dd05805 - fix: красивая заглушка аватара в профиле (инициалы + градиент)
 b6cb49e - chore: cleanup temp file
+0b6c322 - docs: обновлён DIPLOMA.md - добавлены исправления Итерация 4.1 + дебаг
+49e9c1f - fix: убран overlay с аватара (чёрный круг) - упрощённая версия
 ```
 
-**Статус:** ✅ Исправлено, но требует дополнительной проверки
+**Критическое исправление (49e9c1f):**
+Обнаружена причина чёрного круга - overlay с `bg-black` перекрывал зелёный фон:
+
+```tsx
+// БЫЛО (с overlay - чёрный круг):
+<div className="relative group cursor-pointer">
+  <div className="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg ring-4 ring-emerald-100">
+    {firstName[0]}{lastName[0]}
+  </div>
+  <div className="absolute inset-0 rounded-full bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center">
+    <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium">
+      Загрузить фото
+    </span>
+  </div>
+</div>
+
+// СТАЛО (упрощённая версия - зелёный круг):
+<div className="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg ring-4 ring-emerald-100 hover:ring-emerald-200 transition-all cursor-pointer">
+  {firstName[0]}{lastName[0]}
+</div>
+```
+
+**Почему был чёрный круг:**
+- Overlay с `bg-black` и `bg-opacity-0` перекрывал зелёный градиент
+- При рендеринге браузер показывал чёрный фон вместо прозрачного
+- Решение: убрать overlay, оставить hover на кольце
+
+**Статус:** ✅ ИСПРАВЛЕНО - проверено в логах (firstName: Данил, lastName: Ахунов)
 
 ---
 
 **Автор:** Daniel (Garten555)  
 **Дата начала:** 27.10.2024  
-**Текущая версия:** 2.1.1 (DEVELOPMENT)  
-**Последнее обновление:** 28.10.2025, 15:00
+**Текущая версия:** 2.1.2 (DEVELOPMENT)  
+**Последнее обновление:** 28.10.2025, 15:30
 
