@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Eye, EyeOff, Loader2, LogIn } from 'lucide-react';
+import { validateEmail } from '@/lib/validation/auth';
 
 export default function LoginForm() {
   const router = useRouter();
@@ -12,6 +13,7 @@ export default function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     email: '',
@@ -19,11 +21,23 @@ export default function LoginForm() {
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    
     setFormData((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: value,
     }));
     setError(null);
+
+    // Валидация email в реальном времени
+    if (name === 'email') {
+      if (value) {
+        const emailValidation = validateEmail(value);
+        setEmailError(emailValidation.valid ? null : emailValidation.error);
+      } else {
+        setEmailError(null);
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -84,9 +98,19 @@ export default function LoginForm() {
           required
           value={formData.email}
           onChange={handleChange}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
-          placeholder="ivan@example.com"
+          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent outline-none transition-all ${
+            emailError
+              ? 'border-red-300 focus:ring-red-500'
+              : 'border-gray-300 focus:ring-emerald-500'
+          }`}
+          placeholder="ivan@yandex.ru"
         />
+        {emailError && (
+          <p className="mt-1 text-xs text-red-600">{emailError}</p>
+        )}
+        {!emailError && formData.email && (
+          <p className="mt-1 text-xs text-green-600">✓ Email корректен</p>
+        )}
       </div>
 
       {/* Пароль */}

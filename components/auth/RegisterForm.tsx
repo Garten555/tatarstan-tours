@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { Eye, EyeOff, Loader2, UserPlus } from 'lucide-react';
+import { validateEmail, validatePassword } from '@/lib/validation/auth';
+import PasswordStrengthIndicator from './PasswordStrengthIndicator';
 
 export default function RegisterForm() {
   const router = useRouter();
@@ -12,6 +14,12 @@ export default function RegisterForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordValidation, setPasswordValidation] = useState({
+    strength: 'weak' as 'weak' | 'medium' | 'strong',
+    percentage: 0,
+    valid: false,
+  });
   
   const [formData, setFormData] = useState({
     email: '',
@@ -23,29 +31,62 @@ export default function RegisterForm() {
   });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    
     setFormData((prev) => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: value,
     }));
     setError(null);
+
+    // Валидация email в реальном времени
+    if (name === 'email') {
+      if (value) {
+        const emailValidation = validateEmail(value);
+        setEmailError(emailValidation.valid ? null : emailValidation.error);
+      } else {
+        setEmailError(null);
+      }
+    }
   };
+
+  // Валидация пароля в реальном времени
+  useEffect(() => {
+    if (formData.password) {
+      const validation = validatePassword(formData.password);
+      setPasswordValidation({
+        strength: validation.strength,
+        percentage: validation.strengthPercentage,
+        valid: validation.valid,
+      });
+    } else {
+      setPasswordValidation({
+        strength: 'weak',
+        percentage: 0,
+        valid: false,
+      });
+    }
+  }, [formData.password]);
 
   const validateForm = (): string | null => {
     if (!formData.email || !formData.password || !formData.firstName || !formData.lastName) {
       return 'Заполните все обязательные поля';
     }
 
-    if (formData.password.length < 6) {
-      return 'Пароль должен быть не менее 6 символов';
+    // Валидация email
+    const emailValidation = validateEmail(formData.email);
+    if (!emailValidation.valid) {
+      return emailValidation.error || 'Некорректный email';
+    }
+
+    // Валидация пароля
+    const passwordValidation = validatePassword(formData.password);
+    if (!passwordValidation.valid) {
+      return passwordValidation.error || 'Некорректный пароль';
     }
 
     if (formData.password !== formData.confirmPassword) {
       return 'Пароли не совпадают';
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      return 'Введите корректный email';
     }
 
     return null;
@@ -165,9 +206,19 @@ export default function RegisterForm() {
           required
           value={formData.email}
           onChange={handleChange}
-          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
-          placeholder="ivan@example.com"
+          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent outline-none transition-all ${
+            emailError
+              ? 'border-red-300 focus:ring-red-500'
+              : 'border-gray-300 focus:ring-emerald-500'
+          }`}
+          placeholder="ivan@yandex.ru"
         />
+        {emailError && (
+          <p className="mt-1 text-xs text-red-600">{emailError}</p>
+        )}
+        {!emailError && formData.email && (
+          <p className="mt-1 text-xs text-green-600">✓ Email корректен</p>
+        )}
       </div>
 
       {/* Пароль */}
@@ -183,7 +234,11 @@ export default function RegisterForm() {
             required
             value={formData.password}
             onChange={handleChange}
-            className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
+            className={`w-full px-4 py-3 pr-12 border rounded-lg focus:ring-2 focus:border-transparent outline-none transition-all ${
+              formData.password && !passwordValidation.valid
+                ? 'border-red-300 focus:ring-red-500'
+                : 'border-gray-300 focus:ring-emerald-500'
+            }`}
             placeholder="••••••••"
           />
           <button
@@ -198,7 +253,13 @@ export default function RegisterForm() {
             )}
           </button>
         </div>
-        <p className="mt-1 text-xs text-gray-500">Минимум 6 символов</p>
+        
+        {/* Индикатор силы пароля */}
+        <PasswordStrengthIndicator
+          strength={passwordValidation.strength}
+          percentage={passwordValidation.percentage}
+          show={!!formData.password}
+        />
       </div>
 
       {/* Подтверждение пароля */}

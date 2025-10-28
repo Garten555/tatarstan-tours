@@ -1,0 +1,25 @@
+feat(auth): объединённая страница авторизации с улучшенной валидацией
+
+Изменения:
+- Создана единая страница /auth с переключением между формами
+- Добавлена валидация email (только разрешённые провайдеры)
+- Добавлена валидация пароля (запрет русских символов)
+- Добавлен индикатор силы пароля
+- Валидация в реальном времени с визуальной обратной связью
+- Установлен framer-motion для плавных анимаций
+- Удалены старые страницы /auth/register и /auth/login
+
+Новые файлы:
+- lib/validation/auth.ts - утилиты валидации
+- components/auth/PasswordStrengthIndicator.tsx - индикатор силы
+- components/auth/AuthForm.tsx - обёртка с переключением форм
+- app/auth/page.tsx - объединённая страница auth
+
+Обновлённые файлы:
+- components/auth/RegisterForm.tsx - новая валидация
+- components/auth/LoginForm.tsx - новая валидация email
+- components/layout/UserMenu.tsx - редирект на /auth
+
+Разрешённые email провайдеры:
+- Gmail, Yandex, Mail.ru, Outlook, iCloud, Rambler и др.
+

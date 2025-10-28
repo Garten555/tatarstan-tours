@@ -72,16 +72,10 @@ export default function UserMenu() {
     return (
       <div className="flex items-center gap-3">
         <Link
-          href="/auth/login"
-          className="text-gray-700 hover:text-emerald-600 font-medium transition-colors"
-        >
-          Вход
-        </Link>
-        <Link
-          href="/auth/register"
+          href="/auth"
           className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
         >
-          Регистрация
+          Вход
         </Link>
       </div>
     );
