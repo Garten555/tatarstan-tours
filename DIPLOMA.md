@@ -1975,8 +1975,160 @@ i9j0k1l - docs: Обновлена документация DIPLOMA.md
 
 ---
 
+### Итерация 4: Улучшение UX авторизации (28.10.2025)
+
+**Реализовано:**
+- ✅ Объединённая страница авторизации `/auth` с переключением форм
+- ✅ Плавная анимация переключения между "Вход" и "Регистрация" (framer-motion)
+- ✅ Улучшенная валидация email в реальном времени
+- ✅ Ограничение на разрешённые email провайдеры
+- ✅ Валидация пароля (запрет русских символов, минимум 8 символов)
+- ✅ Интерактивный индикатор силы пароля
+- ✅ Визуальная обратная связь (цветные рамки, иконки)
+- ✅ Подсказки для создания надёжного пароля
+
+**Технические детали:**
+
+**Валидация Email:**
+```typescript
+// Разрешённые email провайдеры
+const ALLOWED_EMAIL_PROVIDERS = [
+  'gmail.com',
+  'yandex.ru',
+  'yandex.com',
+  'ya.ru',
+  'mail.ru',
+  'inbox.ru',
+  'list.ru',
+  'bk.ru',
+  'outlook.com',
+  'hotmail.com',
+  'icloud.com',
+  'rambler.ru',
+];
+
+// Валидация в реальном времени
+export function validateEmail(email: string): { valid: boolean; error?: string } {
+  if (!isAllowedEmailProvider(email)) {
+    return {
+      valid: false,
+      error: `Используйте email от: ${ALLOWED_EMAIL_PROVIDERS.slice(0, 5).join(', ')} и др.`,
+    };
+  }
+  return { valid: true };
+}
+```
+
+**Валидация Пароля:**
+```typescript
+// Проверка на русские символы
+export function hasRussianCharacters(text: string): boolean {
+  return /[а-яА-ЯёЁ]/.test(text);
+}
+
+// Расчёт силы пароля (0-100%)
+export function validatePassword(password: string): {
+  valid: boolean;
+  strength: 'weak' | 'medium' | 'strong';
+  strengthPercentage: number;
+} {
+  let score = 0;
+  
+  // Длина (макс 30 баллов)
+  score += Math.min(password.length * 2, 30);
+  
+  // Строчные буквы (20 баллов)
+  if (/[a-z]/.test(password)) score += 20;
+  
+  // Заглавные буквы (20 баллов)
+  if (/[A-Z]/.test(password)) score += 20;
+  
+  // Цифры (15 баллов)
+  if (/\d/.test(password)) score += 15;
+  
+  // Специальные символы (15 баллов)
+  if (/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) score += 15;
+  
+  // Определение уровня
+  if (score < 50) strength = 'weak';
+  else if (score < 80) strength = 'medium';
+  else strength = 'strong';
+  
+  return { valid: true, strength, strengthPercentage: score };
+}
+```
+
+**Индикатор силы пароля:**
+- Слабый (< 50%): красная полоса
+- Средний (50-80%): жёлтая полоса
+- Надёжный (> 80%): зелёная полоса
+- Динамические подсказки для улучшения
+
+**UX улучшения:**
+1. **Единая страница авторизации:**
+   - Табы для переключения между "Вход" и "Регистрация"
+   - Плавная анимация с framer-motion
+   - Визуальный индикатор активной формы
+
+2. **Валидация в реальном времени:**
+   - Email: зелёная рамка + галочка при корректном email
+   - Email: красная рамка + сообщение об ошибке при некорректном
+   - Пароль: динамический индикатор силы с процентами
+
+3. **Визуальная обратная связь:**
+   ```tsx
+   // Цветные рамки для полей
+   className={`border ${
+     emailError
+       ? 'border-red-300 focus:ring-red-500'
+       : 'border-gray-300 focus:ring-emerald-500'
+   }`}
+   
+   // Сообщения под полями
+   {emailError && <p className="text-red-600">{emailError}</p>}
+   {!emailError && email && <p className="text-green-600">✓ Email корректен</p>}
+   ```
+
+**Компоненты:**
+- `lib/validation/auth.ts` - Утилиты валидации email и пароля
+- `components/auth/PasswordStrengthIndicator.tsx` - Индикатор силы пароля
+- `components/auth/AuthForm.tsx` - Обёртка с переключением форм
+- `app/auth/page.tsx` - Объединённая страница авторизации
+
+**Обновлённые компоненты:**
+- `components/auth/RegisterForm.tsx` - Интеграция валидации и индикатора
+- `components/auth/LoginForm.tsx` - Интеграция валидации email
+- `components/layout/UserMenu.tsx` - Редирект на `/auth` вместо `/auth/login`
+
+**Удалённые файлы:**
+- `app/auth/register/page.tsx` - Заменено объединённой страницей
+- `app/auth/login/page.tsx` - Заменено объединённой страницей
+
+**Зависимости:**
+```json
+{
+  "framer-motion": "^11.x" // Для плавных анимаций переключения форм
+}
+```
+
+**Git коммиты:**
+```
+554fc41 - feat(auth): объединённая страница авторизации с улучшенной валидацией
+```
+
+**Преимущества нового подхода:**
+1. ✅ **Лучший UX** - пользователь не покидает страницу при переключении
+2. ✅ **Меньше кода** - одна страница вместо двух
+3. ✅ **Безопасность** - строгая валидация email и пароля
+4. ✅ **Обучение** - подсказки для создания надёжного пароля
+5. ✅ **Визуальная обратная связь** - пользователь сразу видит ошибки
+
+**Статус:** ✅ Реализовано и протестировано локально
+
+---
+
 **Автор:** Daniel (Garten555)  
 **Дата начала:** 27.10.2024  
-**Текущая версия:** 2.0.0 (DEVELOPMENT)  
-**Последнее обновление:** 28.10.2025, 13:00
+**Текущая версия:** 2.1.0 (DEVELOPMENT)  
+**Последнее обновление:** 28.10.2025, 14:30
 
