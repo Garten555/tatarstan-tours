@@ -20,13 +20,26 @@ export default function UserMenu() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user);
       if (user) {
-        // Загружаем профиль
+        // Сначала берём данные из user_metadata (быстро и надёжно)
+        const metaProfile = {
+          first_name: user.user_metadata?.first_name,
+          last_name: user.user_metadata?.last_name,
+          avatar_url: user.user_metadata?.avatar_url,
+        };
+        setProfile(metaProfile);
+        
+        // Затем пытаемся загрузить из БД (если есть обновления)
         supabase
           .from('profiles')
           .select('first_name, last_name, avatar_url')
           .eq('id', user.id)
           .single()
-          .then(({ data }) => setProfile(data));
+          .then(({ data, error }) => {
+            if (!error && data) {
+              setProfile(data);
+            }
+            // Если ошибка RLS - используем данные из metadata (уже установлены выше)
+          });
       }
     });
 
@@ -35,6 +48,14 @@ export default function UserMenu() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      if (session?.user) {
+        // При изменении сессии обновляем из metadata
+        setProfile({
+          first_name: session.user.user_metadata?.first_name,
+          last_name: session.user.user_metadata?.last_name,
+          avatar_url: session.user.user_metadata?.avatar_url,
+        });
+      }
     });
 
     return () => subscription.unsubscribe();
