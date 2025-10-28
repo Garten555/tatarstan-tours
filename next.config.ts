@@ -5,19 +5,16 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: '**.supabase.co',
-        pathname: '/storage/v1/object/**',
+        hostname: 's3.twcstorage.ru',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'images.unsplash.com',
+        pathname: '/**',
       },
     ],
   },
-  
-  // Экспериментальные фичи Next.js 15
-  experimental: {
-    // Включено по умолчанию в Next.js 15
-  },
-  
-  // Настройки для продакшена
-  output: 'standalone',
 };
 
 export default nextConfig;
