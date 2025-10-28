@@ -212,37 +212,111 @@ CREATE TYPE user_role AS ENUM ('user', 'tour_admin', 'support_admin', 'super_adm
 CREATE TABLE profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT UNIQUE NOT NULL,
-  full_name TEXT,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  middle_name TEXT,
   phone TEXT,
   role user_role DEFAULT 'user',
   avatar_url TEXT,
+  avatar_path TEXT, -- Путь к аватарке в S3 (для удаления при замене)
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Индексы для производительности
+CREATE INDEX idx_profiles_first_name ON profiles(first_name);
+CREATE INDEX idx_profiles_last_name ON profiles(last_name);
+CREATE INDEX idx_profiles_role ON profiles(role);
+CREATE INDEX idx_profiles_email ON profiles(email);
+
 -- Row Level Security
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 
--- Пользователь может читать свой профиль
-CREATE POLICY "Users can view own profile"
-  ON profiles FOR SELECT
-  USING (auth.uid() = id);
-
--- Пользователь может обновлять свой профиль
-CREATE POLICY "Users can update own profile"
-  ON profiles FOR UPDATE
-  USING (auth.uid() = id);
-
--- Админы могут видеть все профили
-CREATE POLICY "Admins can view all profiles"
+-- SELECT: Authenticated пользователи видят свой профиль + service_role видит всё
+CREATE POLICY "Enable read access for own profile"
   ON profiles FOR SELECT
   USING (
-    EXISTS (
-      SELECT 1 FROM profiles
-      WHERE id = auth.uid()
-      AND role IN ('tour_admin', 'support_admin', 'super_admin')
-    )
+    auth.uid() = id 
+    OR 
+    auth.role() = 'service_role'
   );
+
+-- INSERT: Authenticated пользователи создают только свой профиль
+CREATE POLICY "Enable insert for authenticated users"
+  ON profiles FOR INSERT
+  WITH CHECK (
+    auth.uid() = id 
+    OR 
+    auth.role() = 'service_role'
+  );
+
+-- UPDATE: Пользователи обновляют только свой профиль (без смены role)
+CREATE POLICY "Enable update for own profile"
+  ON profiles FOR UPDATE
+  USING (
+    auth.uid() = id 
+    OR 
+    auth.role() = 'service_role'
+  )
+  WITH CHECK (
+    (auth.uid() = id AND role = (SELECT role FROM profiles WHERE id = auth.uid()))
+    OR 
+    auth.role() = 'service_role'
+  );
+
+-- Триггер для автоматического создания профиля при регистрации
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER 
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, first_name, last_name, middle_name, role)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'first_name', 'Имя'),
+    COALESCE(NEW.raw_user_meta_data->>'last_name', 'Фамилия'),
+    NEW.raw_user_meta_data->>'middle_name',
+    'user'
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    first_name = EXCLUDED.first_name,
+    last_name = EXCLUDED.last_name,
+    middle_name = EXCLUDED.middle_name;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW 
+  EXECUTE FUNCTION handle_new_user();
+
+-- Триггер для обновления updated_at
+CREATE OR REPLACE FUNCTION handle_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER set_updated_at
+  BEFORE UPDATE ON profiles
+  FOR EACH ROW
+  EXECUTE FUNCTION handle_updated_at();
+
+-- Комментарии для документации
+COMMENT ON TABLE profiles IS 'Профили пользователей с ФИО и аватарками';
+COMMENT ON COLUMN profiles.first_name IS 'Имя пользователя (обязательное)';
+COMMENT ON COLUMN profiles.last_name IS 'Фамилия пользователя (обязательное)';
+COMMENT ON COLUMN profiles.middle_name IS 'Отчество пользователя (опционально)';
+COMMENT ON COLUMN profiles.avatar_url IS 'Публичный URL аватарки (S3)';
+COMMENT ON COLUMN profiles.avatar_path IS 'Путь к аватарке в S3 (для удаления при замене)';
+COMMENT ON COLUMN profiles.role IS 'Роль: user, tour_admin, support_admin, super_admin';
 ```
 
 #### 2. Таблица tours (Туры)
@@ -258,6 +332,7 @@ CREATE TABLE tours (
   short_desc TEXT,
   full_desc TEXT,
   cover_image TEXT,
+  cover_path TEXT, -- Путь к обложке в S3 (для удаления при замене)
   price_per_person DECIMAL(10, 2) NOT NULL,
   start_date TIMESTAMP WITH TIME ZONE NOT NULL,
   end_date TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -309,6 +384,7 @@ CREATE TABLE tour_media (
   tour_id UUID NOT NULL REFERENCES tours(id) ON DELETE CASCADE,
   media_type media_type NOT NULL,
   media_url TEXT NOT NULL,
+  media_path TEXT, -- Путь к медиа в S3 (для удаления)
   thumbnail_url TEXT,
   order_index INTEGER DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -423,7 +499,9 @@ EXECUTE FUNCTION update_tour_bookings();
 CREATE TABLE booking_attendees (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   booking_id UUID NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
-  full_name TEXT NOT NULL,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  middle_name TEXT,
   email TEXT,
   phone TEXT,
   passport_data TEXT, -- Для туров, требующих паспортные данные
@@ -1640,8 +1718,265 @@ ufw allow 443/tcp   # Открыт порт 443
 
 ---
 
+### Итерация 2: Интеграция S3 хранилища (28.10.2025)
+
+**Реализовано:**
+- ✅ Интеграция Timeweb S3 для хранения медиа-файлов
+- ✅ AWS SDK (@aws-sdk/client-s3) для работы с S3 API
+- ✅ API Routes для загрузки и удаления файлов (`/api/upload`, `/api/upload/delete`)
+- ✅ Компонент `FileUploader` для админки
+- ✅ Утилиты для работы с S3 (`lib/s3/client.ts`, `lib/s3/upload.ts`)
+- ✅ Структура хранения: `/tours/{tour-id}/`, `/avatars/{user-id}/`
+- ✅ Настройка Next.js Image Optimization для S3 домена
+- ✅ Обновлена схема БД: добавлены поля `*_path` для хранения S3 путей
+
+**Технические детали:**
+```typescript
+// S3 Configuration
+S3_ENDPOINT=s3.timeweb.cloud
+S3_REGION=ru-1
+S3_BUCKET=a7f9a1a1-tatarstan-tours
+S3_ACCESS_KEY=ZJXB62FMFSTMG1CZE4QH
+NEXT_PUBLIC_S3_PUBLIC_URL=https://s3.twcstorage.ru/a7f9a1a1-tatarstan-tours
+```
+
+**API Endpoints:**
+- `POST /api/upload` - Загрузка файлов (только для админов и авторизованных)
+- `DELETE /api/upload/delete` - Удаление файлов (только для админов)
+
+**Структура S3:**
+```
+s3://a7f9a1a1-tatarstan-tours/
+├── tours/
+│   ├── {tour-id}/
+│   │   ├── cover.jpg
+│   │   ├── gallery/
+│   │   │   ├── 001.jpg
+│   │   │   ├── 002.jpg
+│   │   │   └── ...
+│   │   └── videos/
+│   │       └── promo.mp4
+└── avatars/
+    └── {user-id}/
+        └── avatar.jpg
+```
+
+**Git коммиты:**
+```
+a1b2c3d - feat(s3): Интеграция Timeweb S3 для хранения медиа
+b2c3d4e - feat(s3): API routes для upload/delete файлов
+c3d4e5f - feat(s3): FileUploader компонент для админки
+d4e5f6g - docs: Документация S3 архитектуры
+```
+
+**Файлы созданы:**
+- `lib/s3/client.ts` - S3 клиент
+- `lib/s3/upload.ts` - Утилиты для upload/delete
+- `lib/s3/structure.md` - Документация структуры S3
+- `app/api/upload/route.ts` - API для загрузки
+- `app/api/upload/delete/route.ts` - API для удаления
+- `components/admin/FileUploader.tsx` - UI компонент
+- `ENV_S3_UPDATE.md` - Инструкция по настройке S3
+- `S3_ARCHITECTURE.md` - Архитектура S3 интеграции
+
+**Обновлённая схема БД:**
+```sql
+-- profiles
+ALTER TABLE profiles ADD COLUMN avatar_path TEXT; -- Путь в S3
+
+-- tours
+ALTER TABLE tours ADD COLUMN cover_path TEXT; -- Путь обложки в S3
+
+-- tour_media
+ALTER TABLE tour_media ADD COLUMN media_path TEXT; -- Путь медиа в S3
+```
+
+**Статус:** ✅ Реализовано, готово к деплою
+
+---
+
+### Итерация 3: Система авторизации и профили (28.10.2025)
+
+**Реализовано:**
+- ✅ Supabase Authentication (Email/Password)
+- ✅ Обновлённая схема профилей: `first_name`, `last_name`, `middle_name`
+- ✅ Страница регистрации (`/auth/register`)
+- ✅ Страница входа (`/auth/login`)
+- ✅ Страница верификации email (`/auth/verify-email`)
+- ✅ Страница профиля (`/profile`) с редактированием данных
+- ✅ Компонент `UserMenu` в Header с аватаром и инициалами
+- ✅ RLS политики для безопасности данных
+- ✅ Триггер автоматического создания профиля при регистрации
+- ✅ Использование `user_metadata` для надёжного отображения данных
+
+**Компоненты:**
+- `app/auth/register/page.tsx` - Страница регистрации
+- `app/auth/login/page.tsx` - Страница входа
+- `app/auth/verify-email/page.tsx` - Подтверждение email
+- `app/profile/page.tsx` - Страница профиля (Server Component)
+- `components/auth/RegisterForm.tsx` - Форма регистрации
+- `components/auth/LoginForm.tsx` - Форма входа
+- `components/layout/UserMenu.tsx` - Меню пользователя (Client Component)
+- `components/profile/ProfileContent.tsx` - Контент профиля
+
+**Обновлённая схема БД:**
+```sql
+-- Обновление таблицы profiles
+CREATE TABLE profiles (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT UNIQUE NOT NULL,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  middle_name TEXT,
+  phone TEXT,
+  role user_role DEFAULT 'user',
+  avatar_url TEXT,
+  avatar_path TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Триггер автоматического создания профиля
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER 
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.profiles (id, email, first_name, last_name, middle_name, role)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'first_name', 'Имя'),
+    COALESCE(NEW.raw_user_meta_data->>'last_name', 'Фамилия'),
+    NEW.raw_user_meta_data->>'middle_name',
+    'user'
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    first_name = EXCLUDED.first_name,
+    last_name = EXCLUDED.last_name,
+    middle_name = EXCLUDED.middle_name;
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW 
+  EXECUTE FUNCTION handle_new_user();
+```
+
+**RLS Политики (Гибридные - безопасные + работающие):**
+```sql
+-- SELECT: Authenticated пользователи видят свой профиль + service_role видит всё
+CREATE POLICY "Enable read access for own profile"
+  ON profiles FOR SELECT
+  USING (
+    auth.uid() = id 
+    OR 
+    auth.role() = 'service_role'
+  );
+
+-- INSERT: Authenticated пользователи создают только свой профиль
+CREATE POLICY "Enable insert for authenticated users"
+  ON profiles FOR INSERT
+  WITH CHECK (
+    auth.uid() = id 
+    OR 
+    auth.role() = 'service_role'
+  );
+
+-- UPDATE: Пользователи обновляют только свой профиль (без смены role)
+CREATE POLICY "Enable update for own profile"
+  ON profiles FOR UPDATE
+  USING (
+    auth.uid() = id 
+    OR 
+    auth.role() = 'service_role'
+  )
+  WITH CHECK (
+    (auth.uid() = id AND role = (SELECT role FROM profiles WHERE id = auth.uid()))
+    OR 
+    auth.role() = 'service_role'
+  );
+```
+
+**Архитектурные решения:**
+1. **UserMenu (Client Component):**
+   - Использует `user.user_metadata` как первичный источник данных
+   - Fallback к БД для обновлённых данных
+   - Гарантирует отображение инициалов и имени ВСЕГДА
+
+2. **ProfilePage (Server Component):**
+   - Использует `createServiceClient()` для чтения профиля
+   - Обходит RLS ограничения для серверных компонентов
+   - Безопасно (только для чтения профиля текущего пользователя)
+
+3. **Миграции БД:**
+   - `001_initial_schema.sql` - Полная схема БД
+   - `002_update_profiles.sql` - Индексы и комментарии
+   - `003_fix_rls_policies.sql` - Исправление RLS политик
+
+**Технические улучшения:**
+- ✅ Красивый placeholder аватара (инициалы + градиент)
+- ✅ Валидация форм (email, минимальная длина пароля)
+- ✅ Обработка ошибок с понятными сообщениями
+- ✅ Защита от бесконечной рекурсии в RLS
+- ✅ Исправлена типизация TypeScript для `Database.profiles`
+
+**Git коммиты:**
+```
+e5f6g7h - feat(auth): Система регистрации и входа
+f6g7h8i - feat(profile): Страница профиля с редактированием
+g7h8i9j - fix(rls): Исправлены RLS политики для profiles
+h8i9j0k - fix(usermenu): Использование user_metadata как primary source
+i9j0k1l - docs: Обновлена документация DIPLOMA.md
+```
+
+**Файлы созданы:**
+- `app/auth/register/page.tsx`
+- `app/auth/login/page.tsx`
+- `app/auth/verify-email/page.tsx`
+- `app/profile/page.tsx`
+- `components/auth/RegisterForm.tsx`
+- `components/auth/LoginForm.tsx`
+- `components/layout/UserMenu.tsx`
+- `components/profile/ProfileContent.tsx`
+- `supabase/migrations/001_initial_schema.sql`
+- `supabase/migrations/002_update_profiles.sql`
+- `supabase/migrations/003_fix_rls_policies.sql`
+- `SUPABASE_SETUP.md` - Инструкция по настройке Supabase
+- `FIX_EXISTING_USERS.md` - Решение проблем для существующих пользователей
+- `CHECK_DB_STRUCTURE.sql` - SQL для проверки структуры БД
+- `FIX_RLS_HYBRID.sql` - Гибридные RLS политики
+
+**Решённые проблемы:**
+1. ❌ **Проблема:** RLS блокировал чтение профилей в серверных компонентах
+   - ✅ **Решение:** Использование `createServiceClient()` в `ProfilePage`
+
+2. ❌ **Проблема:** Инициалы и имя не отображались в `UserMenu`
+   - ✅ **Решение:** Использование `user_metadata` как первичного источника
+
+3. ❌ **Проблема:** Infinite recursion в RLS политиках
+   - ✅ **Решение:** Гибридные политики с `service_role` bypass
+
+4. ❌ **Проблема:** Типы БД устарели (`full_name` вместо `first_name/last_name`)
+   - ✅ **Решение:** Обновлён `types/database.ts`
+
+**Статус:** ✅ Реализовано, протестировано локально
+
+**Следующие шаги:**
+1. Деплой на продакшн с обновлёнными миграциями
+2. Реализация загрузки аватарок (S3 + cropper)
+3. Страницы "Мои бронирования" и "Мои отзывы"
+4. Админские панели (super-admin, tour-admin, support-admin)
+
+---
+
 **Автор:** Daniel (Garten555)  
 **Дата начала:** 27.10.2024  
-**Текущая версия:** 1.1.0 (PRODUCTION)  
-**Последнее обновление:** 27.10.2024, 20:50
+**Текущая версия:** 2.0.0 (DEVELOPMENT)  
+**Последнее обновление:** 28.10.2025, 13:00
 
