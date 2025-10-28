@@ -15,6 +15,7 @@ export default function RegisterForm() {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordValidation, setPasswordValidation] = useState({
     strength: 'weak' as 'weak' | 'medium' | 'strong',
     percentage: 0,
@@ -59,12 +60,20 @@ export default function RegisterForm() {
         percentage: validation.strengthPercentage,
         valid: validation.valid,
       });
+      
+      // Устанавливаем ошибку если пароль невалиден
+      if (!validation.valid && validation.error) {
+        setPasswordError(validation.error);
+      } else {
+        setPasswordError(null);
+      }
     } else {
       setPasswordValidation({
         strength: 'weak',
         percentage: 0,
         valid: false,
       });
+      setPasswordError(null);
     }
   }, [formData.password]);
 
@@ -254,12 +263,21 @@ export default function RegisterForm() {
           </button>
         </div>
         
+        {/* Ошибка валидации пароля */}
+        {passwordError && (
+          <p className="mt-1 text-xs text-red-600 font-medium">
+            ⚠ {passwordError}
+          </p>
+        )}
+        
         {/* Индикатор силы пароля */}
-        <PasswordStrengthIndicator
-          strength={passwordValidation.strength}
-          percentage={passwordValidation.percentage}
-          show={!!formData.password}
-        />
+        {!passwordError && (
+          <PasswordStrengthIndicator
+            strength={passwordValidation.strength}
+            percentage={passwordValidation.percentage}
+            show={!!formData.password}
+          />
+        )}
       </div>
 
       {/* Подтверждение пароля */}
