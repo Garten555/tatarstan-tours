@@ -19,8 +19,11 @@ export default async function ProfilePage() {
     redirect('/auth/login');
   }
 
-  // Получаем данные профиля
-  const { data: profile, error: profileError } = await supabase
+  // Получаем данные профиля через SERVICE ROLE (обходим RLS для серверного компонента)
+  const { createServiceClient } = await import('@/lib/supabase/server');
+  const serviceSupabase = createServiceClient();
+  
+  const { data: profile, error: profileError } = await serviceSupabase
     .from('profiles')
     .select('*')
     .eq('id', user.id)
@@ -30,6 +33,7 @@ export default async function ProfilePage() {
   console.log('User ID:', user.id);
   console.log('Profile data:', profile);
   console.log('Profile error:', profileError);
+  console.log('User metadata:', user.user_metadata);
 
   // Если профиля нет - создаём его вручную через service role
   if (!profile && !profileError?.message.includes('multiple')) {
