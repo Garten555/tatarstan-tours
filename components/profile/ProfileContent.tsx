@@ -12,11 +12,18 @@ interface ProfileContentProps {
 export default function ProfileContent({ profile, user }: ProfileContentProps) {
   const [isEditing, setIsEditing] = useState(false);
 
+  // ДЕБАГ: выводим что пришло
+  console.log('ProfileContent - profile:', profile);
+  console.log('ProfileContent - user.user_metadata:', user.user_metadata);
+
   // Получаем данные из profile или user_metadata (fallback)
   const firstName = profile?.first_name || user.user_metadata?.first_name || 'Имя';
   const lastName = profile?.last_name || user.user_metadata?.last_name || 'Фамилия';
   const middleName = profile?.middle_name || user.user_metadata?.middle_name || '';
   const avatarUrl = profile?.avatar_url || user.user_metadata?.avatar_url;
+
+  console.log('ProfileContent - firstName:', firstName);
+  console.log('ProfileContent - lastName:', lastName);
 
   const getRoleName = (role: string) => {
     const roles: Record<string, string> = {

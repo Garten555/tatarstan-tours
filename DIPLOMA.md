@@ -2125,10 +2125,68 @@ export function validatePassword(password: string): {
 
 **Статус:** ✅ Реализовано и протестировано локально
 
+**Исправления и улучшения:**
+- ✅ Добавлен state для ошибки пароля (`passwordError`)
+- ✅ Ошибки валидации пароля теперь отображаются явно
+- ✅ Индикатор скрывается при наличии критической ошибки
+- ✅ Красная рамка + текст ошибки для лучшей UX
+
+**Пример ошибки:**
+```tsx
+{passwordError && (
+  <p className="mt-1 text-xs text-red-600 font-medium">
+    ⚠ {passwordError}
+  </p>
+)}
+```
+
+---
+
+### Итерация 4.1: Исправление отображения профиля (28.10.2025)
+
+**Проблема:**
+После внедрения системы авторизации, аватар в профиле отображался как чёрный круг вместо инициалов с градиентом (как в Header).
+
+**Причина:**
+`ProfileContent` использовал только `profile?.first_name`, но если `profile = null` (что случается при первом входе до применения миграций), данные не отображались.
+
+**Решение:**
+Использование `user.user_metadata` как fallback источника данных (аналогично `UserMenu`):
+
+```typescript
+// Fallback к user_metadata
+const firstName = profile?.first_name || user.user_metadata?.first_name || 'Имя';
+const lastName = profile?.last_name || user.user_metadata?.last_name || 'Фамилия';
+const middleName = profile?.middle_name || user.user_metadata?.middle_name || '';
+const avatarUrl = profile?.avatar_url || user.user_metadata?.avatar_url;
+```
+
+**Аватар с инициалами:**
+```tsx
+<div className="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg ring-4 ring-emerald-100">
+  {firstName[0]}{lastName[0]}
+</div>
+```
+
+**Преимущества:**
+1. ✅ Единый стиль с `UserMenu` (тот же градиент и размер)
+2. ✅ Инициалы всегда отображаются корректно
+3. ✅ Работает даже без данных в БД (fallback к metadata)
+4. ✅ Красивый hover эффект "Загрузить фото"
+
+**Git коммиты:**
+```
+4add6b0 - fix: показ ошибки валидации пароля (русские символы)
+dd05805 - fix: красивая заглушка аватара в профиле (инициалы + градиент)
+b6cb49e - chore: cleanup temp file
+```
+
+**Статус:** ✅ Исправлено, но требует дополнительной проверки
+
 ---
 
 **Автор:** Daniel (Garten555)  
 **Дата начала:** 27.10.2024  
-**Текущая версия:** 2.1.0 (DEVELOPMENT)  
-**Последнее обновление:** 28.10.2025, 14:30
+**Текущая версия:** 2.1.1 (DEVELOPMENT)  
+**Последнее обновление:** 28.10.2025, 15:00
 
