@@ -28,10 +28,13 @@ CREATE TYPE booking_status AS ENUM ('pending', 'confirmed', 'cancelled', 'comple
 CREATE TABLE profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT UNIQUE NOT NULL,
-  full_name TEXT,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  middle_name TEXT, -- Отчество (опционально)
   phone TEXT,
   role user_role DEFAULT 'user',
-  avatar_url TEXT,
+  avatar_url TEXT, -- URL аватарки в S3
+  avatar_path TEXT, -- Путь к аватарке в S3 (для удаления при замене)
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -44,7 +47,8 @@ CREATE TABLE tours (
   description TEXT NOT NULL,
   short_desc TEXT,
   full_desc TEXT,
-  cover_image TEXT,
+  cover_image TEXT, -- URL обложки в S3
+  cover_path TEXT, -- Путь к обложке в S3 (для удаления при замене)
   price_per_person DECIMAL(10, 2) NOT NULL CHECK (price_per_person > 0),
   start_date TIMESTAMP WITH TIME ZONE NOT NULL,
   end_date TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -65,7 +69,8 @@ CREATE TABLE tour_media (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   tour_id UUID NOT NULL REFERENCES tours(id) ON DELETE CASCADE,
   media_type media_type NOT NULL,
-  media_url TEXT NOT NULL,
+  media_url TEXT NOT NULL, -- URL медиа в S3
+  media_path TEXT, -- Путь к медиа в S3 (для удаления)
   thumbnail_url TEXT,
   order_index INTEGER DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -89,7 +94,9 @@ CREATE TABLE bookings (
 CREATE TABLE booking_attendees (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   booking_id UUID NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
-  full_name TEXT NOT NULL,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  middle_name TEXT,
   email TEXT,
   phone TEXT,
   passport_data TEXT,
@@ -344,8 +351,14 @@ CREATE TRIGGER booking_status_change
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name)
-  VALUES (NEW.id, NEW.email, NEW.raw_user_meta_data->>'full_name');
+  INSERT INTO public.profiles (id, email, first_name, last_name, role)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'first_name', 'Имя'),
+    COALESCE(NEW.raw_user_meta_data->>'last_name', 'Фамилия'),
+    'user'
+  );
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

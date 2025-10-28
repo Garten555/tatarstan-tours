@@ -1,0 +1,204 @@
+'use client';
+
+import { useState } from 'react';
+import { User, Mail, Phone, Calendar, Shield } from 'lucide-react';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
+
+interface ProfileContentProps {
+  profile: any;
+  user: SupabaseUser;
+}
+
+export default function ProfileContent({ profile, user }: ProfileContentProps) {
+  const [isEditing, setIsEditing] = useState(false);
+
+  const getRoleName = (role: string) => {
+    const roles: Record<string, string> = {
+      user: 'Пользователь',
+      tour_admin: 'Администратор туров',
+      support_admin: 'Администратор поддержки',
+      super_admin: 'Супер администратор',
+    };
+    return roles[role] || role;
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Заголовок */}
+      <div className="bg-white shadow rounded-lg p-6">
+        <h1 className="text-3xl font-bold text-gray-900">Мой профиль</h1>
+        <p className="mt-2 text-gray-600">
+          Управляйте своим профилем и настройками аккаунта
+        </p>
+      </div>
+
+      {/* Основная информация */}
+      <div className="bg-white shadow rounded-lg p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-2xl font-semibold text-gray-900">
+            Личные данные
+          </h2>
+          <button
+            onClick={() => setIsEditing(!isEditing)}
+            className="text-emerald-600 hover:text-emerald-700 font-medium"
+          >
+            {isEditing ? 'Отмена' : 'Редактировать'}
+          </button>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Аватар */}
+          <div className="md:col-span-2 flex items-center gap-6">
+            {profile?.avatar_url ? (
+              <img
+                src={profile.avatar_url}
+                alt="Avatar"
+                className="w-24 h-24 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-24 h-24 rounded-full bg-emerald-600 flex items-center justify-center text-white text-3xl font-bold">
+                {profile?.first_name?.[0]}{profile?.last_name?.[0]}
+              </div>
+            )}
+            <div>
+              <h3 className="text-xl font-semibold text-gray-900">
+                {profile?.first_name} {profile?.middle_name} {profile?.last_name}
+              </h3>
+              <p className="text-gray-600">{user.email}</p>
+            </div>
+          </div>
+
+          {/* Имя */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <User className="w-4 h-4" />
+              Имя
+            </label>
+            <input
+              type="text"
+              value={profile?.first_name || ''}
+              disabled={!isEditing}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg disabled:bg-gray-50 disabled:text-gray-600"
+            />
+          </div>
+
+          {/* Фамилия */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <User className="w-4 h-4" />
+              Фамилия
+            </label>
+            <input
+              type="text"
+              value={profile?.last_name || ''}
+              disabled={!isEditing}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg disabled:bg-gray-50 disabled:text-gray-600"
+            />
+          </div>
+
+          {/* Отчество */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <User className="w-4 h-4" />
+              Отчество
+            </label>
+            <input
+              type="text"
+              value={profile?.middle_name || ''}
+              disabled={!isEditing}
+              placeholder="Не указано"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg disabled:bg-gray-50 disabled:text-gray-600"
+            />
+          </div>
+
+          {/* Email */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <Mail className="w-4 h-4" />
+              Email
+            </label>
+            <input
+              type="email"
+              value={user.email}
+              disabled
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600"
+            />
+          </div>
+
+          {/* Телефон */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <Phone className="w-4 h-4" />
+              Телефон
+            </label>
+            <input
+              type="tel"
+              value={profile?.phone || ''}
+              disabled={!isEditing}
+              placeholder="+7 (900) 123-45-67"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg disabled:bg-gray-50 disabled:text-gray-600"
+            />
+          </div>
+
+          {/* Роль */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <Shield className="w-4 h-4" />
+              Роль
+            </label>
+            <div className="px-4 py-2 border border-gray-200 rounded-lg bg-gray-50">
+              <span className="text-gray-700 font-medium">
+                {getRoleName(profile?.role)}
+              </span>
+            </div>
+          </div>
+
+          {/* Дата регистрации */}
+          <div>
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-2">
+              <Calendar className="w-4 h-4" />
+              Дата регистрации
+            </label>
+            <div className="px-4 py-2 border border-gray-200 rounded-lg bg-gray-50">
+              <span className="text-gray-700">
+                {new Date(profile?.created_at).toLocaleDateString('ru-RU')}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Кнопка сохранения */}
+        {isEditing && (
+          <div className="mt-6 flex gap-3">
+            <button className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg font-medium transition-colors">
+              Сохранить изменения
+            </button>
+            <button
+              onClick={() => setIsEditing(false)}
+              className="border border-gray-300 hover:bg-gray-50 text-gray-700 px-6 py-2 rounded-lg font-medium transition-colors"
+            >
+              Отмена
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Статистика */}
+      <div className="grid md:grid-cols-3 gap-6">
+        <div className="bg-white shadow rounded-lg p-6">
+          <div className="text-3xl font-bold text-emerald-600 mb-2">0</div>
+          <div className="text-gray-600">Активных бронирований</div>
+        </div>
+        <div className="bg-white shadow rounded-lg p-6">
+          <div className="text-3xl font-bold text-emerald-600 mb-2">0</div>
+          <div className="text-gray-600">Завершённых туров</div>
+        </div>
+        <div className="bg-white shadow rounded-lg p-6">
+          <div className="text-3xl font-bold text-emerald-600 mb-2">0 ₽</div>
+          <div className="text-gray-600">Потрачено на туры</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+

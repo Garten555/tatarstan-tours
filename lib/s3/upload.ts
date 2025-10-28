@@ -107,19 +107,52 @@ export function generateUniqueFileName(originalName: string): string {
  * Получает путь для загрузки файла в зависимости от типа
  * @param type - Тип файла ('tour-cover', 'tour-gallery', 'tour-video', 'avatar')
  * @param fileName - Имя файла
+ * @param userId - ID пользователя (для аватарок)
  * @returns Путь в бакете
  */
 export function getS3Path(
   type: 'tour-cover' | 'tour-gallery' | 'tour-video' | 'avatar',
-  fileName: string
+  fileName: string,
+  userId?: string
 ): string {
   const paths = {
     'tour-cover': `tours/covers/${fileName}`,
     'tour-gallery': `tours/gallery/${fileName}`,
     'tour-video': `tours/videos/${fileName}`,
-    avatar: `users/avatars/${fileName}`,
+    avatar: `users/avatars/${userId || 'default'}/${fileName}`,
   };
 
   return paths[type];
+}
+
+/**
+ * Заменяет файл в S3 (удаляет старый, загружает новый)
+ * @param file - Новый файл
+ * @param newPath - Путь для нового файла
+ * @param oldPath - Путь к старому файлу (для удаления)
+ * @returns URL нового файла
+ */
+export async function replaceFileInS3(
+  file: File | Buffer,
+  newPath: string,
+  oldPath?: string
+): Promise<string> {
+  try {
+    // Загружаем новый файл
+    const newUrl = await uploadFileToS3(file, newPath);
+
+    // Удаляем старый файл (если был)
+    if (oldPath) {
+      await deleteFileFromS3(oldPath).catch((err) => {
+        console.warn('Не удалось удалить старый файл:', err);
+        // Не прерываем процесс, если старый файл не удалился
+      });
+    }
+
+    return newUrl;
+  } catch (error) {
+    console.error('Ошибка замены файла:', error);
+    throw error;
+  }
 }
 

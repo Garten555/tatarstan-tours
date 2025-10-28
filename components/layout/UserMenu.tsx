@@ -1,0 +1,146 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import { User, LogOut, Settings, Calendar } from 'lucide-react';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
+
+export default function UserMenu() {
+  const router = useRouter();
+  const supabase = createClient();
+  
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    // Получаем текущего пользователя
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+      if (user) {
+        // Загружаем профиль
+        supabase
+          .from('profiles')
+          .select('first_name, last_name, avatar_url')
+          .eq('id', user.id)
+          .single()
+          .then(({ data }) => setProfile(data));
+      }
+    });
+
+    // Подписка на изменения авторизации
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, [supabase]);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
+    router.refresh();
+  };
+
+  // Если пользователь не авторизован
+  if (!user) {
+    return (
+      <div className="flex items-center gap-3">
+        <Link
+          href="/auth/login"
+          className="text-gray-700 hover:text-emerald-600 font-medium transition-colors"
+        >
+          Вход
+        </Link>
+        <Link
+          href="/auth/register"
+          className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+        >
+          Регистрация
+        </Link>
+      </div>
+    );
+  }
+
+  // Если пользователь авторизован
+  return (
+    <div className="relative">
+      {/* Кнопка профиля */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+      >
+        {profile?.avatar_url ? (
+          <img
+            src={profile.avatar_url}
+            alt="Avatar"
+            className="w-10 h-10 rounded-full object-cover"
+          />
+        ) : (
+          <div className="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center text-white font-semibold">
+            {profile?.first_name?.[0]}{profile?.last_name?.[0]}
+          </div>
+        )}
+        <span className="hidden md:block font-medium text-gray-900">
+          {profile?.first_name}
+        </span>
+      </button>
+
+      {/* Выпадающее меню */}
+      {isOpen && (
+        <>
+          {/* Overlay для закрытия */}
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setIsOpen(false)}
+          />
+          
+          {/* Меню */}
+          <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-20">
+            <Link
+              href="/profile"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+            >
+              <User className="w-5 h-5 text-gray-600" />
+              <span className="text-gray-700">Мой профиль</span>
+            </Link>
+            
+            <Link
+              href="/profile/bookings"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+            >
+              <Calendar className="w-5 h-5 text-gray-600" />
+              <span className="text-gray-700">Мои бронирования</span>
+            </Link>
+            
+            <Link
+              href="/profile/settings"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
+            >
+              <Settings className="w-5 h-5 text-gray-600" />
+              <span className="text-gray-700">Настройки</span>
+            </Link>
+            
+            <hr className="my-2" />
+            
+            <button
+              onClick={handleSignOut}
+              className="w-full flex items-center gap-3 px-4 py-2 hover:bg-red-50 transition-colors text-red-600"
+            >
+              <LogOut className="w-5 h-5" />
+              <span>Выйти</span>
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+

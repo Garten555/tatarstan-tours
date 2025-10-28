@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Logo } from '@/components/ui/Logo';
 import { Button } from '@/components/ui/Button';
+import UserMenu from './UserMenu';
 
 export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -43,23 +44,23 @@ export function Header() {
           </Link>
 
           {/* Навигация для десктопа */}
-          <nav className="hidden md:flex items-center space-x-8">
-            {navLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="relative text-gray-700 hover:text-emerald-600 transition-all duration-300 font-medium group"
-              >
-                {link.label}
-                <span className="absolute left-0 bottom-0 w-0 h-0.5 bg-emerald-600 group-hover:w-full transition-all duration-300"></span>
-              </Link>
-            ))}
+          <div className="hidden md:flex items-center space-x-6">
+            <nav className="flex items-center space-x-6">
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="relative text-gray-700 hover:text-emerald-600 transition-all duration-300 font-medium group"
+                >
+                  {link.label}
+                  <span className="absolute left-0 bottom-0 w-0 h-0.5 bg-emerald-600 group-hover:w-full transition-all duration-300"></span>
+                </Link>
+              ))}
+            </nav>
 
-            {/* Кнопка призыва к действию */}
-            <Button href="/booking" variant="primary">
-              Забронировать тур
-            </Button>
-          </nav>
+            {/* Меню пользователя */}
+            <UserMenu />
+          </div>
 
           {/* Кнопка мобильного меню */}
           <button
