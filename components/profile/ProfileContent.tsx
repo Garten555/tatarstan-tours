@@ -69,15 +69,8 @@ export default function ProfileContent({ profile, user }: ProfileContentProps) {
                 className="w-24 h-24 rounded-full object-cover border-4 border-emerald-100 shadow-lg"
               />
             ) : (
-              <div className="relative group cursor-pointer">
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg ring-4 ring-emerald-100">
-                  {firstName[0]}{lastName[0]}
-                </div>
-                <div className="absolute inset-0 rounded-full bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all duration-300 flex items-center justify-center">
-                  <span className="text-white opacity-0 group-hover:opacity-100 text-xs font-medium">
-                    Загрузить фото
-                  </span>
-                </div>
+              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white text-3xl font-bold shadow-lg ring-4 ring-emerald-100 hover:ring-emerald-200 transition-all cursor-pointer">
+                {firstName[0]}{lastName[0]}
               </div>
             )}
             <div>
