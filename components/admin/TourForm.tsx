@@ -30,6 +30,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
     end_date: initialData?.end_date ? new Date(initialData.end_date).toISOString().slice(0, 16) : '',
     max_participants: initialData?.max_participants || 20,
     status: initialData?.status || 'draft',
+    yandex_map_url: initialData?.yandex_map_url || '',
   });
 
   // Транслитерация
@@ -309,6 +310,33 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
             />
           </label>
         </div>
+      </div>
+
+      {/* Yandex Map */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Яндекс Карта (URL конструктора) *
+        </label>
+        <input
+          type="url"
+          required
+          value={formData.yandex_map_url}
+          onChange={(e) => setFormData(prev => ({ ...prev, yandex_map_url: e.target.value }))}
+          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          placeholder="https://yandex.ru/map-constructor/..."
+        />
+        <p className="text-xs text-gray-500 mt-1">
+          Создайте карту в{' '}
+          <a 
+            href="https://yandex.ru/map-constructor/" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="text-emerald-600 hover:underline"
+          >
+            Конструкторе карт Яндекса
+          </a>
+          {' '}и вставьте ссылку для встраивания
+        </p>
       </div>
 
       {/* Short Description */}
