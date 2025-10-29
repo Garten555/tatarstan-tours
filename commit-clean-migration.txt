@@ -1,8 +1,0 @@
-fix: clean migration 004 without cyrillic characters
-
-Created 004_tours_and_reviews_clean.sql
-- All comments in English
-- No cyrillic characters
-- Proper UTF-8 encoding
-- Ready to execute
-
