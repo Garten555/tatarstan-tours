@@ -10,10 +10,13 @@ import {
   Users, 
   Star,
   LogOut,
-  Home
+  Home,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
 
 interface AdminSidebarProps {
   userRole: string;
@@ -24,6 +27,24 @@ export default function AdminSidebar({ userRole, userName }: AdminSidebarProps) 
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  
+  // Состояние сайдбара (открыт/закрыт)
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Загружаем состояние из localStorage при монтировании
+  useEffect(() => {
+    const savedState = localStorage.getItem('adminSidebarCollapsed');
+    if (savedState !== null) {
+      setIsCollapsed(savedState === 'true');
+    }
+  }, []);
+
+  // Сохраняем состояние в localStorage при изменении
+  const toggleSidebar = () => {
+    const newState = !isCollapsed;
+    setIsCollapsed(newState);
+    localStorage.setItem('adminSidebarCollapsed', String(newState));
+  };
 
   // Навигационные элементы
   const navigation = [
@@ -89,64 +110,132 @@ export default function AdminSidebar({ userRole, userName }: AdminSidebarProps) 
   };
 
   return (
-    <div className="w-64 bg-gray-900 text-white flex flex-col">
+    <div 
+      className={`bg-gray-900 text-white flex flex-col transition-all duration-300 relative ${
+        isCollapsed ? 'w-20' : 'w-64'
+      }`}
+    >
       {/* Logo */}
-      <div className="p-6 border-b border-gray-800">
-        <h1 className="text-2xl font-bold">Админ панель</h1>
-        <p className="text-sm text-gray-400 mt-1">Tatarstan Tours</p>
+      <div className={`p-6 border-b border-gray-800 flex items-center justify-between ${
+        isCollapsed ? 'px-4' : ''
+      }`}>
+        {!isCollapsed ? (
+          <>
+            <div>
+              <h1 className="text-2xl font-bold">Админ панель</h1>
+              <p className="text-sm text-gray-400 mt-1">Tatarstan Tours</p>
+            </div>
+          </>
+        ) : (
+          <div className="w-full flex justify-center">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center font-bold">
+              A
+            </div>
+          </div>
+        )}
       </div>
 
+      {/* Toggle Button */}
+      <button
+        onClick={toggleSidebar}
+        className="absolute top-6 -right-3 w-6 h-6 bg-emerald-600 rounded-full flex items-center justify-center text-white hover:bg-emerald-700 transition-colors shadow-lg z-10"
+        title={isCollapsed ? 'Развернуть' : 'Свернуть'}
+      >
+        {isCollapsed ? (
+          <ChevronRight className="w-4 h-4" />
+        ) : (
+          <ChevronLeft className="w-4 h-4" />
+        )}
+      </button>
+
       {/* User info */}
-      <div className="p-4 border-b border-gray-800">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-sm font-bold">
+      <div className={`p-4 border-b border-gray-800 ${isCollapsed ? 'px-2' : ''}`}>
+        <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
             {userName.split(' ').map(n => n[0]).join('')}
           </div>
-          <div>
-            <p className="text-sm font-medium">{userName}</p>
-            <p className="text-xs text-gray-400">
-              {getRoleLabel(userRole)}
-            </p>
-          </div>
+          {!isCollapsed && (
+            <div className="overflow-hidden">
+              <p className="text-sm font-medium truncate">{userName}</p>
+              <p className="text-xs text-gray-400 truncate">
+                {getRoleLabel(userRole)}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className={`flex-1 p-4 space-y-1 ${isCollapsed ? 'px-2' : ''}`}>
         {filteredNavigation.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link
               key={item.name}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors relative group ${
                 isActive
                   ? 'bg-emerald-600 text-white'
                   : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-              }`}
+              } ${isCollapsed ? 'justify-center' : ''}`}
+              title={isCollapsed ? item.name : ''}
             >
-              <item.icon className="w-5 h-5" />
-              <span className="text-sm font-medium">{item.name}</span>
+              <item.icon className="w-5 h-5 flex-shrink-0" />
+              {!isCollapsed && (
+                <span className="text-sm font-medium">{item.name}</span>
+              )}
+              
+              {/* Tooltip при свёрнутом сайдбаре */}
+              {isCollapsed && (
+                <div className="absolute left-full ml-2 px-3 py-2 bg-gray-800 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
+                  {item.name}
+                </div>
+              )}
             </Link>
           );
         })}
       </nav>
 
       {/* Bottom actions */}
-      <div className="p-4 border-t border-gray-800 space-y-2">
+      <div className={`p-4 border-t border-gray-800 space-y-2 ${isCollapsed ? 'px-2' : ''}`}>
         <Link
           href="/"
-          className="flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+          className={`flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors relative group ${
+            isCollapsed ? 'justify-center' : ''
+          }`}
+          title={isCollapsed ? 'На главную' : ''}
         >
-          <Home className="w-5 h-5" />
-          <span className="text-sm font-medium">На главную</span>
+          <Home className="w-5 h-5 flex-shrink-0" />
+          {!isCollapsed && (
+            <span className="text-sm font-medium">На главную</span>
+          )}
+          
+          {/* Tooltip */}
+          {isCollapsed && (
+            <div className="absolute left-full ml-2 px-3 py-2 bg-gray-800 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
+              На главную
+            </div>
+          )}
         </Link>
+        
         <button
           onClick={handleLogout}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-red-400 hover:bg-red-900/20 hover:text-red-300 transition-colors"
+          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-red-400 hover:bg-red-900/20 hover:text-red-300 transition-colors relative group ${
+            isCollapsed ? 'justify-center' : ''
+          }`}
+          title={isCollapsed ? 'Выйти' : ''}
         >
-          <LogOut className="w-5 h-5" />
-          <span className="text-sm font-medium">Выйти</span>
+          <LogOut className="w-5 h-5 flex-shrink-0" />
+          {!isCollapsed && (
+            <span className="text-sm font-medium">Выйти</span>
+          )}
+          
+          {/* Tooltip */}
+          {isCollapsed && (
+            <div className="absolute left-full ml-2 px-3 py-2 bg-gray-800 text-white text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50">
+              Выйти
+            </div>
+          )}
         </button>
       </div>
     </div>
