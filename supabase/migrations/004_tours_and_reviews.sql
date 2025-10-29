@@ -44,7 +44,7 @@ CREATE INDEX idx_tours_category ON tours(category);
 CREATE INDEX idx_tours_available ON tours(is_available) WHERE is_available = true;
 
 -- ============================================================================
--- 2. СОЗДАНИЕ ТАБЛИЦЫ REVIEWS (ОТЗЫВЫ)
+-- 2. СОЗДАНИЕ ТАБЛИЦЫ REVIEWS
 -- ============================================================================
 
 CREATE TABLE reviews (
