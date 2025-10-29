@@ -77,7 +77,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
         });
 
         if (!uploadResponse.ok) {
-          throw new Error('Failed to upload cover image');
+          throw new Error('Не удалось загрузить обложку');
         }
 
         const uploadData = await uploadResponse.json();
@@ -108,14 +108,14 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.error || 'Failed to save tour');
+        throw new Error(error.error || 'Не удалось сохранить тур');
       }
 
       router.push('/admin/tours');
       router.refresh();
     } catch (error: any) {
       console.error('Error saving tour:', error);
-      alert(error.message || 'Failed to save tour');
+      alert(error.message || 'Не удалось сохранить тур');
     } finally {
       setLoading(false);
     }
@@ -127,7 +127,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="md:col-span-2">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Tour Title *
+            Название тура *
           </label>
           <input
             type="text"
@@ -135,7 +135,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
             value={formData.title}
             onChange={(e) => handleTitleChange(e.target.value)}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            placeholder="e.g. Казанский Кремль и Кул-Шариф"
+            placeholder="Например: Казанский Кремль и Кул-Шариф"
           />
         </div>
 
@@ -155,7 +155,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Tour Type *
+            Тип тура *
           </label>
           <select
             required
@@ -163,17 +163,17 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
             onChange={(e) => setFormData(prev => ({ ...prev, tour_type: e.target.value }))}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
-            <option value="excursion">Excursion</option>
-            <option value="hiking">Hiking</option>
-            <option value="cruise">Cruise</option>
-            <option value="bus_tour">Bus Tour</option>
-            <option value="walking_tour">Walking Tour</option>
+            <option value="excursion">Экскурсия</option>
+            <option value="hiking">Поход</option>
+            <option value="cruise">Круиз</option>
+            <option value="bus_tour">Автобусный тур</option>
+            <option value="walking_tour">Пешая прогулка</option>
           </select>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Category *
+            Категория *
           </label>
           <select
             required
@@ -181,18 +181,18 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
             onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
-            <option value="history">History</option>
-            <option value="nature">Nature</option>
-            <option value="culture">Culture</option>
-            <option value="architecture">Architecture</option>
-            <option value="food">Food & Gastronomy</option>
-            <option value="adventure">Adventure</option>
+            <option value="history">История</option>
+            <option value="nature">Природа</option>
+            <option value="culture">Культура</option>
+            <option value="architecture">Архитектура</option>
+            <option value="food">Еда и гастрономия</option>
+            <option value="adventure">Приключения</option>
           </select>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Price per Person (₽) *
+            Цена за человека (₽) *
           </label>
           <input
             type="number"
@@ -208,7 +208,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Max Participants *
+            Макс. участников *
           </label>
           <input
             type="number"
@@ -223,7 +223,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Start Date *
+            Дата начала *
           </label>
           <input
             type="datetime-local"
@@ -236,7 +236,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            End Date *
+            Дата окончания *
           </label>
           <input
             type="datetime-local"
@@ -249,7 +249,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Status *
+            Статус *
           </label>
           <select
             required
@@ -257,10 +257,10 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
             onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
             className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
           >
-            <option value="draft">Draft</option>
-            <option value="published">Published</option>
-            <option value="active">Active</option>
-            <option value="archived">Archived</option>
+            <option value="draft">Черновик</option>
+            <option value="published">Опубликован</option>
+            <option value="active">Активен</option>
+            <option value="archived">Архивирован</option>
           </select>
         </div>
       </div>
@@ -268,14 +268,14 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
       {/* Cover Image */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Cover Image
+          Обложка тура
         </label>
         <div className="space-y-4">
           {coverImage && (
             <div className="relative w-full h-64 rounded-lg overflow-hidden">
               <Image
                 src={coverImage}
-                alt="Cover preview"
+                alt="Превью обложки"
                 fill
                 className="object-cover"
               />
@@ -284,7 +284,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
           <label className="flex items-center justify-center gap-2 w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-emerald-500 transition-colors">
             <Upload className="w-5 h-5 text-gray-400" />
             <span className="text-sm text-gray-600">
-              {coverImage ? 'Change Cover Image' : 'Upload Cover Image'}
+              {coverImage ? 'Изменить обложку' : 'Загрузить обложку'}
             </span>
             <input
               type="file"
@@ -299,7 +299,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
       {/* Short Description */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Short Description *
+          Краткое описание *
         </label>
         <textarea
           required
@@ -307,14 +307,14 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
           onChange={(e) => setFormData(prev => ({ ...prev, short_desc: e.target.value }))}
           rows={3}
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          placeholder="Brief description for tour cards..."
+          placeholder="Краткое описание для карточки тура..."
         />
       </div>
 
       {/* Description */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Description *
+          Описание *
         </label>
         <textarea
           required
@@ -322,19 +322,19 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
           onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
           rows={4}
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          placeholder="Detailed description..."
+          placeholder="Подробное описание тура..."
         />
       </div>
 
       {/* Full Description (Rich Text Editor) */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Full Description (Rich Text)
+          Полное описание (Rich Text)
         </label>
         <RichTextEditor
           content={formData.full_desc}
           onChange={(content) => setFormData(prev => ({ ...prev, full_desc: content }))}
-          placeholder="Write detailed tour information with formatting..."
+          placeholder="Напишите детальную информацию о туре с форматированием..."
         />
       </div>
 
@@ -350,17 +350,16 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
           ) : (
             <Save className="w-5 h-5" />
           )}
-          {mode === 'create' ? 'Create Tour' : 'Save Changes'}
+          {mode === 'create' ? 'Создать тур' : 'Сохранить изменения'}
         </button>
         <button
           type="button"
           onClick={() => router.back()}
           className="px-6 py-3 border border-gray-300 rounded-lg font-medium hover:bg-gray-50 transition-colors"
         >
-          Cancel
+          Отмена
         </button>
       </div>
     </form>
   );
 }
-

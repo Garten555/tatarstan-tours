@@ -41,10 +41,10 @@ export default function UserList({ users, currentUserId }: UserListProps) {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to update role');
+        throw new Error(data.error || 'Не удалось обновить роль');
       }
 
-      setMessage({ type: 'success', text: 'Role updated successfully!' });
+      setMessage({ type: 'success', text: 'Роль успешно обновлена!' });
       
       // Перезагружаем страницу через 1 секунду
       setTimeout(() => {
@@ -59,10 +59,10 @@ export default function UserList({ users, currentUserId }: UserListProps) {
 
   // Роли
   const roles = [
-    { value: 'user', label: 'User', color: 'bg-gray-100 text-gray-800' },
-    { value: 'tour_admin', label: 'Tour Admin', color: 'bg-blue-100 text-blue-800' },
-    { value: 'support_admin', label: 'Support Admin', color: 'bg-purple-100 text-purple-800' },
-    { value: 'super_admin', label: 'Super Admin', color: 'bg-red-100 text-red-800' },
+    { value: 'user', label: 'Пользователь', color: 'bg-gray-100 text-gray-800' },
+    { value: 'tour_admin', label: 'Админ туров', color: 'bg-blue-100 text-blue-800' },
+    { value: 'support_admin', label: 'Админ поддержки', color: 'bg-purple-100 text-purple-800' },
+    { value: 'super_admin', label: 'Супер Админ', color: 'bg-red-100 text-red-800' },
   ];
 
   const getRoleColor = (role: string) => {
@@ -95,19 +95,19 @@ export default function UserList({ users, currentUserId }: UserListProps) {
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                User
+                Пользователь
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Email
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Current Role
+                Текущая роль
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Registered
+                Зарегистрирован
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
+                Действия
               </th>
             </tr>
           </thead>
@@ -127,7 +127,7 @@ export default function UserList({ users, currentUserId }: UserListProps) {
                         <div className="text-sm font-medium text-gray-900">
                           {user.first_name} {user.last_name}
                           {isCurrentUser && (
-                            <span className="ml-2 text-xs text-emerald-600 font-semibold">(You)</span>
+                            <span className="ml-2 text-xs text-emerald-600 font-semibold">(Вы)</span>
                           )}
                         </div>
                       </div>
@@ -152,7 +152,7 @@ export default function UserList({ users, currentUserId }: UserListProps) {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {isCurrentUser ? (
-                      <span className="text-gray-400">Cannot change own role</span>
+                      <span className="text-gray-400">Нельзя изменить свою роль</span>
                     ) : (
                       <div className="flex items-center gap-2">
                         <select
@@ -183,10 +183,9 @@ export default function UserList({ users, currentUserId }: UserListProps) {
       {/* Footer */}
       <div className="px-6 py-4 bg-gray-50 border-t border-gray-200">
         <p className="text-sm text-gray-600">
-          Total users: <span className="font-semibold">{users.length}</span>
+          Всего пользователей: <span className="font-semibold">{users.length}</span>
         </p>
       </div>
     </div>
   );
 }
-

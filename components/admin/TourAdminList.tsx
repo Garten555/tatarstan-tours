@@ -29,7 +29,7 @@ export default function TourAdminList({ tours }: TourAdminListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handleDelete = async (tourId: string) => {
-    if (!confirm('Are you sure you want to delete this tour?')) {
+    if (!confirm('Вы уверены, что хотите удалить этот тур? Все связанные медиафайлы будут удалены с S3.')) {
       return;
     }
 
@@ -41,13 +41,13 @@ export default function TourAdminList({ tours }: TourAdminListProps) {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to delete tour');
+        throw new Error('Не удалось удалить тур');
       }
 
       window.location.reload();
     } catch (error) {
       console.error('Error deleting tour:', error);
-      alert('Failed to delete tour');
+      alert('Не удалось удалить тур');
     } finally {
       setDeletingId(null);
     }
@@ -68,10 +68,21 @@ export default function TourAdminList({ tours }: TourAdminListProps) {
     }
   };
 
+  const getStatusLabel = (status: string) => {
+    const labels: { [key: string]: string } = {
+      'draft': 'Черновик',
+      'published': 'Опубликован',
+      'active': 'Активен',
+      'archived': 'Архивирован',
+      'cancelled': 'Отменён',
+    };
+    return labels[status] || status;
+  };
+
   if (tours.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow p-12 text-center">
-        <p className="text-gray-600 text-lg">No tours yet. Create your first tour!</p>
+        <p className="text-gray-600 text-lg">Туров пока нет. Создайте свой первый тур!</p>
       </div>
     );
   }
@@ -94,7 +105,7 @@ export default function TourAdminList({ tours }: TourAdminListProps) {
               />
             ) : (
               <div className="flex items-center justify-center h-full text-gray-400">
-                No Image
+                Нет изображения
               </div>
             )}
             <span
@@ -102,7 +113,7 @@ export default function TourAdminList({ tours }: TourAdminListProps) {
                 tour.status
               )}`}
             >
-              {tour.status}
+              {getStatusLabel(tour.status)}
             </span>
           </div>
 
@@ -116,12 +127,12 @@ export default function TourAdminList({ tours }: TourAdminListProps) {
             <div className="space-y-2 text-sm text-gray-600 mb-4">
               <div className="flex items-center gap-2">
                 <DollarSign className="w-4 h-4" />
-                <span>{tour.price_per_person} ₽ / person</span>
+                <span>{tour.price_per_person} ₽ / чел</span>
               </div>
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4" />
                 <span>
-                  {tour.current_participants} / {tour.max_participants} participants
+                  {tour.current_participants} / {tour.max_participants} участников
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -139,7 +150,7 @@ export default function TourAdminList({ tours }: TourAdminListProps) {
                 className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
               >
                 <Edit className="w-4 h-4" />
-                Edit
+                Изменить
               </Link>
               <button
                 onClick={() => handleDelete(tour.id)}
@@ -147,7 +158,7 @@ export default function TourAdminList({ tours }: TourAdminListProps) {
                 className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
               >
                 <Trash2 className="w-4 h-4" />
-                {deletingId === tour.id ? '...' : 'Delete'}
+                {deletingId === tour.id ? '...' : 'Удалить'}
               </button>
             </div>
           </div>
@@ -156,4 +167,3 @@ export default function TourAdminList({ tours }: TourAdminListProps) {
     </div>
   );
 }
-
