@@ -16,6 +16,10 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
   const [loading, setLoading] = useState(false);
   const [coverImage, setCoverImage] = useState<string | null>(initialData?.cover_image || null);
   const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+  const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
+  const [videoFiles, setVideoFiles] = useState<File[]>([]);
+  const [videoPreviews, setVideoPreviews] = useState<string[]>([]);
 
   // Form data
   const [formData, setFormData] = useState({
@@ -72,6 +76,38 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
     }
   };
 
+  // Handle gallery photos upload
+  const handleGalleryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setGalleryFiles(prev => [...prev, ...files]);
+      const previews = files.map(file => URL.createObjectURL(file));
+      setGalleryPreviews(prev => [...prev, ...previews]);
+    }
+  };
+
+  // Handle video upload
+  const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+      setVideoFiles(prev => [...prev, ...files]);
+      const previews = files.map(file => URL.createObjectURL(file));
+      setVideoPreviews(prev => [...prev, ...previews]);
+    }
+  };
+
+  // Remove gallery photo
+  const removeGalleryPhoto = (index: number) => {
+    setGalleryFiles(prev => prev.filter((_, i) => i !== index));
+    setGalleryPreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Remove video
+  const removeVideo = (index: number) => {
+    setVideoFiles(prev => prev.filter((_, i) => i !== index));
+    setVideoPreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
   // Submit form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,6 +161,41 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
       if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Не удалось сохранить тур');
+      }
+
+      const result = await response.json();
+      const tourId = mode === 'create' ? result.data.id : initialData.id;
+
+      // Upload gallery photos
+      if (galleryFiles.length > 0) {
+        for (const file of galleryFiles) {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('folder', 'tours/gallery');
+          formData.append('tourId', tourId);
+          formData.append('mediaType', 'photo');
+
+          await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+          });
+        }
+      }
+
+      // Upload videos
+      if (videoFiles.length > 0) {
+        for (const file of videoFiles) {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('folder', 'tours/videos');
+          formData.append('tourId', tourId);
+          formData.append('mediaType', 'video');
+
+          await fetch('/api/upload', {
+            method: 'POST',
+            body: formData,
+          });
+        }
       }
 
       router.push('/admin/tours');
@@ -370,6 +441,109 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
         <p className="text-xs text-gray-500 mt-1">
           Это описание будет отображаться на странице тура
         </p>
+      </div>
+
+      {/* Gallery Photos */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Фото галерея
+        </label>
+        <div className="space-y-4">
+          {/* Preview */}
+          {galleryPreviews.length > 0 && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {galleryPreviews.map((preview, index) => (
+                <div key={index} className="relative group">
+                  <Image
+                    src={preview}
+                    alt={`Gallery ${index + 1}`}
+                    width={200}
+                    height={200}
+                    className="w-full h-32 object-cover rounded-lg"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeGalleryPhoto(index)}
+                    className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Upload */}
+          <label className="flex items-center justify-center gap-2 w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-emerald-500 transition-colors">
+            <Upload className="w-5 h-5 text-gray-400" />
+            <span className="text-sm text-gray-600">
+              Загрузить фото (можно несколько)
+            </span>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handleGalleryChange}
+              className="hidden"
+            />
+          </label>
+          <p className="text-xs text-gray-500">
+            Фотографии будут отображаться в галерее тура
+          </p>
+        </div>
+      </div>
+
+      {/* Videos */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          Видео описание
+        </label>
+        <div className="space-y-4">
+          {/* Preview */}
+          {videoPreviews.length > 0 && (
+            <div className="space-y-2">
+              {videoPreviews.map((preview, index) => (
+                <div key={index} className="relative flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                  <video
+                    src={preview}
+                    className="w-32 h-20 object-cover rounded"
+                    controls
+                  />
+                  <span className="flex-1 text-sm text-gray-600">
+                    {videoFiles[index]?.name}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeVideo(index)}
+                    className="bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          {/* Upload */}
+          <label className="flex items-center justify-center gap-2 w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-emerald-500 transition-colors">
+            <Upload className="w-5 h-5 text-gray-400" />
+            <span className="text-sm text-gray-600">
+              Загрузить видео (можно несколько)
+            </span>
+            <input
+              type="file"
+              accept="video/*"
+              multiple
+              onChange={handleVideoChange}
+              className="hidden"
+            />
+          </label>
+          <p className="text-xs text-gray-500">
+            Видео будет отображаться на странице тура
+          </p>
+        </div>
       </div>
 
       {/* Submit */}
