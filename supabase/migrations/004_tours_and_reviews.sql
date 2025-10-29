@@ -12,16 +12,16 @@ ALTER TYPE tour_status ADD VALUE IF NOT EXISTS 'completed';
 ALTER TYPE tour_status ADD VALUE IF NOT EXISTS 'cancelled';
 
 -- Шаг 2: Создаём новые enum типы для tour_type и category
-CREATE TYPE tour_type AS ENUM ('excursion', 'hiking', 'cruise', 'bus_tour', 'walking_tour');
-CREATE TYPE tour_category AS ENUM ('history', 'nature', 'culture', 'architecture', 'food', 'adventure');
+CREATE TYPE tour_type_enum AS ENUM ('excursion', 'hiking', 'cruise', 'bus_tour', 'walking_tour');
+CREATE TYPE tour_category_enum AS ENUM ('history', 'nature', 'culture', 'architecture', 'food', 'adventure');
 
 -- Шаг 3: Переименовываем current_bookings в current_participants
 ALTER TABLE tours RENAME COLUMN current_bookings TO current_participants;
 
 -- Шаг 4: Добавляем новые колонки
 ALTER TABLE tours
-  ADD COLUMN tour_type tour_type DEFAULT 'excursion',
-  ADD COLUMN category tour_category DEFAULT 'history';
+  ADD COLUMN tour_type tour_type_enum DEFAULT 'excursion',
+  ADD COLUMN category tour_category_enum DEFAULT 'history';
 
 -- Шаг 5: Добавляем вычисляемое поле is_available
 -- (GENERATED ALWAYS AS требует PostgreSQL 12+)
