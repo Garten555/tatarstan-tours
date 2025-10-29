@@ -119,7 +119,7 @@ export default function AdminSidebar({ userRole, userName }: AdminSidebarProps) 
       {!isCollapsed && (
         <div className="p-6 border-b border-gray-800">
           <h1 className="text-2xl font-bold">Админ панель</h1>
-          <p className="text-sm text-gray-400 mt-1">Tatarstan Tours</p>
+          <p className="text-sm text-gray-400 mt-1">Туры по Татарстану</p>
         </div>
       )}
 

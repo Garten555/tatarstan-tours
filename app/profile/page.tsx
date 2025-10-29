@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import ProfileContent from '@/components/profile/ProfileContent';
 
 export const metadata = {
-  title: 'Мой профиль | Tatarstan Tours',
+  title: 'Мой профиль | Туры по Татарстану',
   description: 'Управление профилем и настройками аккаунта',
 };
 

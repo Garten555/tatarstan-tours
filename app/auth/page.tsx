@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import AuthForm from '@/components/auth/AuthForm';
 
 export const metadata = {
-  title: 'Вход и Регистрация | Tatarstan Tours',
+  title: 'Вход и Регистрация | Туры по Татарстану',
   description: 'Войдите в свой аккаунт или создайте новый для бронирования туров',
 };
 

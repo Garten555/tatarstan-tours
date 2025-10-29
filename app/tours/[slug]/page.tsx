@@ -76,7 +76,7 @@ export async function generateMetadata({ params }: TourPageProps): Promise<Metad
   }
 
   return {
-    title: `${tour.title} | Tatarstan Tours`,
+    title: `${tour.title} | Туры по Татарстану`,
     description: tour.description,
     openGraph: {
       title: tour.title,

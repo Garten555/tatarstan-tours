@@ -55,7 +55,7 @@ export default async function AdminDashboard() {
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Панель управления</h1>
         <p className="mt-2 text-gray-600">
-          Обзор платформы Tatarstan Tours
+          Обзор платформы "Туры по Татарстану"
         </p>
       </div>
 

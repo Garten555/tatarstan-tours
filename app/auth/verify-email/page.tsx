@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Mail, ArrowLeft } from 'lucide-react';
 
 export const metadata: Metadata = {
-  title: 'Подтвердите email | Tatarstan Tours',
+  title: 'Подтвердите email | Туры по Татарстану',
   description: 'Проверьте вашу почту для подтверждения регистрации',
 };
 
