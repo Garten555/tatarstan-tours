@@ -16,37 +16,37 @@ interface DashboardStatsProps {
 export default function DashboardStats({ stats }: DashboardStatsProps) {
   const statCards = [
     {
-      name: 'Total Users',
+      name: 'Всего пользователей',
       value: stats.totalUsers,
       icon: Users,
       color: 'bg-blue-500',
     },
     {
-      name: 'Total Tours',
+      name: 'Всего туров',
       value: stats.totalTours,
       icon: Map,
       color: 'bg-emerald-500',
     },
     {
-      name: 'Total Bookings',
+      name: 'Всего бронирований',
       value: stats.totalBookings,
       icon: Calendar,
       color: 'bg-purple-500',
     },
     {
-      name: 'Total Reviews',
+      name: 'Всего отзывов',
       value: stats.totalReviews,
       icon: Star,
       color: 'bg-yellow-500',
     },
     {
-      name: 'Active Bookings',
+      name: 'Активные бронирования',
       value: stats.activeBookings,
       icon: CheckCircle,
       color: 'bg-green-500',
     },
     {
-      name: 'Pending Reviews',
+      name: 'Отзывы на модерации',
       value: stats.pendingReviews,
       icon: Clock,
       color: 'bg-orange-500',

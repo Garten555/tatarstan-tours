@@ -2,8 +2,8 @@ import { createServiceClient } from '@/lib/supabase/server';
 import DashboardStats from '@/components/admin/DashboardStats';
 
 export const metadata = {
-  title: 'Dashboard - Admin Panel',
-  description: 'Admin dashboard for Tatarstan Tours',
+  title: 'Панель управления - Админ панель',
+  description: 'Административная панель Tatarstan Tours',
 };
 
 export default async function AdminDashboard() {
@@ -53,9 +53,9 @@ export default async function AdminDashboard() {
     <div className="space-y-8">
       {/* Заголовок */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Панель управления</h1>
         <p className="mt-2 text-gray-600">
-          Overview of Tatarstan Tours platform
+          Обзор платформы Tatarstan Tours
         </p>
       </div>
 
@@ -65,26 +65,26 @@ export default async function AdminDashboard() {
       {/* Последние бронирования */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">
-          Recent Bookings
+          Последние бронирования
         </h2>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Tour
+                  Тур
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  User
+                  Пользователь
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
+                  Статус
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Price
+                  Цена
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Date
+                  Дата
                 </th>
               </tr>
             </thead>
@@ -104,7 +104,9 @@ export default async function AdminDashboard() {
                       booking.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                       'bg-gray-100 text-gray-800'
                     }`}>
-                      {booking.status}
+                      {booking.status === 'confirmed' ? 'Подтверждено' :
+                       booking.status === 'pending' ? 'Ожидает' :
+                       booking.status === 'cancelled' ? 'Отменено' : booking.status}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -122,4 +124,3 @@ export default async function AdminDashboard() {
     </div>
   );
 }
-

@@ -4,8 +4,8 @@ import { Plus } from 'lucide-react';
 import TourAdminList from '@/components/admin/TourAdminList';
 
 export const metadata = {
-  title: 'Tours Management - Admin Panel',
-  description: 'Manage tours',
+  title: 'Управление турами - Админ панель',
+  description: 'Управление турами',
 };
 
 export default async function AdminToursPage() {
@@ -36,9 +36,9 @@ export default async function AdminToursPage() {
       {/* Заголовок */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Tours Management</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Управление турами</h1>
           <p className="mt-2 text-gray-600">
-            Create and manage tours
+            Создание и редактирование туров
           </p>
         </div>
         <Link
@@ -46,7 +46,7 @@ export default async function AdminToursPage() {
           className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
         >
           <Plus className="w-5 h-5" />
-          Create Tour
+          Создать тур
         </Link>
       </div>
 

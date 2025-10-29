@@ -3,8 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import TourForm from '@/components/admin/TourForm';
 
 export const metadata = {
-  title: 'Create Tour - Admin Panel',
-  description: 'Create a new tour',
+  title: 'Создать тур - Админ панель',
+  description: 'Создание нового тура',
 };
 
 export default async function CreateTourPage() {
@@ -31,9 +31,9 @@ export default async function CreateTourPage() {
     <div className="space-y-8">
       {/* Заголовок */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Create New Tour</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Создать новый тур</h1>
         <p className="mt-2 text-gray-600">
-          Fill in the details to create a new tour
+          Заполните данные для создания нового тура
         </p>
       </div>
 

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { User, LogOut, Settings, Calendar } from 'lucide-react';
+import { User, LogOut, Settings, Calendar, Shield } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 export default function UserMenu() {
@@ -31,7 +31,7 @@ export default function UserMenu() {
         // Затем пытаемся загрузить из БД (если есть обновления)
         supabase
           .from('profiles')
-          .select('first_name, last_name, avatar_url')
+          .select('first_name, last_name, avatar_url, role')
           .eq('id', user.id)
           .single()
           .then(({ data, error }) => {
@@ -142,6 +142,21 @@ export default function UserMenu() {
               <Settings className="w-5 h-5 text-gray-600" />
               <span className="text-gray-700">Настройки</span>
             </Link>
+            
+            {/* Ссылка на админку (только для админов) */}
+            {(profile?.role === 'super_admin' || profile?.role === 'tour_admin' || profile?.role === 'support_admin') && (
+              <>
+                <hr className="my-2" />
+                <Link
+                  href="/admin"
+                  onClick={() => setIsOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-emerald-50 transition-colors text-emerald-600 font-medium"
+                >
+                  <Shield className="w-5 h-5" />
+                  <span>Админ-панель</span>
+                </Link>
+              </>
+            )}
             
             <hr className="my-2" />
             

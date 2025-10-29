@@ -3,8 +3,8 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import UserList from '@/components/admin/UserList';
 
 export const metadata = {
-  title: 'Users Management - Admin Panel',
-  description: 'Manage users and assign roles',
+  title: 'Управление пользователями - Админ панель',
+  description: 'Управление пользователями и назначение ролей',
 };
 
 export default async function UsersPage() {
@@ -38,9 +38,9 @@ export default async function UsersPage() {
     <div className="space-y-8">
       {/* Заголовок */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Users Management</h1>
+        <h1 className="text-3xl font-bold text-gray-900">Управление пользователями</h1>
         <p className="mt-2 text-gray-600">
-          Manage user roles and permissions
+          Управление ролями и правами пользователей
         </p>
       </div>
 
@@ -49,4 +49,3 @@ export default async function UsersPage() {
     </div>
   );
 }
-
