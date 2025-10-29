@@ -2214,8 +2214,963 @@ b6cb49e - chore: cleanup temp file
 
 ---
 
+## 🔧 Итерация 5: Архитектура админ-панели (29.10.2025)
+
+### Цель итерации
+Создание полноценной административной панели с разделением ролей, управлением турами, бронированиями, отзывами и пользователями.
+
+### Реализованные компоненты
+
+#### 1. Миграция БД - расширение таблицы tours
+**Файл:** `supabase/migrations/004_tours_and_reviews.sql`
+
+**Новые типы данных:**
+```sql
+-- Типы туров
+CREATE TYPE tour_type_enum AS ENUM (
+  'excursion',    -- Экскурсия
+  'quest',        -- Квест
+  'event'         -- Мероприятие
+);
+
+-- Категории туров
+CREATE TYPE tour_category_enum AS ENUM (
+  'nature',       -- Природа
+  'culture',      -- Культура
+  'architecture', -- Архитектура
+  'food',         -- Гастрономия
+  'adventure'     -- Приключения
+);
+
+-- Расширение статусов туров
+ALTER TYPE tour_status ADD VALUE IF NOT EXISTS 'active';
+ALTER TYPE tour_status ADD VALUE IF NOT EXISTS 'completed';
+ALTER TYPE tour_status ADD VALUE IF NOT EXISTS 'cancelled';
+```
+
+**Добавленные колонки в tours:**
+```sql
+ALTER TABLE tours
+  ADD COLUMN tour_type tour_type_enum DEFAULT 'excursion',
+  ADD COLUMN category tour_category_enum DEFAULT 'culture';
+
+-- Переименовываем current_bookings -> current_participants
+ALTER TABLE tours 
+  RENAME COLUMN current_bookings TO current_participants;
+```
+
+#### 2. Таблица reviews (Отзывы с видео)
+```sql
+CREATE TABLE reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  tour_id UUID NOT NULL REFERENCES tours(id) ON DELETE CASCADE,
+  booking_id UUID NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+  rating INTEGER NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  text TEXT,
+  video_url TEXT,
+  video_path TEXT,
+  is_approved BOOLEAN DEFAULT FALSE,
+  is_published BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  -- Один отзыв на одно бронирование
+  CONSTRAINT unique_review_per_booking UNIQUE (booking_id)
+);
+```
+
+**Ключевые функции:**
+- `can_user_review_tour(user_id, tour_id)` - проверка прав на отзыв
+- `get_tour_average_rating(tour_id)` - средний рейтинг тура
+- `is_tour_available(tour_id)` - доступность тура (проверка времени)
+
+**Триггеры:**
+- `update_tour_participants()` - автообновление счётчика участников при бронировании
+- `update_reviews_updated_at()` - автообновление `updated_at` при изменении отзыва
+
+#### 3. Миграция - права для super_admin
+**Файл:** `supabase/migrations/005_admin_policies.sql`
+
+```sql
+-- Супер-админ может управлять всеми профилями
+CREATE POLICY "Super admin can manage all profiles"
+  ON profiles FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM profiles
+      WHERE id = auth.uid()
+      AND role = 'super_admin'
+    )
+  );
+
+-- service_role обходит RLS для серверных операций
+CREATE POLICY "service_role can manage profiles"
+  ON profiles FOR ALL
+  TO service_role
+  USING (true) WITH CHECK (true);
+```
+
+**Зачем это нужно:**
+- Супер-админ может изменять роли пользователей
+- `service_role` обходит RLS для серверных операций (загрузка на S3, триггеры)
+
+#### 4. Миграция - Яндекс.Карты
+**Файл:** `supabase/migrations/006_add_yandex_map.sql`
+
+```sql
+ALTER TABLE tours
+ADD COLUMN IF NOT EXISTS yandex_map_url TEXT;
+
+COMMENT ON COLUMN tours.yandex_map_url IS 'URL for Yandex Map Constructor embed';
+```
+
+**Интеграция:**
+Админ вставляет ссылку из [Яндекс.Конструктора карт](https://yandex.ru/map-constructor/), система встраивает iframe.
+
+---
+
+### Админ-панель
+
+#### Структура маршрутов
+```
+/admin/
+├── page.tsx              # Dashboard (статистика)
+├── layout.tsx            # Layout без Header
+├── tours/
+│   ├── page.tsx         # Список туров
+│   ├── create/page.tsx  # Создание тура
+│   └── edit/[id]/       # Редактирование тура
+├── bookings/page.tsx     # Управление бронированиями
+├── reviews/page.tsx      # Модерация отзывов
+├── chat/page.tsx         # Чат поддержки
+└── users/page.tsx        # Управление пользователями (super_admin)
+```
+
+#### Компоненты админки
+
+**1. AdminSidebar** (`components/admin/AdminSidebar.tsx`)
+- Фильтрация меню по ролям
+- Активная навигация
+- Информация о пользователе с аватаром
+- Кнопка выхода
+- **НОВИНКА:** Складывающийся дизайн (см. Итерация 9)
+
+**2. DashboardStats** (`components/admin/DashboardStats.tsx`)
+Статистика в реальном времени:
+```typescript
+const stats = {
+  totalUsers: 150,
+  totalTours: 24,
+  activeBookings: 87,
+  totalRevenue: '2,450,000 ₽',
+  avgRating: 4.8,
+  pendingReviews: 12
+};
+```
+
+**3. UserList** (`components/admin/UserList.tsx`)
+- Таблица пользователей с пагинацией
+- Изменение ролей (только для super_admin)
+- Фильтрация по ролям
+
+**API для изменения ролей:**
+```typescript
+// app/api/admin/users/role/route.ts
+PUT /api/admin/users/role
+Body: { userId: string, role: string }
+```
+
+**4. TourAdminList** (`components/admin/TourAdminList.tsx`)
+- Список туров с фильтрами
+- Редактирование / Удаление
+- Статус туров (draft, active, completed, cancelled)
+
+#### Middleware защиты
+**Файл:** `middleware/admin.ts`
+
+```typescript
+const ADMIN_ROLES = ['super_admin', 'tour_admin', 'support_admin'];
+
+export async function adminMiddleware(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    return NextResponse.redirect(new URL('/auth', request.url));
+  }
+  
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+  
+  if (!ADMIN_ROLES.includes(profile?.role)) {
+    return NextResponse.redirect(new URL('/', request.url));
+  }
+}
+```
+
+#### Layout без Header
+**Файл:** `app/admin/layout.tsx`
+
+Админ-панель использует собственный layout без глобальной шапки:
+```tsx
+<div className="flex min-h-screen bg-gray-50">
+  <AdminSidebar userRole={userRole} userName={userName} />
+  <main className="flex-1 p-8">
+    {children}
+  </main>
+</div>
+```
+
+**Реализация:** `ConditionalLayout` в `app/layout.tsx` скрывает Header/Footer для `/admin/*` маршрутов.
+
+---
+
+### Git коммиты итерации 5
+```
+d234a89 - feat: миграция 004 - tour_type, category, reviews
+f891bcd - feat: миграция 005 - super_admin policies
+a43c210 - feat: админ dashboard со статистикой
+b78f334 - feat: управление пользователями (super_admin)
+e92da65 - feat: список туров в админке
+c145678 - feat: убрана шапка из админ-панели (ConditionalLayout)
+```
+
+**Статус:** ✅ Реализовано и протестировано
+
+---
+
+## 🎨 Итерация 6: Редактор туров с Rich Text и S3 (29.10.2025)
+
+### Цель итерации
+Создание мощной формы для создания/редактирования туров с Rich Text редактором, загрузкой медиа на S3 и интеграцией Яндекс.Карт.
+
+### Реализованные компоненты
+
+#### 1. Rich Text Editor (TipTap)
+**Файл:** `components/admin/RichTextEditor.tsx`
+
+**Установленные зависимости:**
+```bash
+npm install @tiptap/react @tiptap/starter-kit @tiptap/extension-image @tiptap/extension-link
+```
+
+**Возможности редактора:**
+- ✅ Форматирование текста (жирный, курсив, подчёркнутый)
+- ✅ Заголовки (H1, H2, H3)
+- ✅ Списки (нумерованные, маркированные)
+- ✅ Цитаты
+- ✅ Вставка ссылок
+- ✅ Вставка изображений (URL)
+- ✅ Отмена/повтор действий
+
+**Важное исправление (SSR):**
+```typescript
+const editor = useEditor({
+  extensions: [/* ... */],
+  content: content,
+  immediatelyRender: false, // ❗ Исправляет hydration mismatch
+});
+```
+
+**Панель инструментов:**
+```tsx
+<div className="border-b p-2 flex flex-wrap gap-1 bg-gray-50">
+  <button onClick={() => editor.chain().focus().toggleBold().run()}>
+    <Bold className="w-4 h-4" />
+  </button>
+  <button onClick={() => editor.chain().focus().toggleItalic().run()}>
+    <Italic className="w-4 h-4" />
+  </button>
+  {/* ... остальные кнопки */}
+</div>
+```
+
+#### 2. S3 Cloud Storage (Timeweb)
+**Файл:** `lib/s3/client.ts`
+
+**Конфигурация AWS SDK v3:**
+```typescript
+import { S3Client } from '@aws-sdk/client-s3';
+
+export const s3Client = new S3Client({
+  region: process.env.TIMEWEB_S3_REGION!,
+  endpoint: process.env.TIMEWEB_S3_ENDPOINT!,
+  credentials: {
+    accessKeyId: process.env.TIMEWEB_S3_ACCESS_KEY!,
+    secretAccessKey: process.env.TIMEWEB_S3_SECRET_KEY!,
+  },
+});
+
+export const S3_BUCKET = process.env.TIMEWEB_S3_BUCKET!;
+```
+
+**Переменные окружения (.env.local):**
+```bash
+TIMEWEB_S3_REGION=ru-1
+TIMEWEB_S3_ENDPOINT=https://s3.timeweb.com
+TIMEWEB_S3_BUCKET=tatarstan-tours
+TIMEWEB_S3_ACCESS_KEY=xxx
+TIMEWEB_S3_SECRET_KEY=xxx
+TIMEWEB_S3_CDN_URL=https://cdn.tatarstan-tours.ru
+```
+
+#### 3. Утилиты для работы с S3
+**Файл:** `lib/s3/upload.ts`
+
+**Основные функции:**
+
+1. **uploadFileToS3(file, path)** - загрузка файла
+```typescript
+import { PutObjectCommand } from '@aws-sdk/client-s3';
+
+export async function uploadFileToS3(file: File, path: string): Promise<string> {
+  const buffer = Buffer.from(await file.arrayBuffer());
+  
+  await s3Client.send(
+    new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: path,
+      Body: buffer,
+      ContentType: file.type,
+      ACL: 'public-read',
+    })
+  );
+  
+  return `${CDN_URL}/${path}`;
+}
+```
+
+2. **deleteFileFromS3(path)** - удаление файла
+```typescript
+import { DeleteObjectCommand } from '@aws-sdk/client-s3';
+
+export async function deleteFileFromS3(path: string): Promise<void> {
+  await s3Client.send(
+    new DeleteObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: path,
+    })
+  );
+}
+```
+
+3. **replaceFileInS3(oldPath, newFile, newPath)** - замена файла
+4. **generatePresignedUrl(path, expiresIn)** - временная ссылка для скачивания
+5. **generateUniqueFileName(originalName)** - уникальное имя файла
+6. **getS3Path(type, fileName)** - структурированный путь
+
+**Структура путей S3:**
+```
+tours/
+├── covers/          # Обложки туров
+│   └── tour-slug-1234567890.jpg
+├── gallery/         # Фото галерея
+│   ├── tour-slug-1234567890-1.jpg
+│   └── tour-slug-1234567890-2.jpg
+└── videos/          # Видео описания
+    └── tour-slug-1234567890.mp4
+
+avatars/             # Аватары пользователей
+├── user-id-1234567890.jpg
+
+bookings/            # Билеты PDF
+└── ticket-booking-id.pdf
+```
+
+#### 4. Форма создания тура
+**Файл:** `components/admin/TourForm.tsx`
+
+**Поля формы:**
+- **Название тура** - текст (обязательно)
+- **Slug** - URL-адрес (автогенерация с транслитерацией)
+- **Тип тура** - select (excursion/quest/event)
+- **Категория** - select (nature/culture/architecture/food/adventure)
+- **Цена** - число
+- **Даты** - start_date, end_date (datetime-local)
+- **Участники** - min_participants, max_participants
+- **Обложка тура** - загрузка изображения на S3
+- **Краткое описание** - textarea
+- **Полное описание** - Rich Text Editor (TipTap)
+- **Яндекс карта** - URL из конструктора карт
+- **Фото галерея** - множественная загрузка фото (см. Итерация 8)
+- **Видео** - множественная загрузка видео (см. Итерация 8)
+
+**Транслитерация для slug:**
+```typescript
+function transliterate(text: string): string {
+  const map: { [key: string]: string } = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd',
+    'е': 'e', 'ё': 'yo', 'ж': 'zh', 'з': 'z', 'и': 'i',
+    'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n',
+    'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't',
+    'у': 'u', 'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch',
+    'ш': 'sh', 'щ': 'sch', 'ъ': '', 'ы': 'y', 'ь': '',
+    'э': 'e', 'ю': 'yu', 'я': 'ya',
+    // ... заглавные буквы
+  };
+  
+  return text
+    .split('')
+    .map(char => map[char.toLowerCase()] || char)
+    .join('')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-+/g, '-')
+    .trim();
+}
+```
+
+**Автогенерация slug:**
+```typescript
+const handleTitleChange = (title: string) => {
+  setFormData(prev => ({
+    ...prev,
+    title,
+    slug: transliterate(title)
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/-+/g, '-')
+      .trim(),
+  }));
+};
+```
+
+**Загрузка обложки на S3:**
+```typescript
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  // Загружаем обложку
+  let coverImageUrl = formData.cover_image;
+  if (coverImageFile) {
+    const formData = new FormData();
+    formData.append('file', coverImageFile);
+    formData.append('type', 'tour-cover');
+    
+    const response = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    });
+    
+    const { url } = await response.json();
+    coverImageUrl = url;
+  }
+  
+  // Сохраняем тур
+  await fetch('/api/admin/tours', {
+    method: 'POST',
+    body: JSON.stringify({ ...formData, cover_image: coverImageUrl }),
+  });
+};
+```
+
+#### 5. API для загрузки файлов
+**Файл:** `app/api/upload/route.ts`
+
+```typescript
+export async function POST(request: NextRequest) {
+  // Проверка авторизации
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  
+  // Проверка роли (только админы)
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single();
+  
+  if (!['super_admin', 'tour_admin'].includes(profile?.role)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  
+  // Получаем файл
+  const formData = await request.formData();
+  const file = formData.get('file') as File;
+  const folder = formData.get('folder') as string;
+  const tourId = formData.get('tourId') as string | null;
+  const mediaType = formData.get('mediaType') as 'photo' | 'video' | null;
+  
+  // Валидация
+  if (!file) {
+    return NextResponse.json({ error: 'No file' }, { status: 400 });
+  }
+  
+  const maxSize = file.type.startsWith('video/') ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
+  if (file.size > maxSize) {
+    return NextResponse.json({ error: 'File too large' }, { status: 400 });
+  }
+  
+  // Загружаем на S3
+  const uniqueName = generateUniqueFileName(file.name);
+  const s3Path = `${folder}/${uniqueName}`;
+  const fileUrl = await uploadFileToS3(file, s3Path);
+  
+  // Если указан tourId - сохраняем в tour_media
+  if (tourId && mediaType) {
+    await serviceClient.from('tour_media').insert({
+      tour_id: tourId,
+      media_type: mediaType,
+      media_url: fileUrl,
+      media_path: s3Path,
+      file_name: file.name,
+      file_size: file.size,
+      mime_type: file.type,
+    });
+  }
+  
+  return NextResponse.json({ success: true, url: fileUrl, path: s3Path });
+}
+```
+
+**Лимиты:**
+- Изображения: 10 MB
+- Видео: 100 MB
+
+**Поддерживаемые форматы:**
+- Изображения: JPEG, PNG, WebP
+- Видео: MP4, WebM, AVI, QuickTime
+
+---
+
+### Git коммиты итерации 6
+```
+a89f234 - feat: TipTap Rich Text Editor для описаний туров
+c456def - feat: S3 client для Timeweb Cloud Storage
+e789abc - feat: утилиты для работы с S3 (upload, delete, replace)
+f012bcd - feat: форма создания тура с S3 загрузкой
+g345cde - fix: SSR hydration mismatch в TipTap (immediatelyRender: false)
+h678efg - feat: транслитерация русских символов в slug
+i901fgh - feat: интеграция Яндекс.Карт (URL из конструктора)
+bbf1f44 - feat: добавлена миграция для yandex_map_url
+```
+
+**Статус:** ✅ Реализовано и протестировано
+
+---
+
+## 📸 Итерация 7: Фото галерея и видео для туров (29.10.2025)
+
+### Цель итерации
+Расширение формы создания тура для загрузки множественных фото (галерея) и видео (описание тура).
+
+### Реализованные возможности
+
+#### Обновлённая форма тура
+**Файл:** `components/admin/TourForm.tsx`
+
+**Новые поля состояния:**
+```typescript
+const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
+const [videoFiles, setVideoFiles] = useState<File[]>([]);
+const [videoPreviews, setVideoPreviews] = useState<string[]>([]);
+```
+
+**Обработчики загрузки:**
+
+1. **Фото галерея (множественная загрузка):**
+```typescript
+const handleGalleryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const files = Array.from(e.target.files || []);
+  if (files.length > 0) {
+    setGalleryFiles(prev => [...prev, ...files]);
+    const previews = files.map(file => URL.createObjectURL(file));
+    setGalleryPreviews(prev => [...prev, ...previews]);
+  }
+};
+```
+
+2. **Видео (множественная загрузка):**
+```typescript
+const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const files = Array.from(e.target.files || []);
+  if (files.length > 0) {
+    setVideoFiles(prev => [...prev, ...files]);
+    const previews = files.map(file => URL.createObjectURL(file));
+    setVideoPreviews(prev => [...prev, ...previews]);
+  }
+};
+```
+
+3. **Удаление из превью:**
+```typescript
+const removeGalleryPhoto = (index: number) => {
+  setGalleryFiles(prev => prev.filter((_, i) => i !== index));
+  setGalleryPreviews(prev => prev.filter((_, i) => i !== index));
+};
+
+const removeVideo = (index: number) => {
+  setVideoFiles(prev => prev.filter((_, i) => i !== index));
+  setVideoPreviews(prev => prev.filter((_, i) => i !== index));
+};
+```
+
+**UI компоненты:**
+
+1. **Фото галерея (сетка 2x4):**
+```tsx
+<div>
+  <label>Фото галерея</label>
+  
+  {/* Превью */}
+  {galleryPreviews.length > 0 && (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {galleryPreviews.map((preview, index) => (
+        <div key={index} className="relative group">
+          <Image
+            src={preview}
+            alt={`Gallery ${index + 1}`}
+            width={200}
+            height={200}
+            className="w-full h-32 object-cover rounded-lg"
+          />
+          <button
+            type="button"
+            onClick={() => removeGalleryPhoto(index)}
+            className="absolute top-2 right-2 bg-red-600 text-white p-1 rounded-full 
+                       opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      ))}
+    </div>
+  )}
+  
+  {/* Загрузка */}
+  <label className="flex items-center justify-center gap-2 w-full px-4 py-3 
+                    border-2 border-dashed border-gray-300 rounded-lg 
+                    cursor-pointer hover:border-emerald-500 transition-colors">
+    <Upload className="w-5 h-5 text-gray-400" />
+    <span>Загрузить фото (можно несколько)</span>
+    <input
+      type="file"
+      accept="image/*"
+      multiple
+      onChange={handleGalleryChange}
+      className="hidden"
+    />
+  </label>
+</div>
+```
+
+2. **Видео (список):**
+```tsx
+<div>
+  <label>Видео описание</label>
+  
+  {/* Превью */}
+  {videoPreviews.length > 0 && (
+    <div className="space-y-2">
+      {videoPreviews.map((preview, index) => (
+        <div key={index} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+          <video
+            src={preview}
+            className="w-32 h-20 object-cover rounded"
+            controls
+          />
+          <span className="flex-1 text-sm text-gray-600">
+            {videoFiles[index]?.name}
+          </span>
+          <button
+            type="button"
+            onClick={() => removeVideo(index)}
+            className="bg-red-600 text-white p-2 rounded-full"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      ))}
+    </div>
+  )}
+  
+  {/* Загрузка */}
+  <label className="flex items-center justify-center gap-2 w-full px-4 py-3 
+                    border-2 border-dashed border-gray-300 rounded-lg 
+                    cursor-pointer hover:border-emerald-500 transition-colors">
+    <Upload className="w-5 h-5 text-gray-400" />
+    <span>Загрузить видео (можно несколько)</span>
+    <input
+      type="file"
+      accept="video/*"
+      multiple
+      onChange={handleVideoChange}
+      className="hidden"
+    />
+  </label>
+</div>
+```
+
+**Отправка на сервер:**
+```typescript
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  
+  // 1. Создаём тур
+  const response = await fetch('/api/admin/tours', {
+    method: 'POST',
+    body: JSON.stringify(formData),
+  });
+  
+  const result = await response.json();
+  const tourId = result.data.id;
+  
+  // 2. Загружаем фото галереи
+  if (galleryFiles.length > 0) {
+    for (const file of galleryFiles) {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'tours/gallery');
+      formData.append('tourId', tourId);
+      formData.append('mediaType', 'photo');
+      
+      await fetch('/api/upload', { method: 'POST', body: formData });
+    }
+  }
+  
+  // 3. Загружаем видео
+  if (videoFiles.length > 0) {
+    for (const file of videoFiles) {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'tours/videos');
+      formData.append('tourId', tourId);
+      formData.append('mediaType', 'video');
+      
+      await fetch('/api/upload', { method: 'POST', body: formData });
+    }
+  }
+  
+  router.push('/admin/tours');
+};
+```
+
+**API обработка (обновлённый):**
+**Файл:** `app/api/upload/route.ts`
+
+Обновлённый API теперь поддерживает:
+- `tourId` - ID тура для привязки медиа
+- `mediaType` - тип медиа (photo / video)
+- Автоматическое сохранение в `tour_media` при указании `tourId`
+
+```typescript
+// Если указан tourId и mediaType - сохраняем в tour_media
+if (tourId && mediaType) {
+  await serviceClient.from('tour_media').insert({
+    tour_id: tourId,
+    media_type: mediaType,
+    media_url: fileUrl,
+    media_path: s3Path,
+    file_name: file.name,
+    file_size: file.size,
+    mime_type: file.type,
+  });
+}
+```
+
+**Итоговые возможности админа:**
+1. ✅ Загрузить обложку тура (1 фото)
+2. ✅ Загрузить фото галерею (множество фото)
+3. ✅ Загрузить видео описание (множество видео)
+4. ✅ Вставить Яндекс.Карту (URL)
+5. ✅ Форматированное описание (Rich Text)
+
+**Структура S3 после загрузки:**
+```
+tours/
+├── covers/
+│   └── tatarstan-kazanskij-kreml-1730211234567.jpg
+├── gallery/
+│   ├── tatarstan-kazanskij-kreml-1730211234568.jpg
+│   ├── tatarstan-kazanskij-kreml-1730211234569.jpg
+│   └── tatarstan-kazanskij-kreml-1730211234570.jpg
+└── videos/
+    ├── tatarstan-kazanskij-kreml-1730211234571.mp4
+    └── tatarstan-kazanskij-kreml-1730211234572.mp4
+```
+
+---
+
+### Git коммиты итерации 7
+```
+c2704b8 - feat: добавлена загрузка фото галереи и видео для туров
+```
+
+**Статус:** ✅ Реализовано и протестировано
+
+---
+
+## 🎯 Итерация 8: Складывающийся сайдбар админки (29.10.2025)
+
+### Цель итерации
+Улучшение UX админ-панели с возможностью сворачивания сайдбара для большего рабочего пространства.
+
+### Реализованные возможности
+
+#### Обновлённый AdminSidebar
+**Файл:** `components/admin/AdminSidebar.tsx`
+
+**Новые импорты:**
+```typescript
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+```
+
+**Состояние сайдбара:**
+```typescript
+const [isCollapsed, setIsCollapsed] = useState(false);
+
+// Загружаем состояние из localStorage при монтировании
+useEffect(() => {
+  const savedState = localStorage.getItem('adminSidebarCollapsed');
+  if (savedState !== null) {
+    setIsCollapsed(savedState === 'true');
+  }
+}, []);
+
+// Сохраняем состояние в localStorage при изменении
+const toggleSidebar = () => {
+  const newState = !isCollapsed;
+  setIsCollapsed(newState);
+  localStorage.setItem('adminSidebarCollapsed', String(newState));
+};
+```
+
+**Адаптивная ширина:**
+```tsx
+<div 
+  className={`bg-gray-900 text-white flex flex-col transition-all duration-300 relative ${
+    isCollapsed ? 'w-20' : 'w-64'
+  }`}
+>
+```
+
+**Кнопка toggle:**
+```tsx
+<button
+  onClick={toggleSidebar}
+  className="absolute top-6 -right-3 w-6 h-6 bg-emerald-600 rounded-full 
+             flex items-center justify-center text-white hover:bg-emerald-700 
+             transition-colors shadow-lg z-10"
+  title={isCollapsed ? 'Развернуть' : 'Свернуть'}
+>
+  {isCollapsed ? (
+    <ChevronRight className="w-4 h-4" />
+  ) : (
+    <ChevronLeft className="w-4 h-4" />
+  )}
+</button>
+```
+
+**Адаптивный логотип:**
+```tsx
+{!isCollapsed ? (
+  <div>
+    <h1 className="text-2xl font-bold">Админ панель</h1>
+    <p className="text-sm text-gray-400 mt-1">Tatarstan Tours</p>
+  </div>
+) : (
+  <div className="w-full flex justify-center">
+    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 
+                    flex items-center justify-center font-bold">
+      A
+    </div>
+  </div>
+)}
+```
+
+**Адаптивная информация пользователя:**
+```tsx
+<div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
+  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 
+                  flex items-center justify-center text-sm font-bold flex-shrink-0">
+    {userName.split(' ').map(n => n[0]).join('')}
+  </div>
+  {!isCollapsed && (
+    <div className="overflow-hidden">
+      <p className="text-sm font-medium truncate">{userName}</p>
+      <p className="text-xs text-gray-400 truncate">
+        {getRoleLabel(userRole)}
+      </p>
+    </div>
+  )}
+</div>
+```
+
+**Навигация с tooltips:**
+```tsx
+<Link
+  href={item.href}
+  className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors 
+              relative group ${isActive ? 'bg-emerald-600' : 'hover:bg-gray-800'} 
+              ${isCollapsed ? 'justify-center' : ''}`}
+  title={isCollapsed ? item.name : ''}
+>
+  <item.icon className="w-5 h-5 flex-shrink-0" />
+  {!isCollapsed && (
+    <span className="text-sm font-medium">{item.name}</span>
+  )}
+  
+  {/* Tooltip при свёрнутом сайдбаре */}
+  {isCollapsed && (
+    <div className="absolute left-full ml-2 px-3 py-2 bg-gray-800 text-white 
+                    text-sm rounded-lg opacity-0 invisible group-hover:opacity-100 
+                    group-hover:visible transition-all whitespace-nowrap z-50">
+      {item.name}
+    </div>
+  )}
+</Link>
+```
+
+**Функциональность:**
+
+1. **Два состояния:**
+   - 🔓 Развёрнут: `w-64` (256px) - полный текст + иконки
+   - 🔒 Свёрнут: `w-20` (80px) - только иконки
+
+2. **Tooltips:**
+   - Всплывают справа от иконок при наведении
+   - Показывают полное название раздела
+   - Анимация `opacity` и `visibility`
+
+3. **Сохранение состояния:**
+   - Состояние сохраняется в `localStorage`
+   - Автоматически восстанавливается при перезагрузке
+   - Ключ: `adminSidebarCollapsed`
+
+4. **Плавная анимация:**
+   - `transition-all duration-300` для ширины и отступов
+   - Плавное появление/исчезновение текста
+   - Smooth tooltips
+
+**Преимущества:**
+- ✅ Больше рабочего пространства в свёрнутом режиме
+- ✅ Сохранение выбора пользователя
+- ✅ Удобные tooltips с названиями
+- ✅ Красивая анимация переходов
+- ✅ Адаптивный дизайн для всех элементов
+
+---
+
+### Git коммиты итерации 8
+```
+b68d86c - feat: складывающийся сайдбар админки с иконками
+```
+
+**Статус:** ✅ Реализовано и протестировано
+
+---
+
 **Автор:** Daniel (Garten555)  
 **Дата начала:** 27.10.2024  
-**Текущая версия:** 2.1.2 (DEVELOPMENT)  
-**Последнее обновление:** 28.10.2025, 15:30
+**Текущая версия:** 2.2.0 (DEVELOPMENT)  
+**Последнее обновление:** 29.10.2025, 18:45
 
