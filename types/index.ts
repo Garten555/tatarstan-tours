@@ -3,7 +3,9 @@
 // ==========================================
 
 export type UserRole = 'user' | 'tour_admin' | 'support_admin' | 'super_admin';
-export type TourStatus = 'draft' | 'published' | 'archived';
+export type TourStatus = 'draft' | 'active' | 'completed' | 'cancelled';
+export type TourType = 'excursion' | 'hiking' | 'cruise' | 'bus_tour' | 'walking_tour';
+export type TourCategory = 'history' | 'nature' | 'culture' | 'architecture' | 'food' | 'adventure';
 export type MediaType = 'image' | 'video';
 export type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 
@@ -55,17 +57,23 @@ export interface Tour {
   short_desc: string | null;
   full_desc: string | null;
   cover_image: string | null;
+  cover_path: string | null;
   price_per_person: number;
+  tour_type: TourType;
+  category: TourCategory;
   start_date: string;
-  end_date: string;
+  end_date: string | null;
   max_participants: number;
-  current_bookings: number;
+  current_participants: number;
+  is_available: boolean;
   yandex_map_data: YandexMapData | null;
   status: TourStatus;
   created_by: string | null;
   created_at: string;
   updated_at: string;
   media?: TourMedia[];
+  average_rating?: number;
+  total_reviews?: number;
 }
 
 export interface TourMedia {
@@ -124,17 +132,57 @@ export interface ChatMessage {
 }
 
 // ==========================================
+// Review
+// ==========================================
+
+export interface Review {
+  id: string;
+  user_id: string;
+  tour_id: string;
+  booking_id: string;
+  rating: number;
+  text: string | null;
+  video_url: string | null;
+  video_path: string | null;
+  is_approved: boolean;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+  user?: Profile;
+  tour?: Tour;
+}
+
+export interface CreateReviewRequest {
+  tour_id: string;
+  booking_id: string;
+  rating: number;
+  text?: string;
+  video?: File;
+}
+
+export interface ReviewCanSubmit {
+  can_review: boolean;
+  booking_id: string | null;
+  reason: string;
+}
+
+// ==========================================
 // API Request/Response Types
 // ==========================================
 
 // Tours
 export interface ToursListParams {
   status?: TourStatus;
+  tour_type?: TourType;
+  category?: TourCategory;
   limit?: number;
   offset?: number;
   search?: string;
   start_date?: string;
   end_date?: string;
+  price_min?: number;
+  price_max?: number;
+  available_only?: boolean;
 }
 
 export interface ToursListResponse {

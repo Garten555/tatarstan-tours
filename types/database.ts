@@ -63,13 +63,17 @@ export interface Database {
           short_desc: string | null
           full_desc: string | null
           cover_image: string | null
+          cover_path: string | null
           price_per_person: number
+          tour_type: 'excursion' | 'hiking' | 'cruise' | 'bus_tour' | 'walking_tour'
+          category: 'history' | 'nature' | 'culture' | 'architecture' | 'food' | 'adventure'
           start_date: string
-          end_date: string
+          end_date: string | null
           max_participants: number
-          current_bookings: number
+          current_participants: number
+          is_available: boolean
           yandex_map_data: Json | null
-          status: 'draft' | 'published' | 'archived'
+          status: 'draft' | 'active' | 'completed' | 'cancelled'
           created_by: string | null
           created_at: string
           updated_at: string
@@ -82,13 +86,15 @@ export interface Database {
           short_desc?: string | null
           full_desc?: string | null
           cover_image?: string | null
+          cover_path?: string | null
           price_per_person: number
+          tour_type?: 'excursion' | 'hiking' | 'cruise' | 'bus_tour' | 'walking_tour'
+          category?: 'history' | 'nature' | 'culture' | 'architecture' | 'food' | 'adventure'
           start_date: string
-          end_date: string
+          end_date?: string | null
           max_participants?: number
-          current_bookings?: number
           yandex_map_data?: Json | null
-          status?: 'draft' | 'published' | 'archived'
+          status?: 'draft' | 'active' | 'completed' | 'cancelled'
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -101,13 +107,15 @@ export interface Database {
           short_desc?: string | null
           full_desc?: string | null
           cover_image?: string | null
+          cover_path?: string | null
           price_per_person?: number
+          tour_type?: 'excursion' | 'hiking' | 'cruise' | 'bus_tour' | 'walking_tour'
+          category?: 'history' | 'nature' | 'culture' | 'architecture' | 'food' | 'adventure'
           start_date?: string
-          end_date?: string
+          end_date?: string | null
           max_participants?: number
-          current_bookings?: number
           yandex_map_data?: Json | null
-          status?: 'draft' | 'published' | 'archived'
+          status?: 'draft' | 'active' | 'completed' | 'cancelled'
           created_by?: string | null
           created_at?: string
           updated_at?: string
@@ -241,16 +249,81 @@ export interface Database {
           created_at?: string
         }
       }
+      reviews: {
+        Row: {
+          id: string
+          user_id: string
+          tour_id: string
+          booking_id: string
+          rating: number
+          text: string | null
+          video_url: string | null
+          video_path: string | null
+          is_approved: boolean
+          is_published: boolean
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          tour_id: string
+          booking_id: string
+          rating: number
+          text?: string | null
+          video_url?: string | null
+          video_path?: string | null
+          is_approved?: boolean
+          is_published?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          tour_id?: string
+          booking_id?: string
+          rating?: number
+          text?: string | null
+          video_url?: string | null
+          video_path?: string | null
+          is_approved?: boolean
+          is_published?: boolean
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      can_user_review_tour: {
+        Args: {
+          p_user_id: string
+          p_tour_id: string
+        }
+        Returns: {
+          can_review: boolean
+          booking_id: string | null
+          reason: string
+        }[]
+      }
+      get_tour_average_rating: {
+        Args: {
+          p_tour_id: string
+        }
+        Returns: {
+          average_rating: number
+          total_reviews: number
+        }[]
+      }
     }
     Enums: {
       user_role: 'user' | 'tour_admin' | 'support_admin' | 'super_admin'
-      tour_status: 'draft' | 'published' | 'archived'
+      tour_status: 'draft' | 'active' | 'completed' | 'cancelled'
+      tour_type: 'excursion' | 'hiking' | 'cruise' | 'bus_tour' | 'walking_tour'
+      tour_category: 'history' | 'nature' | 'culture' | 'architecture' | 'food' | 'adventure'
       media_type: 'image' | 'video'
       booking_status: 'pending' | 'confirmed' | 'cancelled' | 'completed'
     }
