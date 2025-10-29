@@ -73,6 +73,7 @@ export interface Database {
           current_participants: number
           is_available: boolean
           yandex_map_data: Json | null
+          yandex_map_url: string | null
           status: 'draft' | 'active' | 'completed' | 'cancelled'
           created_by: string | null
           created_at: string
@@ -94,6 +95,7 @@ export interface Database {
           end_date?: string | null
           max_participants?: number
           yandex_map_data?: Json | null
+          yandex_map_url?: string | null
           status?: 'draft' | 'active' | 'completed' | 'cancelled'
           created_by?: string | null
           created_at?: string
@@ -115,6 +117,7 @@ export interface Database {
           end_date?: string | null
           max_participants?: number
           yandex_map_data?: Json | null
+          yandex_map_url?: string | null
           status?: 'draft' | 'active' | 'completed' | 'cancelled'
           created_by?: string | null
           created_at?: string
