@@ -111,33 +111,38 @@ export default function AdminSidebar({ userRole, userName }: AdminSidebarProps) 
 
   return (
     <div 
-      className={`bg-gray-900 text-white flex flex-col transition-all duration-300 relative ${
+      className={`sticky top-0 bg-gray-900 text-white flex flex-col h-screen transition-all duration-300 relative ${
         isCollapsed ? 'w-20' : 'w-64'
       }`}
     >
-      {/* Logo */}
-      {!isCollapsed && (
-        <div className="p-6 border-b border-gray-800">
-          <h1 className="text-2xl font-bold">Админ панель</h1>
-          <p className="text-sm text-gray-400 mt-1">Туры по Татарстану</p>
-        </div>
-      )}
-
-      {/* Toggle Button */}
-      <button
-        onClick={toggleSidebar}
-        className="absolute top-6 -right-3 w-6 h-6 bg-emerald-600 rounded-full flex items-center justify-center text-white hover:bg-emerald-700 transition-colors shadow-lg z-10"
-        title={isCollapsed ? 'Развернуть' : 'Свернуть'}
-      >
-        {isCollapsed ? (
-          <ChevronRight className="w-4 h-4" />
+      {/* Header with Logo and Toggle Button */}
+      <div className="border-b border-gray-800 flex-shrink-0 relative">
+        {/* Logo */}
+        {!isCollapsed ? (
+          <div className="p-6">
+            <h1 className="text-2xl font-bold">Админ панель</h1>
+            <p className="text-sm text-gray-400 mt-1">Туры по Татарстану</p>
+          </div>
         ) : (
-          <ChevronLeft className="w-4 h-4" />
+          <div className="p-6" />
         )}
-      </button>
+
+        {/* Toggle Button - Always visible */}
+        <button
+          onClick={toggleSidebar}
+          className="absolute top-6 -right-3 w-6 h-6 bg-emerald-600 rounded-full flex items-center justify-center text-white hover:bg-emerald-700 transition-colors shadow-lg z-10"
+          title={isCollapsed ? 'Развернуть' : 'Свернуть'}
+        >
+          {isCollapsed ? (
+            <ChevronRight className="w-4 h-4" />
+          ) : (
+            <ChevronLeft className="w-4 h-4" />
+          )}
+        </button>
+      </div>
 
       {/* User info */}
-      <div className={`p-4 border-b border-gray-800 ${isCollapsed ? 'px-2' : ''}`}>
+      <div className={`p-4 border-b border-gray-800 flex-shrink-0 ${isCollapsed ? 'px-2' : ''}`}>
         <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'gap-3'}`}>
           <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
             {userName.split(' ').map(n => n[0]).join('')}
@@ -154,7 +159,7 @@ export default function AdminSidebar({ userRole, userName }: AdminSidebarProps) 
       </div>
 
       {/* Navigation */}
-      <nav className={`flex-1 p-4 space-y-1 ${isCollapsed ? 'px-2' : ''}`}>
+      <nav className={`flex-1 p-4 space-y-1 ${isCollapsed ? 'px-2 overflow-y-visible' : 'overflow-y-auto'}`}>
         {filteredNavigation.map((item) => {
           const isActive = pathname === item.href;
           return (
@@ -184,8 +189,8 @@ export default function AdminSidebar({ userRole, userName }: AdminSidebarProps) 
         })}
       </nav>
 
-      {/* Bottom actions */}
-      <div className={`p-4 border-t border-gray-800 space-y-2 ${isCollapsed ? 'px-2' : ''}`}>
+      {/* Bottom actions - Always visible */}
+      <div className={`p-4 border-t border-gray-800 space-y-2 flex-shrink-0 ${isCollapsed ? 'px-2' : ''}`}>
         <Link
           href="/"
           className={`flex items-center gap-3 px-3 py-2 rounded-lg text-gray-300 hover:bg-gray-800 hover:text-white transition-colors relative group ${
