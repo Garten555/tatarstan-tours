@@ -6,17 +6,28 @@
 -- 1. ОБНОВЛЕНИЕ ТАБЛИЦЫ TOURS
 -- ============================================================================
 
--- Добавляем новые колонки к таблице tours
+-- Шаг 1: Добавляем новые enum типы
+ALTER TYPE tour_status ADD VALUE IF NOT EXISTS 'active';
+ALTER TYPE tour_status ADD VALUE IF NOT EXISTS 'completed';
+ALTER TYPE tour_status ADD VALUE IF NOT EXISTS 'cancelled';
+
+-- Шаг 2: Создаём новые enum типы для tour_type и category
+CREATE TYPE tour_type AS ENUM ('excursion', 'hiking', 'cruise', 'bus_tour', 'walking_tour');
+CREATE TYPE tour_category AS ENUM ('history', 'nature', 'culture', 'architecture', 'food', 'adventure');
+
+-- Шаг 3: Переименовываем current_bookings в current_participants
+ALTER TABLE tours RENAME COLUMN current_bookings TO current_participants;
+
+-- Шаг 4: Добавляем новые колонки
 ALTER TABLE tours
-  ADD COLUMN tour_type VARCHAR(50) DEFAULT 'excursion' CHECK (tour_type IN ('excursion', 'hiking', 'cruise', 'bus_tour', 'walking_tour')),
-  ADD COLUMN category VARCHAR(50) DEFAULT 'history' CHECK (category IN ('history', 'nature', 'culture', 'architecture', 'food', 'adventure')),
-  ADD COLUMN start_date TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  ADD COLUMN end_date TIMESTAMP WITH TIME ZONE,
-  ADD COLUMN status VARCHAR(20) DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'completed', 'cancelled')),
-  ADD COLUMN max_participants INTEGER DEFAULT 20 CHECK (max_participants > 0),
-  ADD COLUMN current_participants INTEGER DEFAULT 0 CHECK (current_participants >= 0),
+  ADD COLUMN tour_type tour_type DEFAULT 'excursion',
+  ADD COLUMN category tour_category DEFAULT 'history';
+
+-- Шаг 5: Добавляем вычисляемое поле is_available
+-- (GENERATED ALWAYS AS требует PostgreSQL 12+)
+ALTER TABLE tours
   ADD COLUMN is_available BOOLEAN GENERATED ALWAYS AS (
-    status = 'active' AND 
+    status IN ('draft', 'published') AND 
     start_date > NOW() AND 
     current_participants < max_participants
   ) STORED;
@@ -24,18 +35,12 @@ ALTER TABLE tours
 -- Комментарии для новых полей tours
 COMMENT ON COLUMN tours.tour_type IS 'Тип тура: excursion, hiking, cruise, bus_tour, walking_tour';
 COMMENT ON COLUMN tours.category IS 'Категория тура: history, nature, culture, architecture, food, adventure';
-COMMENT ON COLUMN tours.start_date IS 'Дата и время начала тура';
-COMMENT ON COLUMN tours.end_date IS 'Дата и время окончания тура (опционально)';
-COMMENT ON COLUMN tours.status IS 'Статус тура: draft (черновик), active (активен), completed (завершён), cancelled (отменён)';
-COMMENT ON COLUMN tours.max_participants IS 'Максимальное количество участников';
-COMMENT ON COLUMN tours.current_participants IS 'Текущее количество участников';
+COMMENT ON COLUMN tours.current_participants IS 'Текущее количество участников (переименовано из current_bookings)';
 COMMENT ON COLUMN tours.is_available IS 'Автоматически вычисляемое поле: доступен ли тур для бронирования';
 
--- Индексы для фильтрации
+-- Индексы для фильтрации (новые)
 CREATE INDEX idx_tours_type ON tours(tour_type);
 CREATE INDEX idx_tours_category ON tours(category);
-CREATE INDEX idx_tours_start_date ON tours(start_date);
-CREATE INDEX idx_tours_status ON tours(status);
 CREATE INDEX idx_tours_available ON tours(is_available) WHERE is_available = true;
 
 -- ============================================================================
