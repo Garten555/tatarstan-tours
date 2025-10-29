@@ -116,24 +116,12 @@ export default function AdminSidebar({ userRole, userName }: AdminSidebarProps) 
       }`}
     >
       {/* Logo */}
-      <div className={`p-6 border-b border-gray-800 flex items-center justify-between ${
-        isCollapsed ? 'px-4' : ''
-      }`}>
-        {!isCollapsed ? (
-          <>
-            <div>
-              <h1 className="text-2xl font-bold">Админ панель</h1>
-              <p className="text-sm text-gray-400 mt-1">Tatarstan Tours</p>
-            </div>
-          </>
-        ) : (
-          <div className="w-full flex justify-center">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center font-bold">
-              A
-            </div>
-          </div>
-        )}
-      </div>
+      {!isCollapsed && (
+        <div className="p-6 border-b border-gray-800">
+          <h1 className="text-2xl font-bold">Админ панель</h1>
+          <p className="text-sm text-gray-400 mt-1">Tatarstan Tours</p>
+        </div>
+      )}
 
       {/* Toggle Button */}
       <button
