@@ -21,7 +21,6 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
   const [formData, setFormData] = useState({
     title: initialData?.title || '',
     slug: initialData?.slug || '',
-    description: initialData?.description || '',
     short_desc: initialData?.short_desc || '',
     full_desc: initialData?.full_desc || '',
     tour_type: initialData?.tour_type || 'excursion',
@@ -323,35 +322,26 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
           onChange={(e) => setFormData(prev => ({ ...prev, short_desc: e.target.value }))}
           rows={3}
           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          placeholder="Краткое описание для карточки тура..."
+          placeholder="Краткое описание для карточки тура (1-2 предложения)..."
         />
-      </div>
-
-      {/* Description */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Описание *
-        </label>
-        <textarea
-          required
-          value={formData.description}
-          onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-          rows={4}
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-          placeholder="Подробное описание тура..."
-        />
+        <p className="text-xs text-gray-500 mt-1">
+          Это описание будет отображаться на карточке тура в каталоге
+        </p>
       </div>
 
       {/* Full Description (Rich Text Editor) */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">
-          Полное описание (Rich Text)
+          Полное описание *
         </label>
         <RichTextEditor
           content={formData.full_desc}
           onChange={(content) => setFormData(prev => ({ ...prev, full_desc: content }))}
           placeholder="Напишите детальную информацию о туре с форматированием..."
         />
+        <p className="text-xs text-gray-500 mt-1">
+          Это описание будет отображаться на странице тура
+        </p>
       </div>
 
       {/* Submit */}
