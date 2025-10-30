@@ -33,9 +33,14 @@ export async function POST(request: NextRequest) {
 
     // Получаем данные из запроса
     const tourData = await request.json();
+    
+    console.log('📝 Received tour data:', JSON.stringify(tourData, null, 2));
 
     // Добавляем created_by
     tourData.created_by = user.id;
+    
+    console.log('👤 Added created_by:', user.id);
+    console.log('✅ Final tour data to insert:', JSON.stringify(tourData, null, 2));
 
     // Создаём тур через service_role
     const { data, error } = await serviceClient
@@ -45,12 +50,15 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      console.error('Error creating tour:', error);
+      console.error('❌ Error creating tour:', error);
+      console.error('❌ Error details:', JSON.stringify(error, null, 2));
       return NextResponse.json(
         { error: 'Failed to create tour', details: error.message },
         { status: 500 }
       );
     }
+    
+    console.log('✅ Tour created successfully:', data.id);
 
     return NextResponse.json({ success: true, data });
   } catch (error) {

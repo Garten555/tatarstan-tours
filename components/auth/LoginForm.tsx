@@ -61,6 +61,25 @@ export default function LoginForm() {
       if (signInError) throw signInError;
 
       if (data.user) {
+        // Загружаем роль из profiles и обновляем user_metadata
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, first_name, last_name, avatar_url')
+          .eq('id', data.user.id)
+          .single();
+
+        if (profile) {
+          // Обновляем user_metadata с актуальной ролью
+          await supabase.auth.updateUser({
+            data: {
+              role: profile.role,
+              first_name: profile.first_name,
+              last_name: profile.last_name,
+              avatar_url: profile.avatar_url,
+            },
+          });
+        }
+
         // Успешный вход
         router.push('/profile');
         router.refresh();

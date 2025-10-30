@@ -1,259 +1,333 @@
-import { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { createServiceClient } from '@/lib/supabase/server';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Clock, MapPin, Users, Calendar, Star, Shield, Camera, Heart } from 'lucide-react';
+import { 
+  Calendar, 
+  Clock, 
+  Users, 
+  MapPin, 
+  DollarSign,
+  ArrowLeft,
+  Share2
+} from 'lucide-react';
 
-// Типы для props (Next.js 16 - params теперь Promise)
 interface TourPageProps {
-  params: Promise<{
-    slug: string;
-  }>;
+  params: Promise<{ slug: string }>;
 }
 
-// Временные данные туров (потом заменим на Supabase)
-const TOURS_DATA: Record<string, any> = {
-  'kazan-city-tour': {
-    title: 'Обзорная экскурсия по Казани',
-    description: 'Познакомьтесь с главными достопримечательностями столицы Татарстана: Казанский Кремль, мечеть Кул-Шариф, улица Баумана и многое другое.',
-    fullDescription: `Казань - это уникальный город, где гармонично сочетаются европейская и восточная культуры. 
-    
-    На этой экскурсии вы увидите:
-    - Казанский Кремль (объект ЮНЕСКО)
-    - Мечеть Кул-Шариф - символ города
-    - Благовещенский собор
-    - Башню Сююмбике
-    - Пешеходную улицу Баумана
-    - Площадь Тысячелетия
-    
-    Профессиональный гид расскажет об истории города, его легендах и современной жизни. Вы узнаете о традициях татарского народа, попробуете национальную кухню и сделаете незабываемые фотографии.`,
-    price: 2500,
-    duration: '4-5 часов',
-    image: 'https://images.unsplash.com/photo-1585009414034-8e689de58c29?w=1200&h=800&fit=crop', // Placeholder (реальные фото будут из S3)
-    location: 'Казань',
-    maxParticipants: 25,
-    rating: 4.9,
-    reviewsCount: 237,
-    includes: [
-      'Профессиональный гид',
-      'Входные билеты в музеи',
-      'Транспорт по программе',
-      'Бутилированная вода',
-    ],
-    notIncludes: [
-      'Личные расходы',
-      'Обед (можно заказать отдельно)',
-      'Страховка',
-    ],
-    schedule: [
-      { time: '10:00', activity: 'Встреча группы у гостиницы' },
-      { time: '10:30', activity: 'Экскурсия по Казанскому Кремлю' },
-      { time: '12:30', activity: 'Посещение мечети Кул-Шариф' },
-      { time: '13:30', activity: 'Обед (опционально)' },
-      { time: '14:30', activity: 'Прогулка по улице Баумана' },
-      { time: '15:30', activity: 'Завершение тура' },
-    ],
-    availableDates: [
-      '2024-11-15',
-      '2024-11-22',
-      '2024-11-29',
-      '2024-12-06',
-      '2024-12-13',
-    ],
-  },
-  // Можно добавить больше туров по аналогии
+const TOUR_TYPE_LABELS: Record<string, string> = {
+  excursion: 'Экскурсия',
+  multi_day: 'Многодневный',
+  weekend: 'Выходные',
 };
 
-// Генерация метаданных для SEO
-export async function generateMetadata({ params }: TourPageProps): Promise<Metadata> {
-  const { slug } = await params;
-  const tour = TOURS_DATA[slug];
-  
-  if (!tour) {
-    return {
-      title: 'Тур не найден',
-    };
-  }
-
-  return {
-    title: `${tour.title} | Туры по Татарстану`,
-    description: tour.description,
-    openGraph: {
-      title: tour.title,
-      description: tour.description,
-      images: [tour.image],
-    },
-  };
-}
+const CATEGORY_LABELS: Record<string, string> = {
+  history: 'История',
+  nature: 'Природа',
+  culture: 'Культура',
+  gastronomy: 'Гастрономия',
+  active: 'Активный отдых',
+  religious: 'Религиозные',
+};
 
 export default async function TourPage({ params }: TourPageProps) {
   const { slug } = await params;
-  const tour = TOURS_DATA[slug];
+  const supabase = await createServiceClient();
 
-  // Если тур не найден - 404
-  if (!tour) {
+  // Получаем данные тура
+  const { data: tour, error } = await supabase
+    .from('tours')
+    .select('*')
+    .eq('slug', slug)
+    .eq('status', 'active')
+    .single();
+
+  if (error || !tour) {
     notFound();
   }
 
+  // Получаем медиа галерею
+  const { data: media } = await supabase
+    .from('tour_media')
+    .select('*')
+    .eq('tour_id', tour.id)
+    .order('created_at', { ascending: true });
+
+  const photos = media?.filter((m) => m.media_type === 'photo') || [];
+  const videos = media?.filter((m) => m.media_type === 'video') || [];
+
+  const availableSpots = tour.max_participants - (tour.current_participants || 0);
+  const isFullyBooked = availableSpots <= 0;
+
+  // Форматирование даты
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  // Вычисляем продолжительность
+  const getDuration = () => {
+    const start = new Date(tour.start_date);
+    const end = new Date(tour.end_date);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) {
+      const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
+      return `${diffHours} ${diffHours === 1 ? 'час' : diffHours < 5 ? 'часа' : 'часов'}`;
+    }
+    
+    return `${diffDays} ${diffDays === 1 ? 'день' : diffDays < 5 ? 'дня' : 'дней'}`;
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Hero изображение */}
-      <div className="relative h-[60vh] w-full">
-        <Image
-          src={tour.image}
-          alt={tour.title}
-          fill
-          className="object-cover"
-          priority
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
-        
-        {/* Заголовок поверх изображения */}
-        <div className="absolute bottom-0 left-0 right-0 p-8">
-          <div className="max-w-7xl mx-auto">
-            <div className="flex items-center gap-2 mb-4">
-              <MapPin className="w-5 h-5 text-white" />
-              <span className="text-white/90">{tour.location}</span>
-            </div>
-            <h1 className="text-5xl font-bold text-white mb-4">{tour.title}</h1>
-            <div className="flex items-center gap-4 text-white/90">
-              <div className="flex items-center gap-1">
-                <Star className="w-5 h-5 fill-yellow-400 text-yellow-400" />
-                <span className="font-semibold">{tour.rating}</span>
-                <span className="text-sm">({tour.reviewsCount} отзывов)</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Clock className="w-5 h-5" />
-                <span>{tour.duration}</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <Users className="w-5 h-5" />
-                <span>До {tour.maxParticipants} человек</span>
-              </div>
-            </div>
-          </div>
+    <main className="min-h-screen bg-gray-50">
+      {/* Навигация */}
+      <div className="bg-white border-b">
+        <div className="container mx-auto px-4 py-4">
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-gray-600 hover:text-emerald-600 transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            <span>Назад на главную</span>
+          </Link>
         </div>
       </div>
 
-      {/* Основной контент */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Левая колонка - описание */}
+          {/* Левая колонка - основная информация */}
           <div className="lg:col-span-2 space-y-8">
-            {/* Описание */}
-            <section className="bg-white p-8 rounded-xl shadow-sm">
-              <h2 className="text-3xl font-bold mb-6">О туре</h2>
-              <div className="prose prose-lg max-w-none text-gray-600 whitespace-pre-line">
-                {tour.fullDescription}
-              </div>
-            </section>
-
-            {/* Что входит */}
-            <section className="bg-white p-8 rounded-xl shadow-sm">
-              <h2 className="text-3xl font-bold mb-6">Что входит в стоимость</h2>
-              <div className="grid md:grid-cols-2 gap-8">
-                <div>
-                  <h3 className="font-semibold text-emerald-600 mb-4 flex items-center gap-2">
-                    <Shield className="w-5 h-5" />
-                    Включено
-                  </h3>
-                  <ul className="space-y-2">
-                    {tour.includes.map((item: string, i: number) => (
-                      <li key={i} className="flex items-start gap-2 text-gray-600">
-                        <span className="text-emerald-600 mt-1">✓</span>
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-600 mb-4">Не включено</h3>
-                  <ul className="space-y-2">
-                    {tour.notIncludes.map((item: string, i: number) => (
-                      <li key={i} className="flex items-start gap-2 text-gray-600">
-                        <span className="text-gray-400 mt-1">×</span>
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </section>
-
-            {/* Программа тура */}
-            <section className="bg-white p-8 rounded-xl shadow-sm">
-              <h2 className="text-3xl font-bold mb-6">Программа тура</h2>
-              <div className="space-y-4">
-                {tour.schedule.map((item: any, i: number) => (
-                  <div key={i} className="flex gap-4 border-l-4 border-emerald-600 pl-4 py-2">
-                    <div className="font-semibold text-emerald-600 min-w-[80px]">
-                      {item.time}
-                    </div>
-                    <div className="text-gray-600">{item.activity}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </div>
-
-          {/* Правая колонка - бронирование */}
-          <div className="lg:col-span-1">
-            <div className="bg-white p-8 rounded-xl shadow-lg sticky top-24">
-              <div className="text-center mb-6">
-                <div className="text-4xl font-bold text-emerald-600 mb-2">
-                  {tour.price.toLocaleString('ru-RU')} ₽
-                </div>
-                <div className="text-gray-600">за человека</div>
-              </div>
-
-              <div className="space-y-4 mb-6">
-                <div className="flex items-center justify-between py-3 border-b">
-                  <span className="text-gray-600">Длительность</span>
-                  <span className="font-semibold">{tour.duration}</span>
-                </div>
-                <div className="flex items-center justify-between py-3 border-b">
-                  <span className="text-gray-600">Группа</span>
-                  <span className="font-semibold">До {tour.maxParticipants} чел.</span>
-                </div>
-                <div className="flex items-center justify-between py-3 border-b">
-                  <span className="text-gray-600">Доступно дат</span>
-                  <span className="font-semibold text-emerald-600">
-                    {tour.availableDates.length}
+            {/* Обложка */}
+            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
+              <div className="relative h-96">
+                <Image
+                  src={tour.cover_image}
+                  alt={tour.title}
+                  fill
+                  className="object-cover"
+                  priority
+                />
+                
+                {/* Бейджи */}
+                <div className="absolute top-6 left-6 flex flex-wrap gap-2">
+                  <span className="px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-full">
+                    {TOUR_TYPE_LABELS[tour.tour_type] || tour.tour_type}
+                  </span>
+                  <span className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-full">
+                    {CATEGORY_LABELS[tour.category] || tour.category}
                   </span>
                 </div>
               </div>
 
-              <Link href="/booking">
-                <button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2 mb-4">
-                  <Calendar className="w-5 h-5" />
-                  Забронировать тур
-                </button>
-              </Link>
+              <div className="p-8">
+                {/* Заголовок */}
+                <h1 className="text-4xl font-bold text-gray-900 mb-4">
+                  {tour.title}
+                </h1>
 
-              <button className="w-full border-2 border-emerald-600 text-emerald-600 hover:bg-emerald-50 font-semibold py-4 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2">
-                <Heart className="w-5 h-5" />
-                В избранное
-              </button>
+                {/* Краткое описание */}
+                <p className="text-lg text-gray-600 mb-6">
+                  {tour.short_desc}
+                </p>
 
-              <div className="mt-6 pt-6 border-t space-y-3 text-sm text-gray-600">
-                <div className="flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-emerald-600" />
-                  <span>Гарантия лучшей цены</span>
+                {/* Метаданные */}
+                <div className="grid grid-cols-2 gap-4 py-6 border-y border-gray-200">
+                  <div className="flex items-center gap-3">
+                    <Calendar className="w-6 h-6 text-emerald-500" />
+                    <div>
+                      <div className="text-sm text-gray-500">Начало</div>
+                      <div className="font-medium text-gray-900">
+                        {formatDate(tour.start_date)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <Clock className="w-6 h-6 text-emerald-500" />
+                    <div>
+                      <div className="text-sm text-gray-500">Продолжительность</div>
+                      <div className="font-medium text-gray-900">{getDuration()}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <Users className="w-6 h-6 text-emerald-500" />
+                    <div>
+                      <div className="text-sm text-gray-500">Участники</div>
+                      <div className="font-medium text-gray-900">
+                        До {tour.max_participants} человек
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <DollarSign className="w-6 h-6 text-emerald-500" />
+                    <div>
+                      <div className="text-sm text-gray-500">Цена</div>
+                      <div className="font-medium text-gray-900">
+                        {tour.price_per_person.toLocaleString('ru-RU')} ₽
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-4 h-4 text-emerald-600" />
-                  <span>Бесплатная отмена за 24 часа</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Camera className="w-4 h-4 text-emerald-600" />
-                  <span>Фотосъемка включена</span>
+
+                {/* Полное описание */}
+                <div className="mt-8">
+                  <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                    Описание тура
+                  </h2>
+                  <div
+                    className="prose prose-lg max-w-none text-gray-700"
+                    dangerouslySetInnerHTML={{ __html: tour.full_desc }}
+                  />
                 </div>
               </div>
+            </div>
+
+            {/* Галерея */}
+            {photos.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-sm p-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6">
+                  Фотогалерея
+                </h2>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                  {photos.map((photo) => (
+                    <div
+                      key={photo.id}
+                      className="relative h-48 rounded-xl overflow-hidden"
+                    >
+                      <Image
+                        src={photo.media_url}
+                        alt={photo.file_name}
+                        fill
+                        className="object-cover hover:scale-110 transition-transform duration-300"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Видео */}
+            {videos.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-sm p-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6">
+                  Видео о туре
+                </h2>
+                <div className="space-y-4">
+                  {videos.map((video) => (
+                    <video
+                      key={video.id}
+                      controls
+                      className="w-full rounded-xl"
+                    >
+                      <source src={video.media_url} type={video.mime_type} />
+                      Ваш браузер не поддерживает видео.
+                    </video>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Яндекс Карта */}
+            {tour.yandex_map_url && (
+              <div className="bg-white rounded-2xl shadow-sm p-8">
+                <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+                  <MapPin className="w-6 h-6 text-emerald-500" />
+                  Место проведения
+                </h2>
+                <div className="relative w-full h-96 rounded-xl overflow-hidden">
+                  {tour.yandex_map_url.includes('<iframe') ? (
+                    <div
+                      dangerouslySetInnerHTML={{ __html: tour.yandex_map_url }}
+                      className="w-full h-full"
+                    />
+                  ) : (
+                    <iframe
+                      src={tour.yandex_map_url}
+                      className="w-full h-full border-0"
+                      allowFullScreen
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Правая колонка - бронирование */}
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-8">
+              <div className="mb-6">
+                <div className="text-3xl font-bold text-emerald-600 mb-2">
+                  {tour.price_per_person.toLocaleString('ru-RU')} ₽
+                </div>
+                <div className="text-sm text-gray-500">за человека</div>
+              </div>
+
+              {/* Доступность мест */}
+              <div className="mb-6 p-4 bg-gray-50 rounded-xl">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-gray-600">Доступно мест:</span>
+                  <span className="font-bold text-gray-900">
+                    {availableSpots} / {tour.max_participants}
+                  </span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div
+                    className="bg-emerald-500 h-2 rounded-full transition-all"
+                    style={{
+                      width: `${(availableSpots / tour.max_participants) * 100}%`,
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Кнопка бронирования */}
+              <button
+                className={`w-full py-4 rounded-xl font-bold text-lg mb-4 transition-all ${
+                  isFullyBooked
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-emerald-500 text-white hover:bg-emerald-600 hover:shadow-xl'
+                }`}
+                disabled={isFullyBooked}
+              >
+                {isFullyBooked ? 'Мест нет' : 'Забронировать'}
+              </button>
+
+              {/* Информация */}
+              <div className="space-y-3 text-sm text-gray-600">
+                <div className="flex items-start gap-2">
+                  <span className="text-emerald-500">✓</span>
+                  <span>Бесплатная отмена за 24 часа</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-emerald-500">✓</span>
+                  <span>Подтверждение в течение 1 часа</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="text-emerald-500">✓</span>
+                  <span>Опытный гид-экскурсовод</span>
+                </div>
+              </div>
+
+              {/* Кнопка "Поделиться" */}
+              <button className="w-full mt-6 py-3 border-2 border-gray-200 rounded-xl font-medium text-gray-700 hover:border-emerald-500 hover:text-emerald-600 transition-all flex items-center justify-center gap-2">
+                <Share2 className="w-5 h-5" />
+                Поделиться
+              </button>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
-

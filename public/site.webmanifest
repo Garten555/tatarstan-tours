@@ -1,0 +1,18 @@
+{
+  "name": "Tatarstan Tours",
+  "short_name": "TT Tours",
+  "description": "Платформа бронирования туров по Татарстану",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ],
+  "theme_color": "#10b981",
+  "background_color": "#ffffff",
+  "display": "standalone",
+  "start_url": "/",
+  "scope": "/"
+}
+

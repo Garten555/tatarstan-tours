@@ -25,6 +25,7 @@ export default function UserMenu() {
           first_name: user.user_metadata?.first_name,
           last_name: user.user_metadata?.last_name,
           avatar_url: user.user_metadata?.avatar_url,
+          role: user.user_metadata?.role, // ✅ Добавляем роль!
         };
         setProfile(metaProfile);
         
@@ -54,6 +55,7 @@ export default function UserMenu() {
           first_name: session.user.user_metadata?.first_name,
           last_name: session.user.user_metadata?.last_name,
           avatar_url: session.user.user_metadata?.avatar_url,
+          role: session.user.user_metadata?.role, // ✅ Добавляем роль!
         });
       }
     });

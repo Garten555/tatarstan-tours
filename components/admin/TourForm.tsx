@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import RichTextEditor from './RichTextEditor';
+import AutoResizeTextarea from './AutoResizeTextarea';
 import { Upload, Loader2, Save, AlertCircle, CheckCircle2, MapPin } from 'lucide-react';
 import Image from 'next/image';
 
@@ -149,12 +150,11 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
         break;
 
       case 'yandex_map_url':
-        if (!value) {
-          return 'Добавьте ссылку или код карты';
-        }
-        const parsedUrl = parseYandexMapIframe(value);
-        if (!parsedUrl.includes('yandex.ru')) {
-          return 'Ссылка должна быть с yandex.ru';
+        if (value && value.trim().length > 0) {
+          const parsedUrl = parseYandexMapIframe(value);
+          if (!parsedUrl.includes('yandex.ru')) {
+            return 'Ссылка должна быть с yandex.ru';
+          }
         }
         break;
 
@@ -201,6 +201,9 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
     if (mode === 'create') {
       const slug = transliterate(title);
       setFormData(prev => ({ ...prev, slug }));
+      // Очищаем ошибку slug и touched при автогенерации
+      setErrors(prev => ({ ...prev, slug: undefined }));
+      setTouched(prev => ({ ...prev, slug: false }));
     }
   };
 
@@ -286,7 +289,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
       if (coverImageFile) {
         const formDataUpload = new FormData();
         formDataUpload.append('file', coverImageFile);
-        formDataUpload.append('type', 'tour-cover');
+        formDataUpload.append('folder', 'tours/covers'); // ✅ Правильная папка!
 
         const uploadResponse = await fetch('/api/upload', {
           method: 'POST',
@@ -304,7 +307,11 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
         ...formData,
         cover_image: coverImageUrl,
         price_per_person: parseFloat(formData.price_per_person),
+        yandex_map_url: formData.yandex_map_url.trim() || null,
+        description: formData.short_desc, // Используем short_desc как description (обязательное поле в БД)
       };
+
+      console.log('🚀 Отправка данных тура:', tourData);
 
       const response = await fetch('/api/admin/tours', {
         method: mode === 'create' ? 'POST' : 'PUT',
@@ -314,10 +321,15 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
         body: JSON.stringify(tourData),
       });
 
+      console.log('📡 Ответ сервера:', response.status, response.statusText);
+
       if (!response.ok) {
         const error = await response.json();
+        console.error('❌ Ошибка от сервера:', error);
         throw new Error(error.error || 'Не удалось сохранить тур');
       }
+      
+      console.log('✅ Тур успешно создан!');
 
       const result = await response.json();
       const tourId = mode === 'create' ? result.data.id : initialData.id;
@@ -462,8 +474,10 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-500 transition-all"
             >
               <option value="excursion">🏛️ Экскурсия</option>
-              <option value="quest">🎯 Квест</option>
-              <option value="event">🎉 Мероприятие</option>
+              <option value="hiking">🥾 Пеший тур</option>
+              <option value="cruise">⛴️ Круиз</option>
+              <option value="bus_tour">🚌 Автобусный тур</option>
+              <option value="walking_tour">🚶 Прогулка</option>
             </select>
           </div>
 
@@ -477,6 +491,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
               onChange={(e) => handleFieldChange('category', e.target.value)}
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-500 transition-all"
             >
+              <option value="history">📜 История</option>
               <option value="nature">🌲 Природа</option>
               <option value="culture">🎭 Культура</option>
               <option value="architecture">🏰 Архитектура</option>
@@ -577,7 +592,6 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-500 transition-all"
             >
               <option value="draft">📝 Черновик</option>
-              <option value="published">✅ Опубликован</option>
               <option value="active">🚀 Активен</option>
               <option value="completed">✔️ Завершён</option>
               <option value="cancelled">❌ Отменён</option>
@@ -736,13 +750,14 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
             <MapPin className="w-4 h-4" />
-            Яндекс Карта <span className="text-red-500">*</span>
+            Яндекс Карта <span className="text-gray-400 text-xs">(необязательно)</span>
           </label>
-          <textarea
+          <AutoResizeTextarea
             value={formData.yandex_map_url}
             onChange={(e) => handleYandexMapChange(e.target.value)}
             onBlur={() => handleBlur('yandex_map_url')}
-            rows={3}
+            minRows={3}
+            maxRows={10}
             className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all font-mono text-xs ${
               errors.yandex_map_url && touched.yandex_map_url
                 ? 'border-red-300 focus:ring-red-200 bg-red-50'
@@ -778,11 +793,12 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Краткое описание <span className="text-red-500">*</span>
           </label>
-          <textarea
+          <AutoResizeTextarea
             value={formData.short_desc}
             onChange={(e) => handleFieldChange('short_desc', e.target.value)}
             onBlur={() => handleBlur('short_desc')}
-            rows={3}
+            minRows={3}
+            maxRows={8}
             maxLength={300}
             className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all ${
               errors.short_desc && touched.short_desc
