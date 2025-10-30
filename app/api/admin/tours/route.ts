@@ -70,3 +70,69 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// PUT - Обновление тура
+export async function PUT(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const serviceClient = await createServiceClient();
+
+    // Проверка авторизации
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Проверка прав
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (!profile || !['super_admin', 'tour_admin'].includes(profile.role)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const tourData = await request.json();
+    
+    console.log('📝 Updating tour:', tourData.id);
+
+    // Удаляем поля, которые не нужно обновлять
+    const { id, created_at, created_by, gallery_photos, video_urls, ...updateData } = tourData;
+
+    if (!id) {
+      return NextResponse.json({ error: 'Tour ID required' }, { status: 400 });
+    }
+
+    console.log('✅ Data to update:', JSON.stringify(updateData, null, 2));
+
+    const { data, error } = await serviceClient
+      .from('tours')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Error updating tour:', error);
+      return NextResponse.json(
+        { error: 'Failed to update tour', details: error.message },
+        { status: 500 }
+      );
+    }
+
+    console.log('✅ Tour updated successfully:', data.id);
+    return NextResponse.json({ success: true, data });
+  } catch (error) {
+    console.error('Error in PUT /api/admin/tours:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+

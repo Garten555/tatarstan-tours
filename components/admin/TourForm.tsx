@@ -28,6 +28,7 @@ interface FormErrors {
 export default function TourForm({ mode, initialData }: TourFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState<string>(''); // ✅ Статус загрузки
   const [coverImage, setCoverImage] = useState<string | null>(initialData?.cover_image || null);
   const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
@@ -39,6 +40,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
 
   // Form data
   const [formData, setFormData] = useState({
+    id: initialData?.id || null, // ✅ Добавляем id для режима edit
     title: initialData?.title || '',
     slug: initialData?.slug || '',
     short_desc: initialData?.short_desc || '',
@@ -282,14 +284,16 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
     }
 
     setLoading(true);
+    setLoadingStatus('Подготовка данных...');
 
     try {
-      // Upload cover image
+      // Upload cover image (ТОЛЬКО если выбран новый файл)
       let coverImageUrl = formData.cover_image || coverImage;
       if (coverImageFile) {
+        setLoadingStatus('Загрузка обложки...');
         const formDataUpload = new FormData();
         formDataUpload.append('file', coverImageFile);
-        formDataUpload.append('folder', 'tours/covers'); // ✅ Правильная папка!
+        formDataUpload.append('folder', 'tours/covers');
 
         const uploadResponse = await fetch('/api/upload', {
           method: 'POST',
@@ -300,18 +304,20 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
         
         const { url } = await uploadResponse.json();
         coverImageUrl = url;
+      } else if (mode === 'edit' && coverImage) {
+        coverImageUrl = coverImage;
       }
 
       // Create/update tour
+      setLoadingStatus(mode === 'create' ? 'Создание тура...' : 'Обновление тура...');
+      
       const tourData = {
         ...formData,
         cover_image: coverImageUrl,
         price_per_person: parseFloat(formData.price_per_person),
         yandex_map_url: formData.yandex_map_url.trim() || null,
-        description: formData.short_desc, // Используем short_desc как description (обязательное поле в БД)
+        description: formData.short_desc,
       };
-
-      console.log('🚀 Отправка данных тура:', tourData);
 
       const response = await fetch('/api/admin/tours', {
         method: mode === 'create' ? 'POST' : 'PUT',
@@ -321,51 +327,89 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
         body: JSON.stringify(tourData),
       });
 
-      console.log('📡 Ответ сервера:', response.status, response.statusText);
-
       if (!response.ok) {
         const error = await response.json();
-        console.error('❌ Ошибка от сервера:', error);
         throw new Error(error.error || 'Не удалось сохранить тур');
       }
-      
-      console.log('✅ Тур успешно создан!');
 
       const result = await response.json();
       const tourId = mode === 'create' ? result.data.id : initialData.id;
 
-      // Upload gallery photos
+      console.log('📦 Tour ID:', tourId);
+      console.log('📸 Gallery files:', galleryFiles.length, galleryFiles.map(f => f.name));
+      console.log('🎬 Video files:', videoFiles.length, videoFiles.map(f => f.name));
+
+      // Upload gallery photos and videos ПАРАЛЛЕЛЬНО (быстрее!)
+      const uploadPromises: Promise<any>[] = [];
+
       if (galleryFiles.length > 0) {
-        for (const file of galleryFiles) {
+        setLoadingStatus(`Загрузка ${galleryFiles.length} фото...`);
+        console.log('🚀 Начало загрузки фото...');
+        galleryFiles.forEach((file, index) => {
+          console.log(`  📤 Фото ${index + 1}: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
           const formDataUpload = new FormData();
           formDataUpload.append('file', file);
           formDataUpload.append('folder', 'tours/gallery');
           formDataUpload.append('tourId', tourId);
           formDataUpload.append('mediaType', 'photo');
 
-          await fetch('/api/upload', {
-            method: 'POST',
-            body: formDataUpload,
-          });
-        }
+          uploadPromises.push(
+            fetch('/api/upload', {
+              method: 'POST',
+              body: formDataUpload,
+            }).then(res => {
+              console.log(`✅ Фото ${index + 1} загружено:`, res.status);
+              return res;
+            }).catch(err => {
+              console.error(`❌ Ошибка загрузки фото ${index + 1}:`, err);
+              throw err;
+            })
+          );
+        });
       }
 
-      // Upload videos
       if (videoFiles.length > 0) {
-        for (const file of videoFiles) {
+        setLoadingStatus(`Загрузка ${videoFiles.length} видео...`);
+        console.log('🚀 Начало загрузки видео...');
+        videoFiles.forEach((file, index) => {
+          console.log(`  📤 Видео ${index + 1}: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
           const formDataUpload = new FormData();
           formDataUpload.append('file', file);
           formDataUpload.append('folder', 'tours/videos');
           formDataUpload.append('tourId', tourId);
           formDataUpload.append('mediaType', 'video');
 
-          await fetch('/api/upload', {
-            method: 'POST',
-            body: formDataUpload,
-          });
-        }
+          uploadPromises.push(
+            fetch('/api/upload', {
+              method: 'POST',
+              body: formDataUpload,
+            }).then(res => {
+              console.log(`✅ Видео ${index + 1} загружено:`, res.status);
+              return res;
+            }).catch(err => {
+              console.error(`❌ Ошибка загрузки видео ${index + 1}:`, err);
+              throw err;
+            })
+          );
+        });
       }
 
+      // Ждем завершения всех загрузок параллельно
+      if (uploadPromises.length > 0) {
+        setLoadingStatus(`Загрузка ${uploadPromises.length} файлов...`);
+        console.log(`⏳ Ожидание загрузки ${uploadPromises.length} файлов...`);
+        try {
+          await Promise.all(uploadPromises);
+          console.log('✅ Все файлы успешно загружены!');
+        } catch (error) {
+          console.error('❌ Ошибка при загрузке файлов:', error);
+          throw new Error('Не удалось загрузить медиафайлы');
+        }
+      } else {
+        console.log('ℹ️ Нет файлов для загрузки');
+      }
+
+      setLoadingStatus('Завершение...');
       router.push('/admin/tours');
       router.refresh();
     } catch (error: any) {
@@ -863,7 +907,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
           {loading ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" />
-              Сохранение...
+              {loadingStatus || 'Сохранение...'}
             </>
           ) : (
             <>

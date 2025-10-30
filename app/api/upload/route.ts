@@ -104,7 +104,13 @@ export async function POST(request: NextRequest) {
 
     // Если указан tourId и mediaType - сохраняем в tour_media
     if (tourId && mediaType) {
-      await serviceClient.from('tour_media').insert({
+      console.log('💾 Сохранение медиа в БД:', {
+        tour_id: tourId,
+        media_type: mediaType,
+        file_name: file.name,
+      });
+      
+      const { data: mediaData, error: mediaError } = await serviceClient.from('tour_media').insert({
         tour_id: tourId,
         media_type: mediaType,
         media_url: fileUrl,
@@ -112,7 +118,15 @@ export async function POST(request: NextRequest) {
         file_name: file.name,
         file_size: file.size,
         mime_type: file.type,
-      });
+      }).select();
+      
+      if (mediaError) {
+        console.error('❌ Ошибка сохранения медиа в БД:', mediaError);
+      } else {
+        console.log('✅ Медиа сохранено в БД:', mediaData);
+      }
+    } else {
+      console.log('⚠️ Пропуск сохранения в БД (нет tourId или mediaType)');
     }
 
     // Возвращаем URL загруженного файла

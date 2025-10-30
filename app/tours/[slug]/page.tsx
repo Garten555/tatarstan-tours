@@ -48,14 +48,19 @@ export default async function TourPage({ params }: TourPageProps) {
   }
 
   // Получаем медиа галерею
-  const { data: media } = await supabase
+  const { data: media, error: mediaError } = await supabase
     .from('tour_media')
     .select('*')
     .eq('tour_id', tour.id)
     .order('created_at', { ascending: true });
 
+  console.log('📸 Медиа для тура', tour.id, ':', media);
+  if (mediaError) console.error('❌ Ошибка загрузки медиа:', mediaError);
+
   const photos = media?.filter((m) => m.media_type === 'photo') || [];
   const videos = media?.filter((m) => m.media_type === 'video') || [];
+  
+  console.log('📷 Фото:', photos.length, '🎬 Видео:', videos.length);
 
   const availableSpots = tour.max_participants - (tour.current_participants || 0);
   const isFullyBooked = availableSpots <= 0;
