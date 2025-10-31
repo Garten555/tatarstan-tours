@@ -26,7 +26,11 @@ export default async function AdminLayout({
     .eq('id', user.id)
     .single();
 
-  const userRole = profile?.role || 'user';
+  // Явно подстрахуем тип, если генерация типов БД вернула never
+  const typedProfile = (profile ?? null) as
+    | { role?: string | null; first_name?: string | null; last_name?: string | null }
+    | null;
+  const userRole = typedProfile?.role || 'user';
 
   // Проверяем права доступа
   if (!ADMIN_ROLES.includes(userRole)) {
@@ -38,7 +42,7 @@ export default async function AdminLayout({
       {/* Sidebar */}
       <AdminSidebar 
         userRole={userRole}
-        userName={`${profile?.first_name} ${profile?.last_name}`}
+        userName={`${typedProfile?.first_name ?? ''} ${typedProfile?.last_name ?? ''}`}
       />
 
       {/* Main content */}

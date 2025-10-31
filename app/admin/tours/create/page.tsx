@@ -22,8 +22,9 @@ export default async function CreateTourPage() {
     .select('role')
     .eq('id', user.id)
     .single();
+  const typedProfile = (profile ?? null) as { role?: string | null } | null;
 
-  if (profile?.role !== 'tour_admin' && profile?.role !== 'super_admin') {
+  if (typedProfile?.role !== 'tour_admin' && typedProfile?.role !== 'super_admin') {
     redirect('/admin');
   }
 

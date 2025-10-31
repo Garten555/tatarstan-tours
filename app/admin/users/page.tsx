@@ -23,8 +23,9 @@ export default async function UsersPage() {
     .select('role')
     .eq('id', user.id)
     .single();
+  const typedProfile = (profile ?? null) as { role?: string | null } | null;
 
-  if (profile?.role !== 'super_admin') {
+  if (typedProfile?.role !== 'super_admin') {
     redirect('/admin');
   }
 

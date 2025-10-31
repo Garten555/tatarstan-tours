@@ -23,8 +23,9 @@ export async function PUT(request: NextRequest) {
       .select('role')
       .eq('id', user.id)
       .single();
+    const typedProfile = (profile ?? null) as { role?: string | null } | null;
 
-    if (profile?.role !== 'super_admin') {
+    if (typedProfile?.role !== 'super_admin') {
       return NextResponse.json(
         { error: 'Forbidden: Only super_admin can change roles' },
         { status: 403 }
@@ -59,9 +60,9 @@ export async function PUT(request: NextRequest) {
     }
 
     // Обновляем роль через service_role (обходим RLS)
-    const { data, error } = await serviceClient
+    const { data, error } = await (serviceClient as any)
       .from('profiles')
-      .update({ role: newRole })
+      .update({ role: newRole } as any)
       .eq('id', userId)
       .select()
       .single();

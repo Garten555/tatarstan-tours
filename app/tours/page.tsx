@@ -1,3 +1,4 @@
+export const revalidate = 60
 import { createServiceClient } from '@/lib/supabase/server';
 import TourCard from '@/components/tours/TourCard';
 import Link from 'next/link';
@@ -81,7 +82,7 @@ export default async function ToursPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {tours.map((tour) => (
+            {(tours as any[]).map((tour) => (
               <TourCard
                 key={tour.id}
                 id={tour.id}

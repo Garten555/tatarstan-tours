@@ -49,6 +49,8 @@ export default async function AdminDashboard() {
     pendingReviews: pendingReviews || 0,
   };
 
+  const recentBookingsTyped = (recentBookings ?? []) as any[];
+
   return (
     <div className="space-y-8">
       {/* Заголовок */}
@@ -89,7 +91,7 @@ export default async function AdminDashboard() {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {recentBookings?.map((booking) => (
+              {recentBookingsTyped.map((booking) => (
                 <tr key={booking.id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                     {(booking.tour as any)?.title || 'N/A'}

@@ -28,8 +28,9 @@ export async function PUT(
       .select('role')
       .eq('id', user.id)
       .single();
+    const typedProfile = (profile ?? null) as { role?: string | null } | null;
 
-    if (profile?.role !== 'tour_admin' && profile?.role !== 'super_admin') {
+    if (typedProfile?.role !== 'tour_admin' && typedProfile?.role !== 'super_admin') {
       return NextResponse.json(
         { error: 'Forbidden' },
         { status: 403 }
@@ -40,9 +41,9 @@ export async function PUT(
     const tourData = await request.json();
 
     // Обновляем тур
-    const { data, error } = await serviceClient
+    const { data, error } = await (serviceClient as any)
       .from('tours')
-      .update(tourData)
+      .update(tourData as any)
       .eq('id', id)
       .select()
       .single();
@@ -91,8 +92,9 @@ export async function DELETE(
       .select('role')
       .eq('id', user.id)
       .single();
+    const typedProfile = (profile ?? null) as { role?: string | null } | null;
 
-    if (profile?.role !== 'tour_admin' && profile?.role !== 'super_admin') {
+    if (typedProfile?.role !== 'tour_admin' && typedProfile?.role !== 'super_admin') {
       return NextResponse.json(
         { error: 'Forbidden' },
         { status: 403 }
@@ -128,8 +130,8 @@ export async function DELETE(
     // Удаляем файлы из S3
     const filesToDelete = [];
 
-    if (tour?.cover_path) {
-      filesToDelete.push(tour.cover_path);
+    if ((tour as any)?.cover_path) {
+      filesToDelete.push((tour as any).cover_path);
     }
 
     if (media) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import RichTextEditor from './RichTextEditor';
 import AutoResizeTextarea from './AutoResizeTextarea';
@@ -10,6 +10,7 @@ import Image from 'next/image';
 interface TourFormProps {
   mode: 'create' | 'edit';
   initialData?: any;
+  existingMedia?: Array<{ id: string; media_type: string; media_url: string }>;
 }
 
 interface FormErrors {
@@ -25,7 +26,7 @@ interface FormErrors {
   cover_image?: string;
 }
 
-export default function TourForm({ mode, initialData }: TourFormProps) {
+export default function TourForm({ mode, initialData, existingMedia = [] }: TourFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState<string>(''); // ✅ Статус загрузки
@@ -80,6 +81,19 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '');
   };
+
+  // Инициализация превью существующих медиа в режиме edit
+  useEffect(() => {
+    if (mode !== 'edit') return;
+    if (!existingMedia || existingMedia.length === 0) return;
+    // Не перезаписываем если уже есть локальные превью (например, пользователь добавил новые)
+    if (galleryPreviews.length > 0 || videoPreviews.length > 0) return;
+
+    const existingPhotos = existingMedia.filter((m) => m.media_type === 'image' || (m as any).media_type === 'photo');
+    const existingVideos = existingMedia.filter((m) => m.media_type === 'video');
+    setGalleryPreviews(existingPhotos.map((m) => m.media_url));
+    setVideoPreviews(existingVideos.map((m) => m.media_url));
+  }, [mode, existingMedia]);
 
   // Парсинг iframe Яндекс карты
   const parseYandexMapIframe = (input: string): string => {
@@ -288,7 +302,7 @@ export default function TourForm({ mode, initialData }: TourFormProps) {
 
     try {
       // Upload cover image (ТОЛЬКО если выбран новый файл)
-      let coverImageUrl = formData.cover_image || coverImage;
+      let coverImageUrl = (formData as any).cover_image || coverImage;
       if (coverImageFile) {
         setLoadingStatus('Загрузка обложки...');
         const formDataUpload = new FormData();

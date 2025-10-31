@@ -23,8 +23,9 @@ export async function POST(request: NextRequest) {
       .select('role')
       .eq('id', user.id)
       .single();
+    const typedProfile = (profile ?? null) as { role?: string | null } | null;
 
-    if (profile?.role !== 'tour_admin' && profile?.role !== 'super_admin') {
+    if (typedProfile?.role !== 'tour_admin' && typedProfile?.role !== 'super_admin') {
       return NextResponse.json(
         { error: 'Forbidden: Only tour_admin or super_admin can create tours' },
         { status: 403 }
@@ -43,9 +44,9 @@ export async function POST(request: NextRequest) {
     console.log('✅ Final tour data to insert:', JSON.stringify(tourData, null, 2));
 
     // Создаём тур через service_role
-    const { data, error } = await serviceClient
+    const { data, error } = await (serviceClient as any)
       .from('tours')
-      .insert(tourData)
+      .insert(tourData as any)
       .select()
       .single();
 
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    console.log('✅ Tour created successfully:', data.id);
+    console.log('✅ Tour created successfully:', (data as any)?.id);
 
     return NextResponse.json({ success: true, data });
   } catch (error) {
@@ -92,14 +93,17 @@ export async function PUT(request: NextRequest) {
       .select('role')
       .eq('id', user.id)
       .single();
+    const typedProfile = (profile ?? null) as { role?: string | null } | null;
 
-    if (!profile || !['super_admin', 'tour_admin'].includes(profile.role)) {
+    if (!typedProfile || !['super_admin', 'tour_admin'].includes(typedProfile.role ?? '')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     const tourData = await request.json();
     
-    console.log('📝 Updating tour:', tourData.id);
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('📝 Updating tour:', tourData.id);
+            }
 
     // Удаляем поля, которые не нужно обновлять
     const { id, created_at, created_by, gallery_photos, video_urls, ...updateData } = tourData;
@@ -108,11 +112,13 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Tour ID required' }, { status: 400 });
     }
 
-    console.log('✅ Data to update:', JSON.stringify(updateData, null, 2));
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('✅ Data to update:', JSON.stringify(updateData, null, 2));
+            }
 
-    const { data, error } = await serviceClient
+    const { data, error } = await (serviceClient as any)
       .from('tours')
-      .update(updateData)
+      .update(updateData as any)
       .eq('id', id)
       .select()
       .single();
@@ -125,7 +131,9 @@ export async function PUT(request: NextRequest) {
       );
     }
 
-    console.log('✅ Tour updated successfully:', data.id);
+            if (process.env.NODE_ENV !== 'production') {
+              console.log('✅ Tour updated successfully:', data.id);
+            }
     return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error('Error in PUT /api/admin/tours:', error);

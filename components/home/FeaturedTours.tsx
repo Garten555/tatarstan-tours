@@ -48,7 +48,7 @@ export async function FeaturedTours() {
 
         {/* Сетка туров */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
-          {tours.map((tour) => (
+          {(tours as any[]).map((tour) => (
             <TourCard
               key={tour.id}
               id={tour.id}

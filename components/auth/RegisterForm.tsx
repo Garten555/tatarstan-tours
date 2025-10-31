@@ -44,7 +44,7 @@ export default function RegisterForm() {
     if (name === 'email') {
       if (value) {
         const emailValidation = validateEmail(value);
-        setEmailError(emailValidation.valid ? null : emailValidation.error);
+        setEmailError(emailValidation.valid ? null : (emailValidation.error ?? null));
       } else {
         setEmailError(null);
       }

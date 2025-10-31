@@ -104,15 +104,19 @@ export async function POST(request: NextRequest) {
 
     // Если указан tourId и mediaType - сохраняем в tour_media
     if (tourId && mediaType) {
-      console.log('💾 Сохранение медиа в БД:', {
-        tour_id: tourId,
-        media_type: mediaType,
-        file_name: file.name,
-      });
+      // Нормализуем значение mediaType под enum в БД
+      const normalizedMediaType = mediaType === 'photo' ? 'image' : mediaType;
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('💾 Сохранение медиа в БД:', {
+          tour_id: tourId,
+          media_type: normalizedMediaType,
+          file_name: file.name,
+        });
+      }
       
-      const { data: mediaData, error: mediaError } = await serviceClient.from('tour_media').insert({
+      const { data: mediaData, error: mediaError } = await (serviceClient as any).from('tour_media').insert({
         tour_id: tourId,
-        media_type: mediaType,
+        media_type: normalizedMediaType,
         media_url: fileUrl,
         media_path: s3Path,
         file_name: file.name,
@@ -122,7 +126,7 @@ export async function POST(request: NextRequest) {
       
       if (mediaError) {
         console.error('❌ Ошибка сохранения медиа в БД:', mediaError);
-      } else {
+      } else if (process.env.NODE_ENV !== 'production') {
         console.log('✅ Медиа сохранено в БД:', mediaData);
       }
     } else {

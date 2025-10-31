@@ -33,7 +33,7 @@ export default function LoginForm() {
     if (name === 'email') {
       if (value) {
         const emailValidation = validateEmail(value);
-        setEmailError(emailValidation.valid ? null : emailValidation.error);
+        setEmailError(emailValidation.valid ? null : (emailValidation.error ?? null));
       } else {
         setEmailError(null);
       }
@@ -72,10 +72,10 @@ export default function LoginForm() {
           // Обновляем user_metadata с актуальной ролью
           await supabase.auth.updateUser({
             data: {
-              role: profile.role,
-              first_name: profile.first_name,
-              last_name: profile.last_name,
-              avatar_url: profile.avatar_url,
+              role: (profile as any).role,
+              first_name: (profile as any).first_name,
+              last_name: (profile as any).last_name,
+              avatar_url: (profile as any).avatar_url,
             },
           });
         }

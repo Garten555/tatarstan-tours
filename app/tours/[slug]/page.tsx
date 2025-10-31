@@ -1,3 +1,4 @@
+export const revalidate = 60
 import { notFound } from 'next/navigation';
 import { createServiceClient } from '@/lib/supabase/server';
 import Image from 'next/image';
@@ -47,22 +48,26 @@ export default async function TourPage({ params }: TourPageProps) {
     notFound();
   }
 
+  const t = tour as any;
+
   // Получаем медиа галерею
   const { data: media, error: mediaError } = await supabase
     .from('tour_media')
     .select('*')
-    .eq('tour_id', tour.id)
+    .eq('tour_id', t.id)
     .order('created_at', { ascending: true });
 
-  console.log('📸 Медиа для тура', tour.id, ':', media);
+  console.log('📸 Медиа для тура', t.id, ':', media);
   if (mediaError) console.error('❌ Ошибка загрузки медиа:', mediaError);
 
-  const photos = media?.filter((m) => m.media_type === 'photo') || [];
-  const videos = media?.filter((m) => m.media_type === 'video') || [];
+// В БД media_type: 'image' | 'video' — совместимость со старым 'photo'
+const mediaTyped = ((media || []) as any[]);
+const photos = mediaTyped.filter((m) => m.media_type === 'image' || m.media_type === 'photo');
+const videos = mediaTyped.filter((m) => m.media_type === 'video');
   
-  console.log('📷 Фото:', photos.length, '🎬 Видео:', videos.length);
+console.log('📷 Фото:', photos.length, '🎬 Видео:', videos.length);
 
-  const availableSpots = tour.max_participants - (tour.current_participants || 0);
+  const availableSpots = t.max_participants - (t.current_participants || 0);
   const isFullyBooked = availableSpots <= 0;
 
   // Форматирование даты
@@ -79,8 +84,8 @@ export default async function TourPage({ params }: TourPageProps) {
 
   // Вычисляем продолжительность
   const getDuration = () => {
-    const start = new Date(tour.start_date);
-    const end = new Date(tour.end_date);
+    const start = new Date(t.start_date);
+    const end = new Date(t.end_date);
     const diffTime = Math.abs(end.getTime() - start.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
@@ -115,8 +120,8 @@ export default async function TourPage({ params }: TourPageProps) {
             <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
               <div className="relative h-96">
                 <Image
-                  src={tour.cover_image}
-                  alt={tour.title}
+                  src={t.cover_image}
+                  alt={t.title}
                   fill
                   className="object-cover"
                   priority
@@ -125,10 +130,10 @@ export default async function TourPage({ params }: TourPageProps) {
                 {/* Бейджи */}
                 <div className="absolute top-6 left-6 flex flex-wrap gap-2">
                   <span className="px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-full">
-                    {TOUR_TYPE_LABELS[tour.tour_type] || tour.tour_type}
+                    {TOUR_TYPE_LABELS[t.tour_type] || t.tour_type}
                   </span>
                   <span className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-full">
-                    {CATEGORY_LABELS[tour.category] || tour.category}
+                    {CATEGORY_LABELS[t.category] || t.category}
                   </span>
                 </div>
               </div>
@@ -136,12 +141,12 @@ export default async function TourPage({ params }: TourPageProps) {
               <div className="p-8">
                 {/* Заголовок */}
                 <h1 className="text-4xl font-bold text-gray-900 mb-4">
-                  {tour.title}
+                  {t.title}
                 </h1>
 
                 {/* Краткое описание */}
                 <p className="text-lg text-gray-600 mb-6">
-                  {tour.short_desc}
+                  {t.short_desc}
                 </p>
 
                 {/* Метаданные */}
@@ -151,7 +156,7 @@ export default async function TourPage({ params }: TourPageProps) {
                     <div>
                       <div className="text-sm text-gray-500">Начало</div>
                       <div className="font-medium text-gray-900">
-                        {formatDate(tour.start_date)}
+                        {formatDate(t.start_date)}
                       </div>
                     </div>
                   </div>
@@ -169,7 +174,7 @@ export default async function TourPage({ params }: TourPageProps) {
                     <div>
                       <div className="text-sm text-gray-500">Участники</div>
                       <div className="font-medium text-gray-900">
-                        До {tour.max_participants} человек
+                        До {t.max_participants} человек
                       </div>
                     </div>
                   </div>
@@ -179,7 +184,7 @@ export default async function TourPage({ params }: TourPageProps) {
                     <div>
                       <div className="text-sm text-gray-500">Цена</div>
                       <div className="font-medium text-gray-900">
-                        {tour.price_per_person.toLocaleString('ru-RU')} ₽
+                        {t.price_per_person.toLocaleString('ru-RU')} ₽
                       </div>
                     </div>
                   </div>
@@ -192,7 +197,7 @@ export default async function TourPage({ params }: TourPageProps) {
                   </h2>
                   <div
                     className="prose prose-lg max-w-none text-gray-700"
-                    dangerouslySetInnerHTML={{ __html: tour.full_desc }}
+                    dangerouslySetInnerHTML={{ __html: t.full_desc }}
                   />
                 </div>
               </div>
@@ -244,21 +249,21 @@ export default async function TourPage({ params }: TourPageProps) {
             )}
 
             {/* Яндекс Карта */}
-            {tour.yandex_map_url && (
+            {t.yandex_map_url && (
               <div className="bg-white rounded-2xl shadow-sm p-8">
                 <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
                   <MapPin className="w-6 h-6 text-emerald-500" />
                   Место проведения
                 </h2>
                 <div className="relative w-full h-96 rounded-xl overflow-hidden">
-                  {tour.yandex_map_url.includes('<iframe') ? (
+                  {t.yandex_map_url.includes('<iframe') ? (
                     <div
-                      dangerouslySetInnerHTML={{ __html: tour.yandex_map_url }}
+                      dangerouslySetInnerHTML={{ __html: t.yandex_map_url }}
                       className="w-full h-full"
                     />
                   ) : (
                     <iframe
-                      src={tour.yandex_map_url}
+                      src={t.yandex_map_url}
                       className="w-full h-full border-0"
                       allowFullScreen
                     />
@@ -273,7 +278,7 @@ export default async function TourPage({ params }: TourPageProps) {
             <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-8">
               <div className="mb-6">
                 <div className="text-3xl font-bold text-emerald-600 mb-2">
-                  {tour.price_per_person.toLocaleString('ru-RU')} ₽
+                  {t.price_per_person.toLocaleString('ru-RU')} ₽
                 </div>
                 <div className="text-sm text-gray-500">за человека</div>
               </div>
@@ -283,14 +288,14 @@ export default async function TourPage({ params }: TourPageProps) {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-gray-600">Доступно мест:</span>
                   <span className="font-bold text-gray-900">
-                    {availableSpots} / {tour.max_participants}
+                    {availableSpots} / {t.max_participants}
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div
                     className="bg-emerald-500 h-2 rounded-full transition-all"
                     style={{
-                      width: `${(availableSpots / tour.max_participants) * 100}%`,
+                      width: `${(availableSpots / t.max_participants) * 100}%`,
                     }}
                   />
                 </div>

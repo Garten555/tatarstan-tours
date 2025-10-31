@@ -28,15 +28,16 @@ export default async function EditTourPage({ params }: EditTourPageProps) {
     .select('role')
     .eq('id', user.id)
     .single();
+  const typedProfile = (profile ?? null) as { role?: string | null } | null;
 
-  if (profile?.role !== 'tour_admin' && profile?.role !== 'super_admin') {
+  if (typedProfile?.role !== 'tour_admin' && typedProfile?.role !== 'super_admin') {
     redirect('/admin');
   }
 
   // Загружаем данные тура
   const { data: tour, error } = await serviceClient
     .from('tours')
-    .select('*')
+    .select('id,title,slug,short_desc,full_desc,tour_type,category,price_per_person,start_date,end_date,max_participants,status,yandex_map_url,cover_image,description')
     .eq('id', id)
     .single();
 
@@ -47,16 +48,17 @@ export default async function EditTourPage({ params }: EditTourPageProps) {
   // Загружаем медиа
   const { data: media } = await serviceClient
     .from('tour_media')
-    .select('*')
+    .select('id,media_type,media_url,created_at')
     .eq('tour_id', id)
     .order('created_at', { ascending: true });
 
-  const gallery = media?.filter((m) => m.media_type === 'photo') || [];
-  const videos = media?.filter((m) => m.media_type === 'video') || [];
+  const mediaTyped = (media ?? []) as any[];
+  const gallery = mediaTyped.filter((m) => m.media_type === 'image' || m.media_type === 'photo');
+  const videos = mediaTyped.filter((m) => m.media_type === 'video');
 
   // Подготавливаем данные для формы
   const tourData = {
-    ...tour,
+    ...(tour as any),
     gallery_photos: gallery.map((g) => g.media_url),
     video_urls: videos.map((v) => v.media_url),
   };
@@ -67,12 +69,12 @@ export default async function EditTourPage({ params }: EditTourPageProps) {
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Редактировать тур</h1>
         <p className="mt-2 text-gray-600">
-          Обновите информацию о туре &quot;{tour.title}&quot;
+          Обновите информацию о туре &quot;{(tour as any)?.title}&quot;
         </p>
       </div>
 
       {/* Форма */}
-      <TourForm mode="edit" initialData={tourData} />
+      <TourForm mode="edit" initialData={tourData} existingMedia={mediaTyped} />
     </div>
   );
 }
