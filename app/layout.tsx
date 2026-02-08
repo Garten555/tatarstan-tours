@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import ConditionalLayout from "@/components/layout/ConditionalLayout";
+import RealtimeNotifications from "@/components/notifications/RealtimeNotifications";
+import MaintenanceWatcher from "@/components/maintenance/MaintenanceWatcher";
+import SupportChatLauncher from "@/components/chat/SupportChatLauncher";
+import BanBanner from "@/components/ban/BanBanner";
+import { Toaster } from "react-hot-toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -91,6 +96,34 @@ export default function RootLayout({
         <ConditionalLayout>
           {children}
         </ConditionalLayout>
+        <BanBanner />
+        <RealtimeNotifications />
+        <MaintenanceWatcher />
+        <SupportChatLauncher />
+        <Toaster 
+          position="top-right"
+          toastOptions={{
+            duration: 3000,
+            style: {
+              background: '#363636',
+              color: '#fff',
+            },
+            success: {
+              duration: 3000,
+              iconTheme: {
+                primary: '#10b981',
+                secondary: '#fff',
+              },
+            },
+            error: {
+              duration: 4000,
+              iconTheme: {
+                primary: '#ef4444',
+                secondary: '#fff',
+              },
+            },
+          }}
+        />
       </body>
     </html>
   );

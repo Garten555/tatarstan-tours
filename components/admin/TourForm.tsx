@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import RichTextEditor from './RichTextEditor';
 import AutoResizeTextarea from './AutoResizeTextarea';
-import { Upload, Loader2, Save, AlertCircle, CheckCircle2, MapPin } from 'lucide-react';
+import { Upload, Loader2, Save, AlertCircle, CheckCircle2, MapPin, Search, X, Copy, Calendar } from 'lucide-react';
 import Image from 'next/image';
 
 interface TourFormProps {
@@ -38,6 +38,7 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
   const [videoPreviews, setVideoPreviews] = useState<string[]>([]);
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<{ [key: string]: boolean }>({});
+  const [extraDateRanges, setExtraDateRanges] = useState<Array<{ start_date: string; end_date: string }>>([]);
 
   // Form data
   const [formData, setFormData] = useState({
@@ -54,7 +55,14 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
     max_participants: initialData?.max_participants || 20,
     status: initialData?.status || 'draft',
     yandex_map_url: initialData?.yandex_map_url || '',
+    city_id: initialData?.city_id || null,
   });
+
+  // Состояние для поиска города
+  const [citySearch, setCitySearch] = useState('');
+  const [cities, setCities] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedCity, setSelectedCity] = useState<{ id: string; name: string } | null>(null);
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
 
   // Транслитерация
   const transliterate = (text: string): string => {
@@ -94,6 +102,78 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
     setGalleryPreviews(existingPhotos.map((m) => m.media_url));
     setVideoPreviews(existingVideos.map((m) => m.media_url));
   }, [mode, existingMedia]);
+
+  // Загрузка выбранного города при редактировании
+  useEffect(() => {
+    if (mode === 'edit' && initialData?.city_id && !selectedCity) {
+      fetch(`/api/admin/cities/${initialData.city_id}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.city) {
+            setSelectedCity({ id: data.city.id, name: data.city.name });
+            setCitySearch(data.city.name);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [mode, initialData?.city_id]);
+
+  // Поиск городов
+  useEffect(() => {
+    if (citySearch.length < 2) {
+      setCities([]);
+      setShowCityDropdown(false);
+      return;
+    }
+
+    const timeoutId = setTimeout(() => {
+      fetch(`/api/admin/cities?search=${encodeURIComponent(citySearch)}`)
+        .then(res => res.json())
+        .then(data => {
+          const foundCities = data.cities || [];
+          setCities(foundCities);
+          // Показываем dropdown сразу после получения результатов
+          if (foundCities.length > 0) {
+            setShowCityDropdown(true);
+          }
+        })
+        .catch(console.error);
+    }, 200); // Уменьшена задержка с 300 до 200мс для более быстрого отклика
+
+    return () => clearTimeout(timeoutId);
+  }, [citySearch]);
+
+  // Выбор города
+  const handleCitySelect = (city: { id: string; name: string }) => {
+    setSelectedCity(city);
+    setCitySearch(city.name);
+    setFormData(prev => ({ ...prev, city_id: city.id }));
+    setShowCityDropdown(false);
+  };
+
+  // Очистка выбранного города
+  const handleCityClear = () => {
+    setSelectedCity(null);
+    setCitySearch('');
+    setFormData(prev => ({ ...prev, city_id: null }));
+    setCities([]);
+    setShowCityDropdown(false);
+  };
+
+  // Закрытие dropdown при клике вне
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.city-search-container')) {
+        setShowCityDropdown(false);
+      }
+    };
+
+    if (showCityDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [showCityDropdown]);
 
   // Парсинг iframe Яндекс карты
   const parseYandexMapIframe = (input: string): string => {
@@ -174,12 +254,12 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
         }
         break;
 
-      case 'short_desc':
+        case 'short_desc':
         if (!value || value.trim().length < 10) {
           return 'Краткое описание должно содержать минимум 10 символов';
         }
-        if (value.length > 300) {
-          return 'Краткое описание не может быть длиннее 300 символов';
+        if (value.length > 500) {
+          return 'Краткое описание не может быть длиннее 500 символов';
         }
         break;
 
@@ -297,6 +377,16 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
       return;
     }
 
+    const invalidExtraRange = extraDateRanges.some((range) => {
+      if (!range.start_date || !range.end_date) return true;
+      return new Date(range.end_date) <= new Date(range.start_date);
+    });
+
+    if (invalidExtraRange) {
+      alert('Проверьте дополнительные даты: обе даты обязательны, окончание должно быть позже начала');
+      return;
+    }
+
     setLoading(true);
     setLoadingStatus('Подготовка данных...');
 
@@ -314,12 +404,20 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
           body: formDataUpload,
         });
 
-        if (!uploadResponse.ok) throw new Error('Не удалось загрузить обложку');
+        if (!uploadResponse.ok) {
+          const uploadError = await uploadResponse.json();
+          throw new Error(uploadError.error || 'Не удалось загрузить обложку');
+        }
         
-        const { url } = await uploadResponse.json();
-        coverImageUrl = url;
+        const uploadData = await uploadResponse.json();
+        if (!uploadData.url) {
+          throw new Error('Не получен URL загруженной обложки');
+        }
+        coverImageUrl = uploadData.url;
       } else if (mode === 'edit' && coverImage) {
         coverImageUrl = coverImage;
+      } else if (mode === 'create' && !coverImageUrl) {
+        throw new Error('Обложка тура обязательна');
       }
 
       // Create/update tour
@@ -330,9 +428,18 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
         cover_image: coverImageUrl,
         price_per_person: parseFloat(formData.price_per_person),
         yandex_map_url: formData.yandex_map_url.trim() || null,
-        description: formData.short_desc,
+        description: formData.short_desc || formData.full_desc || '', // Обязательное поле
+        // Удаляем id при создании
+        ...(mode === 'create' ? { id: undefined } : {}),
       };
-
+      
+      // Удаляем undefined значения
+      Object.keys(tourData).forEach(key => {
+        if (tourData[key as keyof typeof tourData] === undefined) {
+          delete tourData[key as keyof typeof tourData];
+        }
+      });
+      
       const response = await fetch('/api/admin/tours', {
         method: mode === 'create' ? 'POST' : 'PUT',
         headers: {
@@ -342,25 +449,23 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Не удалось сохранить тур');
+        const errorData = await response.json();
+        const errorMessage = errorData.details 
+          ? `${errorData.error}: ${errorData.details}`
+          : errorData.error || 'Не удалось сохранить тур';
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
       const tourId = mode === 'create' ? result.data.id : initialData.id;
 
-      console.log('📦 Tour ID:', tourId);
-      console.log('📸 Gallery files:', galleryFiles.length, galleryFiles.map(f => f.name));
-      console.log('🎬 Video files:', videoFiles.length, videoFiles.map(f => f.name));
-
       // Upload gallery photos and videos ПАРАЛЛЕЛЬНО (быстрее!)
       const uploadPromises: Promise<any>[] = [];
+      const totalFiles = galleryFiles.length + videoFiles.length;
 
       if (galleryFiles.length > 0) {
         setLoadingStatus(`Загрузка ${galleryFiles.length} фото...`);
-        console.log('🚀 Начало загрузки фото...');
-        galleryFiles.forEach((file, index) => {
-          console.log(`  📤 Фото ${index + 1}: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+        galleryFiles.forEach((file) => {
           const formDataUpload = new FormData();
           formDataUpload.append('file', file);
           formDataUpload.append('folder', 'tours/gallery');
@@ -372,11 +477,8 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
               method: 'POST',
               body: formDataUpload,
             }).then(res => {
-              console.log(`✅ Фото ${index + 1} загружено:`, res.status);
+              if (!res.ok) throw new Error(`Ошибка загрузки фото: ${file.name}`);
               return res;
-            }).catch(err => {
-              console.error(`❌ Ошибка загрузки фото ${index + 1}:`, err);
-              throw err;
             })
           );
         });
@@ -384,9 +486,7 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
 
       if (videoFiles.length > 0) {
         setLoadingStatus(`Загрузка ${videoFiles.length} видео...`);
-        console.log('🚀 Начало загрузки видео...');
-        videoFiles.forEach((file, index) => {
-          console.log(`  📤 Видео ${index + 1}: ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+        videoFiles.forEach((file) => {
           const formDataUpload = new FormData();
           formDataUpload.append('file', file);
           formDataUpload.append('folder', 'tours/videos');
@@ -398,11 +498,8 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
               method: 'POST',
               body: formDataUpload,
             }).then(res => {
-              console.log(`✅ Видео ${index + 1} загружено:`, res.status);
+              if (!res.ok) throw new Error(`Ошибка загрузки видео: ${file.name}`);
               return res;
-            }).catch(err => {
-              console.error(`❌ Ошибка загрузки видео ${index + 1}:`, err);
-              throw err;
             })
           );
         });
@@ -410,25 +507,44 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
 
       // Ждем завершения всех загрузок параллельно
       if (uploadPromises.length > 0) {
-        setLoadingStatus(`Загрузка ${uploadPromises.length} файлов...`);
-        console.log(`⏳ Ожидание загрузки ${uploadPromises.length} файлов...`);
+        setLoadingStatus(`Загрузка ${totalFiles} файлов...`);
         try {
           await Promise.all(uploadPromises);
-          console.log('✅ Все файлы успешно загружены!');
         } catch (error) {
-          console.error('❌ Ошибка при загрузке файлов:', error);
           throw new Error('Не удалось загрузить медиафайлы');
         }
-      } else {
-        console.log('ℹ️ Нет файлов для загрузки');
+      }
+      
+      if (extraDateRanges.length > 0) {
+        setLoadingStatus('Создание дополнительных дат...');
+        const datesPayload = extraDateRanges.map((range) => ({
+          start_date: new Date(range.start_date).toISOString(),
+          end_date: new Date(range.end_date).toISOString(),
+        }));
+
+        const duplicateResponse = await fetch(`/api/admin/tours/${tourId}/duplicate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dates: datesPayload }),
+        });
+
+        const duplicateResult = await duplicateResponse.json();
+
+        if (!duplicateResponse.ok) {
+          throw new Error(duplicateResult.error || 'Не удалось добавить дополнительные даты');
+        }
       }
 
       setLoadingStatus('Завершение...');
+      // Используем prefetch для быстрого перехода
+      router.prefetch('/admin/tours');
       router.push('/admin/tours');
       router.refresh();
     } catch (error: any) {
       console.error('Error saving tour:', error);
-      alert(error.message || 'Не удалось сохранить тур');
+      const errorMessage = error.message || 'Не удалось сохранить тур';
+      alert(errorMessage);
+      setLoadingStatus('');
     } finally {
       setLoading(false);
     }
@@ -518,6 +634,82 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
           <p className="text-xs text-gray-500 mt-1">
             URL: /tours/{formData.slug || 'slug-tура'}
           </p>
+        </div>
+
+        {/* City */}
+        <div className="city-search-container">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Город <span className="text-gray-400 text-xs">(необязательно)</span>
+          </label>
+          <div className="relative">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                value={citySearch}
+                onChange={(e) => {
+                  setCitySearch(e.target.value);
+                  if (selectedCity && e.target.value !== selectedCity.name) {
+                    setSelectedCity(null);
+                    setFormData(prev => ({ ...prev, city_id: null }));
+                  }
+                }}
+                onFocus={() => {
+                  // Показываем dropdown если есть результаты поиска или если уже введен текст
+                  if (cities.length > 0 || citySearch.length >= 2) {
+                    setShowCityDropdown(true);
+                  }
+                }}
+                onInput={(e) => {
+                  // Показываем dropdown при вводе, если есть результаты
+                  if (cities.length > 0) {
+                    setShowCityDropdown(true);
+                  }
+                }}
+                className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-500 transition-all"
+                placeholder="Начните вводить название города..."
+              />
+              {selectedCity && (
+                <button
+                  type="button"
+                  onClick={handleCityClear}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+            
+            {/* Dropdown с результатами поиска */}
+            {showCityDropdown && cities.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                {cities.map((city) => (
+                  <button
+                    key={city.id}
+                    type="button"
+                    onClick={() => handleCitySelect(city)}
+                    className="w-full px-4 py-3 text-left hover:bg-emerald-50 transition-colors flex items-center gap-2"
+                  >
+                    <MapPin className="w-4 h-4 text-emerald-500" />
+                    <span className="text-gray-900">{city.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            
+            {/* Сообщение если ничего не найдено */}
+            {showCityDropdown && citySearch.length >= 2 && cities.length === 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-4 text-sm text-gray-500">
+                Город не найден
+              </div>
+            )}
+          </div>
+          {selectedCity && (
+            <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1">
+              <CheckCircle2 className="w-3 h-3" />
+              Выбран: {selectedCity.name}
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -622,9 +814,22 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
 
           {/* End Date */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Дата окончания <span className="text-red-500">*</span>
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Дата окончания <span className="text-red-500">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setExtraDateRanges((prev) => [...prev, { start_date: '', end_date: '' }]);
+                }}
+                className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                title="Добавить ещё даты тура"
+              >
+                <Copy className="w-3 h-3" />
+                + даты
+              </button>
+            </div>
             <input
               type="datetime-local"
               value={formData.end_date}
@@ -656,6 +861,58 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
             </select>
           </div>
         </div>
+
+        {extraDateRanges.length > 0 && (
+          <div className="space-y-4">
+            <h4 className="text-sm font-semibold text-gray-900">Дополнительные даты тура</h4>
+            {extraDateRanges.map((range, index) => (
+              <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Дата начала
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={range.start_date}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setExtraDateRanges((prev) =>
+                        prev.map((item, idx) => (idx === index ? { ...item, start_date: value } : item))
+                      );
+                    }}
+                    className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all border-gray-300 focus:ring-emerald-200 focus:border-emerald-500"
+                  />
+                </div>
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Дата окончания
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={range.end_date}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setExtraDateRanges((prev) =>
+                          prev.map((item, idx) => (idx === index ? { ...item, end_date: value } : item))
+                        );
+                      }}
+                      className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all border-gray-300 focus:ring-emerald-200 focus:border-emerald-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setExtraDateRanges((prev) => prev.filter((_, idx) => idx !== index))}
+                    className="px-3 py-3 border border-gray-300 rounded-xl text-gray-600 hover:text-red-600 hover:border-red-300 transition-colors"
+                    title="Удалить даты"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Медиа */}
@@ -673,17 +930,25 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
           <div className="space-y-4">
             {coverImage && (
               <div className="relative w-full h-64 rounded-xl overflow-hidden border-2 border-gray-200">
-                <Image
-                  src={coverImage}
-                  alt="Cover preview"
-                  fill
-                  className="object-cover"
-                />
+                {coverImage.startsWith('blob:') ? (
+                  <img
+                    src={coverImage}
+                    alt="Cover preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <Image
+                    src={coverImage}
+                    alt="Cover preview"
+                    fill
+                    className="object-cover"
+                  />
+                )}
               </div>
             )}
             <label className="flex items-center justify-center gap-2 w-full px-4 py-4 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-emerald-500 hover:bg-emerald-50 transition-all">
               <Upload className="w-5 h-5 text-gray-400" />
-              <span className="text-sm text-gray-600 font-medium">
+              <span className="text-base text-gray-600 font-medium">
                 {coverImage ? 'Изменить обложку' : 'Загрузить обложку'}
               </span>
               <input
@@ -729,7 +994,7 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
             )}
             <label className="flex items-center justify-center gap-2 w-full px-4 py-4 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-purple-500 hover:bg-purple-50 transition-all">
               <Upload className="w-5 h-5 text-gray-400" />
-              <span className="text-sm text-gray-600 font-medium">
+              <span className="text-base text-gray-600 font-medium">
                 Загрузить фото (можно несколько)
               </span>
               <input
@@ -757,10 +1022,13 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
                 {videoPreviews.map((preview, index) => (
                   <div key={index} className="relative flex items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
                     <video
-                      src={preview}
                       className="w-32 h-20 object-cover rounded-lg"
                       controls
-                    />
+                      playsInline
+                      preload="metadata"
+                    >
+                      <source src={preview} type={videoFiles[index]?.type || 'video/mp4'} />
+                    </video>
                     <span className="flex-1 text-sm text-gray-600 font-medium">
                       {videoFiles[index]?.name}
                     </span>
@@ -779,7 +1047,7 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
             )}
             <label className="flex items-center justify-center gap-2 w-full px-4 py-4 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-purple-500 hover:bg-purple-50 transition-all">
               <Upload className="w-5 h-5 text-gray-400" />
-              <span className="text-sm text-gray-600 font-medium">
+              <span className="text-base text-gray-600 font-medium">
                 Загрузить видео (можно несколько)
               </span>
               <input
@@ -857,7 +1125,7 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
             onBlur={() => handleBlur('short_desc')}
             minRows={3}
             maxRows={8}
-            maxLength={300}
+            maxLength={500}
             className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all ${
               errors.short_desc && touched.short_desc
                 ? 'border-red-300 focus:ring-red-200 bg-red-50'
@@ -868,7 +1136,7 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
           <div className="flex items-center justify-between mt-1">
             <ErrorMessage message={errors.short_desc && touched.short_desc ? errors.short_desc : undefined} />
             <span className="text-xs text-gray-500">
-              {formData.short_desc.length}/300
+              {formData.short_desc.length}/500
             </span>
           </div>
           <p className="text-xs text-gray-500 mt-1">
@@ -903,6 +1171,8 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
           </p>
         </div>
       </div>
+
+      {/* Дублирование тура (только в режиме редактирования) */}
 
       {/* Submit Button */}
       <div className="flex gap-4 sticky bottom-6 z-10">

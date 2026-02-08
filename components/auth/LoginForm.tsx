@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Eye, EyeOff, Loader2, LogIn } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Eye, EyeOff, Loader2, LogIn, Mail, Lock } from 'lucide-react';
 import { validateEmail } from '@/lib/validation/auth';
 
 export default function LoginForm() {
@@ -99,45 +100,81 @@ export default function LoginForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Сообщение об ошибке */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
-        </div>
-      )}
+      <AnimatePresence>
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            className="bg-gradient-to-br from-red-50 via-rose-50 to-red-50 border-2 border-red-300 text-red-900 px-5 py-4 rounded-2xl text-sm sm:text-base font-bold shadow-lg backdrop-blur-sm"
+          >
+            <div className="flex items-center gap-3">
+              <div className="flex-shrink-0 w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
+                <span className="text-white text-lg font-black">!</span>
+              </div>
+              <p className="flex-1">{error}</p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Email */}
-      <div>
-        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+      <div className="space-y-2">
+        <label htmlFor="email" className="flex items-center gap-2 text-sm sm:text-base font-black text-gray-900">
+          <Mail className="w-4 h-4 text-emerald-600" />
           Email
         </label>
-        <input
-          id="email"
-          name="email"
-          type="email"
-          required
-          value={formData.email}
-          onChange={handleChange}
-          className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:border-transparent outline-none transition-all ${
-            emailError
-              ? 'border-red-300 focus:ring-red-500'
-              : 'border-gray-300 focus:ring-emerald-500'
-          }`}
-          placeholder="ivan@yandex.ru"
-        />
+        <div className="relative">
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+            <Mail className="w-5 h-5" />
+          </div>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            required
+            value={formData.email}
+            onChange={handleChange}
+            className={`w-full pl-12 pr-4 py-4 text-base sm:text-lg border-2 rounded-xl focus:ring-2 focus:border-transparent outline-none transition-all text-gray-900 placeholder:text-gray-400 font-medium ${
+              emailError
+                ? 'border-red-300 focus:ring-red-500 bg-red-50/50'
+                : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 hover:bg-white'
+            }`}
+            placeholder="ivan@yandex.ru"
+          />
+        </div>
         {emailError && (
-          <p className="mt-1 text-xs text-red-600">{emailError}</p>
+          <motion.div
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="mt-2 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
+          >
+            <span className="text-red-500 font-black">⚠</span>
+            <span>{emailError}</span>
+          </motion.div>
         )}
         {!emailError && formData.email && (
-          <p className="mt-1 text-xs text-green-600">✓ Email корректен</p>
+          <motion.div
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="mt-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
+          >
+            <span className="text-emerald-500 font-black">✓</span>
+            <span>Email корректен</span>
+          </motion.div>
         )}
       </div>
 
       {/* Пароль */}
-      <div>
-        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+      <div className="space-y-2">
+        <label htmlFor="password" className="flex items-center gap-2 text-sm sm:text-base font-black text-gray-900">
+          <Lock className="w-4 h-4 text-emerald-600" />
           Пароль
         </label>
         <div className="relative">
+          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+            <Lock className="w-5 h-5" />
+          </div>
           <input
             id="password"
             name="password"
@@ -145,18 +182,18 @@ export default function LoginForm() {
             required
             value={formData.password}
             onChange={handleChange}
-            className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none transition-all"
-            placeholder="••••••••"
+            className="w-full pl-12 pr-12 py-4 text-base sm:text-lg border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-gray-900 placeholder:text-gray-400 bg-gray-50/50 hover:bg-white font-medium"
+            placeholder="Введите пароль"
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+            className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
           >
             {showPassword ? (
-              <EyeOff className="w-5 h-5" />
+              <EyeOff className="w-5 h-5 sm:w-6 sm:h-6" />
             ) : (
-              <Eye className="w-5 h-5" />
+              <Eye className="w-5 h-5 sm:w-6 sm:h-6" />
             )}
           </button>
         </div>
@@ -166,17 +203,17 @@ export default function LoginForm() {
       <button
         type="submit"
         disabled={loading}
-        className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-semibold py-3 px-6 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
+        className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 disabled:from-emerald-400 disabled:to-emerald-500 text-white !text-white font-black text-base sm:text-lg py-4 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 shadow-xl hover:shadow-2xl hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading ? (
           <>
-            <Loader2 className="w-5 h-5 animate-spin" />
-            Вход...
+            <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" />
+            <span>Вход...</span>
           </>
         ) : (
           <>
-            <LogIn className="w-5 h-5" />
-            Войти
+            <LogIn className="w-5 h-5 sm:w-6 sm:h-6" />
+            <span>Войти в аккаунт</span>
           </>
         )}
       </button>

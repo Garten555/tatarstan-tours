@@ -11,11 +11,13 @@ export default function ConditionalLayout({
 }) {
   const pathname = usePathname();
   
-  // Скрываем Header и Footer для админки
+  // Скрываем Header и Footer для админки, страницы обслуживания и страницы бана
   const isAdminRoute = pathname?.startsWith('/admin');
+  const isMaintenanceRoute = pathname === '/maintenance';
+  const isBannedRoute = pathname === '/banned';
 
-  if (isAdminRoute) {
-    // Для админки только контент (там свой layout с sidebar)
+  if (isAdminRoute || isMaintenanceRoute || isBannedRoute) {
+    // Для админки и страницы бана только контент
     return <>{children}</>;
   }
 
@@ -23,7 +25,7 @@ export default function ConditionalLayout({
   return (
     <>
       <Header />
-      <main className="pt-20">
+      <main className="main-with-sidebar">
         {children}
       </main>
       <Footer />

@@ -7,7 +7,7 @@ import type { Database } from '@/types/database';
 export async function createClient() {
   const cookieStore = await cookies();
 
-  return createServerClient<Database>(
+  return createServerClient<any>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -37,7 +37,7 @@ export async function createClient() {
 // Service role client (for admin operations)
 export function createServiceClient() {
   // Service role client не использует cookies - это для серверных операций
-  return createSupabaseClient<Database>(
+  return createSupabaseClient<any>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {

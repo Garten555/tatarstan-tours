@@ -43,7 +43,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Валидация роли
-    const validRoles = ['user', 'tour_admin', 'support_admin', 'super_admin'];
+    const validRoles = ['user', 'guide', 'tour_admin', 'support_admin', 'super_admin'];
     if (!validRoles.includes(newRole)) {
       return NextResponse.json(
         { error: 'Invalid role' },

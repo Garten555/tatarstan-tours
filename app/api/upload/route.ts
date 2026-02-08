@@ -33,24 +33,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Проверяем права доступа (только для админов)
+    // Получаем данные формы
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+    const folder = formData.get('folder') as string; // tours/covers, tours/gallery, tours/videos, diaries/covers, diaries/media
+
+    // Проверяем права доступа
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    if (!profile || !['super_admin', 'tour_admin'].includes((profile as any).role)) {
+    const isDiaryUpload = folder?.startsWith('diaries/');
+    const isReviewUpload = folder?.startsWith('reviews/');
+    const isUserGalleryUpload = folder === 'user-gallery';
+    
+    // Для загрузки медиа дневников и галереи пользователя разрешаем всем авторизованным пользователям
+    // Для туров - только админам
+    if (!isDiaryUpload && !isReviewUpload && !isUserGalleryUpload && (!profile || !['super_admin', 'tour_admin'].includes((profile as any).role))) {
       return NextResponse.json(
         { error: 'Недостаточно прав для загрузки файлов' },
         { status: 403 }
       );
     }
-
-    // Получаем данные формы
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
-    const folder = formData.get('folder') as string; // tours/covers, tours/gallery, tours/videos
     const tourId = formData.get('tourId') as string | null;
     const mediaType = formData.get('mediaType') as string | null; // photo, video
 
@@ -97,7 +103,10 @@ export async function POST(request: NextRequest) {
 
     // Генерируем уникальное имя файла
     const uniqueFileName = generateUniqueFileName(file.name);
-    const s3Path = `${folder}/${uniqueFileName}`;
+    // Для галереи пользователя используем путь users/gallery/{userId}/
+    const s3Path = isUserGalleryUpload 
+      ? `users/gallery/${user.id}/${uniqueFileName}`
+      : `${folder}/${uniqueFileName}`;
 
     // Загружаем файл в S3
     const fileUrl = await uploadFileToS3(file, s3Path);

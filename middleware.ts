@@ -104,7 +104,68 @@ export async function middleware(request: NextRequest) {
       redirectUrl.searchParams.set('redirect', request.nextUrl.pathname);
       return NextResponse.redirect(redirectUrl);
     }
+
+    // Проверка бана пользователя (кроме страницы /banned)
+    if (request.nextUrl.pathname !== '/banned') {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_banned, ban_until')
+        .eq('id', session.user.id)
+        .single();
+
+      if (profile?.is_banned) {
+        // Проверяем, не истёк ли срок бана
+        if (profile.ban_until) {
+          const until = new Date(profile.ban_until);
+          if (until.getTime() > Date.now()) {
+            // Бан ещё действует - редирект на страницу бана
+            return NextResponse.redirect(new URL('/banned', request.url));
+          }
+        } else {
+          // Постоянный бан - редирект на страницу бана
+          return NextResponse.redirect(new URL('/banned', request.url));
+        }
+      }
+    }
   }
+
+  // Проверка бана для всех защищённых маршрутов (кроме /banned и /auth)
+  if (
+    session &&
+    !request.nextUrl.pathname.startsWith('/banned') &&
+    !request.nextUrl.pathname.startsWith('/auth') &&
+    !request.nextUrl.pathname.startsWith('/api')
+  ) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_banned, ban_until')
+      .eq('id', session.user.id)
+      .single();
+
+    if (profile?.is_banned) {
+      // Проверяем, не истёк ли срок бана
+      if (profile.ban_until) {
+        const until = new Date(profile.ban_until);
+        if (until.getTime() > Date.now()) {
+          // Бан ещё действует - редирект на страницу бана
+          return NextResponse.redirect(new URL('/banned', request.url));
+        }
+      } else {
+        // Постоянный бан - редирект на страницу бана
+        return NextResponse.redirect(new URL('/banned', request.url));
+      }
+    }
+  }
+
+  // Добавляем заголовки безопасности для защиты от XSS
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-XSS-Protection', '1; mode=block');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set(
+    'Content-Security-Policy',
+    "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:;"
+  );
 
   return response;
 }
@@ -114,6 +175,10 @@ export const config = {
     '/admin/:path*',
     '/profile/:path*',
     '/my-bookings/:path*',
+    '/messenger/:path*',
+    '/banned',
+    // Исключаем публичные маршруты
+    '/((?!api|_next/static|_next/image|favicon.ico|auth|terms|privacy|contacts|about|tours|$).*)',
   ],
 };
 

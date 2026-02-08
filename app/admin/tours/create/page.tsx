@@ -1,6 +1,11 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import TourForm from '@/components/admin/TourForm';
+import dynamic from 'next/dynamic';
+
+// Динамический импорт для уменьшения начального бандла
+const TourForm = dynamic(() => import('@/components/admin/TourForm'), {
+  loading: () => <div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div></div>,
+});
 
 export const metadata = {
   title: 'Создать тур - Админ панель',

@@ -1,6 +1,11 @@
 import { redirect, notFound } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
-import TourForm from '@/components/admin/TourForm';
+import dynamic from 'next/dynamic';
+
+// Динамический импорт для уменьшения начального бандла
+const TourForm = dynamic(() => import('@/components/admin/TourForm'), {
+  loading: () => <div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div></div>,
+});
 
 export const metadata = {
   title: 'Редактировать тур - Админ панель',
@@ -37,7 +42,7 @@ export default async function EditTourPage({ params }: EditTourPageProps) {
   // Загружаем данные тура
   const { data: tour, error } = await serviceClient
     .from('tours')
-    .select('id,title,slug,short_desc,full_desc,tour_type,category,price_per_person,start_date,end_date,max_participants,status,yandex_map_url,cover_image,description')
+    .select('id,title,slug,short_desc,full_desc,tour_type,category,price_per_person,start_date,end_date,max_participants,status,yandex_map_url,cover_image,description,city_id')
     .eq('id', id)
     .single();
 

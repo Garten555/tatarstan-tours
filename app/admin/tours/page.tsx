@@ -1,6 +1,5 @@
 import Link from 'next/link';
-import { createServiceClient } from '@/lib/supabase/server';
-import { Plus } from 'lucide-react';
+import { Plus, Map } from 'lucide-react';
 import TourAdminList from '@/components/admin/TourAdminList';
 
 export const metadata = {
@@ -8,50 +7,38 @@ export const metadata = {
   description: 'Управление турами',
 };
 
-export default async function AdminToursPage() {
-  const supabase = await createServiceClient();
-
-  // Получаем все туры
-  const { data: tours } = await supabase
-    .from('tours')
-    .select(`
-      id,
-      title,
-      slug,
-      price_per_person,
-      tour_type,
-      category,
-      start_date,
-      end_date,
-      status,
-      current_participants,
-      max_participants,
-      cover_image,
-      created_at
-    `)
-    .order('created_at', { ascending: false });
-
+export default function AdminToursPage() {
   return (
-    <div className="space-y-8">
-      {/* Заголовок */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Управление турами</h1>
-          <p className="mt-2 text-gray-600">
-            Создание и редактирование туров
-          </p>
+    <div>
+      {/* Заголовок в стиле главной страницы */}
+      <div className="mb-8 py-6">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="px-3 py-1.5 bg-emerald-100/50 border border-emerald-200/50 rounded-xl">
+                <span className="text-sm font-bold text-emerald-700">Туры</span>
+              </div>
+            </div>
+            <h1 className="text-3xl md:text-4xl lg:text-5xl font-black text-gray-900 flex items-center gap-3 mb-2">
+              <Map className="w-7 h-7 md:w-8 md:h-8 text-emerald-600" />
+              Управление турами
+            </h1>
+            <p className="text-lg md:text-xl font-bold text-gray-700">
+              Создание и редактирование туров
+            </p>
+          </div>
+          <Link
+            href="/admin/tours/create"
+            className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 flex items-center gap-2 font-black text-base transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+          >
+            <Plus className="w-5 h-5" />
+            Создать тур
+          </Link>
         </div>
-        <Link
-          href="/admin/tours/create"
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          Создать тур
-        </Link>
       </div>
 
-      {/* Список туров */}
-      <TourAdminList tours={tours || []} />
+      {/* Список туров с фильтрацией и пагинацией */}
+      <TourAdminList />
     </div>
   );
 }

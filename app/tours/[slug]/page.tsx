@@ -1,40 +1,29 @@
 export const revalidate = 60
 import { notFound } from 'next/navigation';
-import { createServiceClient } from '@/lib/supabase/server';
+import { createClient, createServiceClient } from '@/lib/supabase/server';
 import Image from 'next/image';
 import Link from 'next/link';
-import { 
-  Calendar, 
-  Clock, 
-  Users, 
-  MapPin, 
-  DollarSign,
-  ArrowLeft,
-  Share2
-} from 'lucide-react';
+import TourHeaderCard from '@/components/tours/TourHeaderCard';
+import TourBookingCard from '@/components/tours/TourBookingCard';
+import TourDescriptionSection from '@/components/tours/TourDescriptionSection';
+import TourCharacteristicsSection from '@/components/tours/TourCharacteristicsSection';
+import TourMediaGallery from '@/components/tours/TourMediaGallery';
+import TourVideoSection from '@/components/tours/TourVideoSection';
+import TourMapSection from '@/components/tours/TourMapSection';
+import TourReviewsSection from '@/components/tours/TourReviewsSection';
+import { ArrowLeft } from 'lucide-react';
 
 interface TourPageProps {
   params: Promise<{ slug: string }>;
 }
 
-const TOUR_TYPE_LABELS: Record<string, string> = {
-  excursion: 'Экскурсия',
-  multi_day: 'Многодневный',
-  weekend: 'Выходные',
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  history: 'История',
-  nature: 'Природа',
-  culture: 'Культура',
-  gastronomy: 'Гастрономия',
-  active: 'Активный отдых',
-  religious: 'Религиозные',
-};
-
 export default async function TourPage({ params }: TourPageProps) {
   const { slug } = await params;
   const supabase = await createServiceClient();
+  const supabaseAuth = await createClient();
+  const {
+    data: { user },
+  } = await supabaseAuth.auth.getUser();
 
   // Получаем данные тура
   const { data: tour, error } = await supabase
@@ -57,18 +46,142 @@ export default async function TourPage({ params }: TourPageProps) {
     .eq('tour_id', t.id)
     .order('created_at', { ascending: true });
 
-  console.log('📸 Медиа для тура', t.id, ':', media);
   if (mediaError) console.error('❌ Ошибка загрузки медиа:', mediaError);
 
-// В БД media_type: 'image' | 'video' — совместимость со старым 'photo'
-const mediaTyped = ((media || []) as any[]);
-const photos = mediaTyped.filter((m) => m.media_type === 'image' || m.media_type === 'photo');
-const videos = mediaTyped.filter((m) => m.media_type === 'video');
-  
-console.log('📷 Фото:', photos.length, '🎬 Видео:', videos.length);
+  // В БД media_type: 'image' | 'video' — совместимость со старым 'photo'
+  const mediaTyped = ((media || []) as any[]);
+  const photos = mediaTyped.filter((m) => m.media_type === 'image' || m.media_type === 'photo');
+  const videos = mediaTyped.filter((m) => m.media_type === 'video');
 
   const availableSpots = t.max_participants - (t.current_participants || 0);
   const isFullyBooked = availableSpots <= 0;
+
+  const { data: reviewsData } = await supabase
+    .from('reviews')
+    .select('id, rating, text, created_at, user_id')
+    .eq('tour_id', t.id)
+    .eq('is_published', true)
+    .eq('is_approved', true)
+    .order('created_at', { ascending: false });
+
+  const reviewItemsRaw = (reviewsData as any[]) || [];
+  const reviewUserIds = reviewItemsRaw.map((review) => review.user_id);
+  const reviewIds = reviewItemsRaw.map((review) => review.id);
+
+  const { data: reviewProfiles } =
+    reviewUserIds.length > 0
+      ? await supabase
+          .from('profiles')
+          .select('id, first_name, last_name, avatar_url')
+          .in('id', reviewUserIds)
+      : { data: [] };
+
+  const { data: reviewMedia } =
+    reviewIds.length > 0
+      ? await supabase
+          .from('review_media')
+          .select('review_id, media_type, media_url')
+          .in('review_id', reviewIds)
+          .order('order_index', { ascending: true })
+      : { data: [] };
+
+  const { data: reviewComments } =
+    reviewIds.length > 0
+      ? await supabase
+          .from('review_comments')
+          .select('id, review_id, message, created_at, user_id')
+          .in('review_id', reviewIds)
+          .order('created_at', { ascending: true })
+      : { data: [] };
+
+  const commentUserIds = (reviewComments || []).map((comment: any) => comment.user_id);
+  const { data: commentProfiles } =
+    commentUserIds.length > 0
+      ? await supabase
+          .from('profiles')
+          .select('id, first_name, last_name, avatar_url')
+          .in('id', commentUserIds)
+      : { data: [] };
+
+  const { data: reviewReactions } =
+    reviewIds.length > 0
+      ? await supabase
+          .from('review_reactions')
+          .select('review_id, user_id, reaction')
+          .in('review_id', reviewIds)
+      : { data: [] };
+
+  const profileMap = new Map(
+    ((reviewProfiles as any[]) || []).map((profile) => [profile.id, profile])
+  );
+
+  const commentProfileMap = new Map(
+    ((commentProfiles as any[]) || []).map((profile) => [profile.id, profile])
+  );
+
+  const mediaMap = new Map<string, { media_type: 'image' | 'video'; media_url: string }[]>();
+  (reviewMedia || []).forEach((item: any) => {
+    if (!mediaMap.has(item.review_id)) mediaMap.set(item.review_id, []);
+    mediaMap.get(item.review_id)?.push({
+      media_type: item.media_type,
+      media_url: item.media_url,
+    });
+  });
+
+  const commentsMap = new Map<
+    string,
+    { id: string; message: string; user_name: string; user_avatar: string | null; created_at: string }[]
+  >();
+
+  (reviewComments || []).forEach((comment: any) => {
+    const profile = commentProfileMap.get(comment.user_id);
+    const name = profile
+      ? [profile.first_name, profile.last_name].filter(Boolean).join(' ')
+      : 'Пользователь';
+    if (!commentsMap.has(comment.review_id)) commentsMap.set(comment.review_id, []);
+    commentsMap.get(comment.review_id)?.push({
+      id: comment.id,
+      message: comment.message,
+      user_name: name || 'Пользователь',
+      user_avatar: profile?.avatar_url || null,
+      created_at: comment.created_at,
+    });
+  });
+
+  const reviewItems = reviewItemsRaw.map((review) => {
+    const profile = profileMap.get(review.user_id);
+    const name = profile
+      ? [profile.first_name, profile.last_name].filter(Boolean).join(' ')
+      : 'Пользователь';
+    const reactions = (reviewReactions || []).filter(
+      (reaction: any) => reaction.review_id === review.id
+    );
+    const likeCount = reactions.filter((reaction: any) => reaction.reaction === 'like').length;
+    const dislikeCount = reactions.filter((reaction: any) => reaction.reaction === 'dislike').length;
+    const userReaction = user
+      ? reactions.find((reaction: any) => reaction.user_id === user.id)?.reaction || null
+      : null;
+
+    return {
+      id: review.id,
+      user_name: name || 'Пользователь',
+      user_avatar: profile?.avatar_url || null,
+      created_at: review.created_at,
+      rating: review.rating,
+      text: review.text,
+      media: mediaMap.get(review.id) || [],
+      like_count: likeCount,
+      dislike_count: dislikeCount,
+      user_reaction: userReaction,
+      comments: commentsMap.get(review.id) || [],
+    };
+  });
+
+  const reviewCount = reviewItems.length;
+  const averageRating =
+    reviewCount > 0
+      ? reviewItems.reduce((sum, review) => sum + review.rating, 0) / reviewCount
+      : 0;
 
   // Форматирование даты
   const formatDate = (dateString: string) => {
@@ -98,246 +211,75 @@ console.log('📷 Фото:', photos.length, '🎬 Видео:', videos.length);
   };
 
   return (
-    <main className="min-h-screen bg-gray-50">
-      {/* Навигация */}
-      <div className="bg-white border-b">
-        <div className="container mx-auto px-4 py-4">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-gray-600 hover:text-emerald-600 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            <span>Назад на главную</span>
-          </Link>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gray-50 relative w-full">
+      <div className="relative z-10 container mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-6 sm:py-8 lg:py-12 max-w-7xl w-full overflow-x-hidden">
+        {/* Кнопка назад с улучшенным дизайном */}
+        <Link
+          href="/"
+          className="group inline-flex items-center gap-2 sm:gap-3 text-gray-700 hover:text-emerald-600 transition-all duration-200 mb-6 sm:mb-8 px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg sm:rounded-xl hover:bg-white hover:shadow-lg border-2 border-gray-200 hover:border-emerald-200"
+        >
+          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 group-hover:-translate-x-1 transition-transform duration-200 flex-shrink-0" />
+          <span className="font-bold text-sm sm:text-base">Назад на главную</span>
+        </Link>
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Левая колонка - основная информация */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Обложка */}
-            <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
-              <div className="relative h-96">
-                <Image
-                  src={t.cover_image}
-                  alt={t.title}
-                  fill
-                  className="object-cover"
-                  priority
-                />
-                
-                {/* Бейджи */}
-                <div className="absolute top-6 left-6 flex flex-wrap gap-2">
-                  <span className="px-4 py-2 bg-emerald-500 text-white text-sm font-medium rounded-full">
-                    {TOUR_TYPE_LABELS[t.tour_type] || t.tour_type}
-                  </span>
-                  <span className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-full">
-                    {CATEGORY_LABELS[t.category] || t.category}
-                  </span>
-                </div>
-              </div>
-
-              <div className="p-8">
-                {/* Заголовок */}
-                <h1 className="text-4xl font-bold text-gray-900 mb-4">
-                  {t.title}
-                </h1>
-
-                {/* Краткое описание */}
-                <p className="text-lg text-gray-600 mb-6">
-                  {t.short_desc}
-                </p>
-
-                {/* Метаданные */}
-                <div className="grid grid-cols-2 gap-4 py-6 border-y border-gray-200">
-                  <div className="flex items-center gap-3">
-                    <Calendar className="w-6 h-6 text-emerald-500" />
-                    <div>
-                      <div className="text-sm text-gray-500">Начало</div>
-                      <div className="font-medium text-gray-900">
-                        {formatDate(t.start_date)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <Clock className="w-6 h-6 text-emerald-500" />
-                    <div>
-                      <div className="text-sm text-gray-500">Продолжительность</div>
-                      <div className="font-medium text-gray-900">{getDuration()}</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <Users className="w-6 h-6 text-emerald-500" />
-                    <div>
-                      <div className="text-sm text-gray-500">Участники</div>
-                      <div className="font-medium text-gray-900">
-                        До {t.max_participants} человек
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <DollarSign className="w-6 h-6 text-emerald-500" />
-                    <div>
-                      <div className="text-sm text-gray-500">Цена</div>
-                      <div className="font-medium text-gray-900">
-                        {t.price_per_person.toLocaleString('ru-RU')} ₽
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Полное описание */}
-                <div className="mt-8">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-4">
-                    Описание тура
-                  </h2>
-                  <div
-                    className="prose prose-lg max-w-none text-gray-700"
-                    dangerouslySetInnerHTML={{ __html: t.full_desc }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Галерея */}
-            {photos.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm p-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                  Фотогалерея
-                </h2>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                  {photos.map((photo) => (
-                    <div
-                      key={photo.id}
-                      className="relative h-48 rounded-xl overflow-hidden"
-                    >
-                      <Image
-                        src={photo.media_url}
-                        alt={photo.file_name}
-                        fill
-                        className="object-cover hover:scale-110 transition-transform duration-300"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Видео */}
-            {videos.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-sm p-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">
-                  Видео о туре
-                </h2>
-                <div className="space-y-4">
-                  {videos.map((video) => (
-                    <video
-                      key={video.id}
-                      controls
-                      className="w-full rounded-xl"
-                    >
-                      <source src={video.media_url} type={video.mime_type} />
-                      Ваш браузер не поддерживает видео.
-                    </video>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Яндекс Карта */}
-            {t.yandex_map_url && (
-              <div className="bg-white rounded-2xl shadow-sm p-8">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
-                  <MapPin className="w-6 h-6 text-emerald-500" />
-                  Место проведения
-                </h2>
-                <div className="relative w-full h-96 rounded-xl overflow-hidden">
-                  {t.yandex_map_url.includes('<iframe') ? (
-                    <div
-                      dangerouslySetInnerHTML={{ __html: t.yandex_map_url }}
-                      className="w-full h-full"
-                    />
-                  ) : (
-                    <iframe
-                      src={t.yandex_map_url}
-                      className="w-full h-full border-0"
-                      allowFullScreen
-                    />
-                  )}
-                </div>
-              </div>
-            )}
+        <div className="mt-4 sm:mt-6 flex flex-col lg:flex-row gap-6 sm:gap-8 w-full items-start">
+          <div className="w-full lg:w-[320px] xl:w-[380px] flex-shrink-0">
+            <TourBookingCard
+              price={t.price_per_person}
+              availableSpots={availableSpots}
+              maxParticipants={t.max_participants}
+              isFullyBooked={isFullyBooked}
+              bookingHref={`/booking?tour=${t.id}`}
+            />
           </div>
 
-          {/* Правая колонка - бронирование */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-8">
-              <div className="mb-6">
-                <div className="text-3xl font-bold text-emerald-600 mb-2">
-                  {t.price_per_person.toLocaleString('ru-RU')} ₽
-                </div>
-                <div className="text-sm text-gray-500">за человека</div>
-              </div>
+          <div className="flex-1 space-y-6 sm:space-y-8 w-full min-w-0">
+            <TourHeaderCard
+              coverImage={t.cover_image}
+              title={t.title}
+              shortDesc={t.short_desc}
+              tourType={t.tour_type}
+              category={t.category}
+            />
 
-              {/* Доступность мест */}
-              <div className="mb-6 p-4 bg-gray-50 rounded-xl">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-gray-600">Доступно мест:</span>
-                  <span className="font-bold text-gray-900">
-                    {availableSpots} / {t.max_participants}
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-emerald-500 h-2 rounded-full transition-all"
-                    style={{
-                      width: `${(availableSpots / t.max_participants) * 100}%`,
-                    }}
-                  />
-                </div>
-              </div>
+            <TourCharacteristicsSection
+              startDateLabel={formatDate(t.start_date)}
+              durationLabel={getDuration()}
+              maxParticipants={t.max_participants}
+              priceLabel={`${t.price_per_person.toLocaleString('ru-RU')} ₽`}
+            />
 
-              {/* Кнопка бронирования */}
-              <button
-                className={`w-full py-4 rounded-xl font-bold text-lg mb-4 transition-all ${
-                  isFullyBooked
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-emerald-500 text-white hover:bg-emerald-600 hover:shadow-xl'
-                }`}
-                disabled={isFullyBooked}
-              >
-                {isFullyBooked ? 'Мест нет' : 'Забронировать'}
-              </button>
+            <TourDescriptionSection
+              html={t.full_desc || t.description || t.short_desc || ''}
+            />
 
-              {/* Информация */}
-              <div className="space-y-3 text-sm text-gray-600">
-                <div className="flex items-start gap-2">
-                  <span className="text-emerald-500">✓</span>
-                  <span>Бесплатная отмена за 24 часа</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-emerald-500">✓</span>
-                  <span>Подтверждение в течение 1 часа</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <span className="text-emerald-500">✓</span>
-                  <span>Опытный гид-экскурсовод</span>
-                </div>
-              </div>
+            <TourMediaGallery
+              photos={(photos || []).map((photo: any) => ({
+                id: photo.id,
+                media_url: photo.media_url,
+                file_name: photo.file_name,
+              }))}
+            />
 
-              {/* Кнопка "Поделиться" */}
-              <button className="w-full mt-6 py-3 border-2 border-gray-200 rounded-xl font-medium text-gray-700 hover:border-emerald-500 hover:text-emerald-600 transition-all flex items-center justify-center gap-2">
-                <Share2 className="w-5 h-5" />
-                Поделиться
-              </button>
-            </div>
+            <TourVideoSection
+              videos={(videos || []).map((video: any) => ({
+                id: video.id,
+                media_url: video.media_url,
+                mime_type: video.mime_type,
+                file_name: video.file_name,
+              }))}
+            />
+
+            {t.yandex_map_url && <TourMapSection yandexMapUrl={t.yandex_map_url} />}
+
+            <TourReviewsSection
+              reviews={reviewItems}
+              reviewCount={reviewCount}
+              averageRating={averageRating}
+            />
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

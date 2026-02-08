@@ -20,9 +20,9 @@ export function Logo({ className = 'w-12 h-12' }: LogoProps) {
       <Image
         src="/logo.svg"
         alt="Туры по Татарстану - Логотип"
-        width={48}
-        height={48}
-        className="object-contain"
+        width={192}
+        height={192}
+        className="object-contain w-full h-full"
         priority
       />
     </div>

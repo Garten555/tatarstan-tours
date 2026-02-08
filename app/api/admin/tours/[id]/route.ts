@@ -102,27 +102,59 @@ export async function DELETE(
     }
 
     // Получаем информацию о туре и его медиа
-    const { data: tour } = await serviceClient
+    const { data: tour, error: tourError } = await serviceClient
       .from('tours')
       .select('cover_path')
       .eq('id', id)
       .single();
+
+    if (tourError || !tour) {
+      console.error('Error fetching tour:', tourError);
+      return NextResponse.json(
+        { error: 'Tour not found' },
+        { status: 404 }
+      );
+    }
 
     const { data: media } = await serviceClient
       .from('tour_media')
       .select('media_path')
       .eq('tour_id', id);
 
+    // Проверяем наличие бронирований и удаляем их все (админ может удалять любые туры)
+    const { data: bookings, error: bookingsError } = await serviceClient
+      .from('bookings')
+      .select('id, status')
+      .eq('tour_id', id);
+
+    const bookingsCount = bookings?.length || 0;
+
+    // Удаляем все бронирования (независимо от статуса - админ имеет право удалять любые туры)
+    if (bookingsCount > 0) {
+      const { error: deleteBookingsError } = await serviceClient
+        .from('bookings')
+        .delete()
+        .eq('tour_id', id);
+
+      if (deleteBookingsError) {
+        console.error('Error deleting bookings:', deleteBookingsError);
+        return NextResponse.json(
+          { error: 'Failed to delete related bookings' },
+          { status: 500 }
+        );
+      }
+    }
+
     // Удаляем тур из БД (CASCADE удалит связанные медиа)
-    const { error } = await serviceClient
+    const { error: deleteError } = await serviceClient
       .from('tours')
       .delete()
       .eq('id', id);
 
-    if (error) {
-      console.error('Error deleting tour:', error);
+    if (deleteError) {
+      console.error('Error deleting tour:', deleteError);
       return NextResponse.json(
-        { error: 'Failed to delete tour' },
+        { error: deleteError.message || 'Failed to delete tour' },
         { status: 500 }
       );
     }

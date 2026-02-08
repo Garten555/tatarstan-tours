@@ -1,26 +1,33 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { User, LogOut, Settings, Calendar, Shield } from 'lucide-react';
+import { User, LogOut, Settings, Calendar, Shield, Crown, MessageSquare, BookOpen, Compass, Search, Users, Home, Mail, DoorOpen } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { useDialog } from '@/hooks/useDialog';
 
 export default function UserMenu() {
   const router = useRouter();
   const supabase = createClient();
+  const { alert, DialogComponents } = useDialog();
   
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [profile, setProfile] = useState<any>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [authResolved, setAuthResolved] = useState(false); // чтобы не мигала кнопка "Вход"
+  const [isGuide, setIsGuide] = useState(false); // Является ли пользователь гидом
+  const guideCheckedRef = useRef<string | null>(null); // ID пользователя, для которого уже проверено
   
   // Диагностика: единый префикс для логов
   const logPrefix = '[МенюПользователя]';
 
   const isAdminRole = (role: any) =>
     role === 'super_admin' || role === 'tour_admin' || role === 'support_admin';
+  
+  // Проверяем, является ли пользователь гидом по роли или по наличию комнат
+  const isGuideByRole = profile?.role === 'guide' || profile?.role === 'tour_admin';
 
   // Белый список админов по email (через NEXT_PUBLIC_ADMIN_EMAILS="a@b.com,c@d.com")
   const adminEmails: string[] = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '')
@@ -35,13 +42,7 @@ export default function UserMenu() {
     const isAdminByRole = isAdminRole(role);
     const isAdminByEmail = !!(email && adminEmails.includes(email));
     const isAdmin = isAdminByRole || isAdminByEmail;
-    console.info(logPrefix, 'проверка админа', { роль: role, email, поРоли: isAdminByRole, поEmail: isAdminByEmail, админ: isAdmin });
-    // Дублируем в серверные логи (IDE/терминал)
-    fetch('/api/log', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tag: 'UserMenu', level: 'info', message: 'admin check', data: { role, email, isAdminByRole, isAdminByEmail, isAdmin } }),
-    }).catch(() => {});
+    // Логирование отключено для производительности
   }, [profile?.role, user?.email]);
 
   // Хелперы кэша
@@ -50,10 +51,9 @@ export default function UserMenu() {
       const raw = localStorage.getItem('tt_profile') || sessionStorage.getItem('tt_profile');
       if (!raw) return null;
       const parsed = JSON.parse(raw);
-      console.debug(logPrefix, 'чтение кэша профиля', { существует: !!raw, данные: parsed });
       return parsed;
     } catch {
-      console.warn(logPrefix, 'ошибка парсинга JSON при чтении кэша профиля');
+      // Тихая обработка ошибки парсинга кэша (не критично)
       return null;
     }
   };
@@ -62,71 +62,102 @@ export default function UserMenu() {
       const s = JSON.stringify(data);
       localStorage.setItem('tt_profile', s);
       sessionStorage.setItem('tt_profile', s);
-      console.debug(logPrefix, 'запись кэша профиля', { данные: data });
     } catch {}
   };
 
   useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent).detail;
+      if (detail?.source !== 'user-menu') {
+        setTimeout(() => setIsOpen(false), 0);
+      }
+    };
+    window.addEventListener('ui:dropdown', handler as EventListener);
+    return () => window.removeEventListener('ui:dropdown', handler as EventListener);
+  }, []);
+
+  // Закрытие при клике вне компонента
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      const userMenuButton = target.closest('[data-user-menu-button]');
+      const userMenuDropdown = target.closest('[data-user-menu]');
+      
+      if (!userMenuButton && !userMenuDropdown) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  useEffect(() => {
     // Быстрый старт из localStorage, чтобы ссылка Админ-панель не пропадала при пробуждении вкладки
     const cached = readCachedProfile();
-    if (cached && (cached.role || cached.first_name || cached.last_name)) {
-      setProfile(cached);
-      console.info(logPrefix, 'инициализация из кэша', { роль: cached.role });
-    }
+      if (cached && (cached.role || cached.first_name || cached.last_name)) {
+        setProfile(cached);
+      }
 
     // Получаем текущего пользователя
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUser(user);
-      console.info(logPrefix, 'получен пользователь', { пользователь: !!user, userId: user?.id });
-      fetch('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tag: 'UserMenu', level: 'info', message: 'getUser', data: { hasUser: !!user, userId: user?.id } }) }).catch(() => {});
       if (user) {
-        // Сначала берём данные из user_metadata (быстро и надёжно)
-        const metaProfile = {
-          first_name: user.user_metadata?.first_name,
-          last_name: user.user_metadata?.last_name,
-          avatar_url: user.user_metadata?.avatar_url,
-          role: user.user_metadata?.role, // ✅ Добавляем роль!
-        };
-        setProfile(metaProfile);
-        // Кэшируем
-        writeCachedProfile(metaProfile);
-        console.info(logPrefix, 'роль из user_metadata применена', { роль: metaProfile.role });
-        fetch('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tag: 'UserMenu', level: 'info', message: 'meta role applied', data: { role: metaProfile.role } }) }).catch(() => {});
-        
-        // Затем пытаемся загрузить из БД (если есть обновления)
+        // Сначала загружаем из БД (приоритет для актуальных данных, особенно avatar_url)
         supabase
           .from('profiles')
-          .select('first_name, last_name, avatar_url, role')
+          .select('first_name, last_name, avatar_url, role, username')
           .eq('id', user.id)
           .single()
           .then(({ data, error }) => {
-            console.debug(logPrefix, 'результат загрузки профиля из БД', { естьДанные: !!data, ошибка: error });
-            fetch('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tag: 'UserMenu', level: 'debug', message: 'db profile fetch', data: { hasData: !!data, error } }) }).catch(() => {});
             if (!error && data) {
-              // Не понижаем привилегии, если в метаданных/кэше роль админская, а в БД нет
+              // Используем данные из БД как основной источник
+              const dbProfile = {
+                first_name: (data as any).first_name,
+                last_name: (data as any).last_name,
+                avatar_url: (data as any).avatar_url,
+                role: (data as any).role,
+                username: (data as any).username,
+              };
+              
               setProfile((prev: any) => {
-                const keepAdmin = isAdminRole(prev?.role) && !isAdminRole((data as any).role);
+                const keepAdmin = isAdminRole(prev?.role) && !isAdminRole(dbProfile.role);
                 const next = {
-                  first_name: (data as any).first_name ?? prev?.first_name,
-                  last_name: (data as any).last_name ?? prev?.last_name,
-                  avatar_url: (data as any).avatar_url ?? prev?.avatar_url,
-                  role: keepAdmin ? prev?.role : ((data as any).role ?? prev?.role),
+                  first_name: dbProfile.first_name ?? prev?.first_name ?? user.user_metadata?.first_name,
+                  last_name: dbProfile.last_name ?? prev?.last_name ?? user.user_metadata?.last_name,
+                  // Всегда приоритет avatar_url из БД
+                  avatar_url: dbProfile.avatar_url ?? prev?.avatar_url ?? user.user_metadata?.avatar_url,
+                  role: keepAdmin ? prev?.role : (dbProfile.role ?? prev?.role ?? user.user_metadata?.role),
+                  username: dbProfile.username ?? prev?.username,
                 };
-                if (keepAdmin) {
-                  console.warn(logPrefix, 'понижение роли из БД проигнорировано', { былаРоль: prev?.role, рольБД: (data as any).role });
-                  fetch('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tag: 'UserMenu', level: 'warn', message: 'db role downgrade ignored', data: { prevRole: prev?.role, dbRole: (data as any).role } }) }).catch(() => {});
-                }
                 writeCachedProfile(next);
-                console.info(logPrefix, 'профиль из БД применён', { роль: next.role });
-                fetch('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tag: 'UserMenu', level: 'info', message: 'db role applied', data: { role: next.role } }) }).catch(() => {});
                 return next;
               });
+            } else {
+              // Если ошибка RLS - используем данные из metadata как fallback
+              const metaProfile = {
+                first_name: user.user_metadata?.first_name,
+                last_name: user.user_metadata?.last_name,
+                avatar_url: user.user_metadata?.avatar_url,
+                role: user.user_metadata?.role,
+              };
+              setProfile((prev: any) => {
+                // Не перезаписываем, если уже есть данные из кэша
+                if (prev?.role || prev?.first_name) {
+                  return {
+                    ...prev,
+                    avatar_url: prev.avatar_url ?? metaProfile.avatar_url,
+                  };
+                }
+                return metaProfile;
+              });
+              writeCachedProfile(metaProfile);
             }
-            // Если ошибка RLS - используем данные из metadata (уже установлены выше)
           });
       }
       setAuthResolved(true);
-      console.debug(logPrefix, 'состояние аутентификации определено (getUser)');
     });
 
     // Подписка на изменения авторизации
@@ -134,99 +165,290 @@ export default function UserMenu() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
-      console.info(logPrefix, 'изменение состояния авторизации', { событие: _event, естьПользователь: !!session?.user });
       if (session?.user) {
-        // При изменении сессии обновляем из metadata
-        setProfile({
-          first_name: session.user.user_metadata?.first_name,
-          last_name: session.user.user_metadata?.last_name,
-          avatar_url: session.user.user_metadata?.avatar_url,
-          role: session.user.user_metadata?.role, // ✅ Добавляем роль!
-        });
-        writeCachedProfile({
-          first_name: session.user.user_metadata?.first_name,
-          last_name: session.user.user_metadata?.last_name,
-          avatar_url: session.user.user_metadata?.avatar_url,
-          role: session.user.user_metadata?.role,
-        });
-        console.info(logPrefix, 'роль из метаданных сессии применена', { роль: session.user.user_metadata?.role });
+        // При изменении сессии перезагружаем профиль из БД для получения актуальных данных
+        // Используем кэш для быстрого старта
+        const cachedProfile = readCachedProfile();
+        if (cachedProfile && cachedProfile.role) {
+          setProfile(cachedProfile);
+        }
+        
+        // Загружаем из БД в фоне (не блокируем UI)
+        supabase
+          .from('profiles')
+          .select('first_name, last_name, avatar_url, role, username')
+          .eq('id', session.user.id)
+          .single()
+          .then(({ data, error }) => {
+            if (!error && data) {
+              setProfile((prev: any) => {
+                const keepAdmin = isAdminRole(prev?.role) && !isAdminRole((data as any).role);
+                const next = {
+                  first_name: (data as any).first_name ?? prev?.first_name ?? session.user.user_metadata?.first_name,
+                  last_name: (data as any).last_name ?? prev?.last_name ?? session.user.user_metadata?.last_name,
+                  // Всегда приоритет avatar_url из БД
+                  avatar_url: (data as any).avatar_url ?? prev?.avatar_url ?? session.user.user_metadata?.avatar_url,
+                  role: keepAdmin ? prev?.role : ((data as any).role ?? prev?.role ?? session.user.user_metadata?.role),
+                  username: (data as any).username ?? prev?.username,
+                };
+                writeCachedProfile(next);
+                return next;
+              });
+            } else {
+              // Fallback на user_metadata только если БД недоступна
+              setProfile((prev: any) => {
+                // Не перезаписываем аватар, если он уже есть
+                if (prev?.avatar_url && !session.user.user_metadata?.avatar_url) {
+                  return {
+                    ...prev,
+                    first_name: session.user.user_metadata?.first_name ?? prev?.first_name,
+                    last_name: session.user.user_metadata?.last_name ?? prev?.last_name,
+                    role: session.user.user_metadata?.role ?? prev?.role,
+                  };
+                }
+                return {
+                  first_name: session.user.user_metadata?.first_name,
+                  last_name: session.user.user_metadata?.last_name,
+                  avatar_url: session.user.user_metadata?.avatar_url ?? prev?.avatar_url,
+                  role: session.user.user_metadata?.role,
+                };
+              });
+              writeCachedProfile({
+                first_name: session.user.user_metadata?.first_name,
+                last_name: session.user.user_metadata?.last_name,
+                avatar_url: session.user.user_metadata?.avatar_url,
+                role: session.user.user_metadata?.role,
+              });
+            }
+          });
       }
       setAuthResolved(true);
-      console.debug(logPrefix, 'состояние аутентификации определено (onAuthStateChange)');
     });
 
-    // При возврате на вкладку подхватываем кэш немедленно
-    const onVisible = () => {
-      const c = readCachedProfile();
-      if (c && (c.role || c.first_name || c.last_name)) {
-        setProfile((prev: any) => {
-          const next = prev?.role ? prev : c;
-          console.debug(logPrefix, 'применение кэша при возврате во вкладку', { предыдущаяРоль: prev?.role, следующаяРоль: next?.role });
-          return next;
-        });
+    // При возврате на вкладку перезагружаем профиль из БД для синхронизации
+    const onVisible = async () => {
+      // Не перезагружаем, если вкладка только что стала видимой (может быть ложное срабатывание)
+      if (document.hidden) return;
+      
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        // Перезагружаем профиль из БД для получения актуальных данных (особенно avatar_url)
+        supabase
+          .from('profiles')
+          .select('first_name, last_name, avatar_url, role, username')
+          .eq('id', currentUser.id)
+          .single()
+          .then(({ data, error }) => {
+            if (!error && data) {
+              setProfile((prev: any) => {
+                const keepAdmin = isAdminRole(prev?.role) && !isAdminRole((data as any).role);
+                const next = {
+                  first_name: (data as any).first_name ?? prev?.first_name,
+                  last_name: (data as any).last_name ?? prev?.last_name,
+                  // Всегда используем avatar_url из БД при возврате на вкладку
+                  avatar_url: (data as any).avatar_url ?? prev?.avatar_url,
+                  role: keepAdmin ? prev?.role : ((data as any).role ?? prev?.role),
+                  username: (data as any).username ?? prev?.username,
+                };
+                writeCachedProfile(next);
+                return next;
+              });
+            }
+          });
       }
     };
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('focus', onVisible);
+    
+    // Используем только visibilitychange для избежания множественных срабатываний
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        // Небольшая задержка для избежания ложных срабатываний
+        setTimeout(onVisible, 100);
+      }
+    });
+
+    // Слушаем событие обновления аватара
+    const handleAvatarUpdate = async (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const newAvatarUrl = customEvent.detail?.url;
+      if (newAvatarUrl) {
+        // Обновляем профиль с новым аватаром
+        setProfile((prev: any) => {
+          const updated = { ...prev, avatar_url: newAvatarUrl };
+          writeCachedProfile(updated);
+          return updated;
+        });
+        
+        // Также перезагружаем профиль из БД для синхронизации
+        const { data: { user: currentUser } } = await supabase.auth.getUser();
+        if (currentUser) {
+          supabase
+            .from('profiles')
+            .select('first_name, last_name, avatar_url, role')
+            .eq('id', currentUser.id)
+            .single()
+            .then(({ data, error }) => {
+              if (!error && data) {
+                setProfile((prev: any) => {
+                  const next = {
+                    first_name: (data as any).first_name ?? prev?.first_name,
+                    last_name: (data as any).last_name ?? prev?.last_name,
+                    avatar_url: (data as any).avatar_url ?? prev?.avatar_url,
+                    role: (data as any).role ?? prev?.role,
+                  };
+                  writeCachedProfile(next);
+                  return next;
+                });
+              }
+            });
+        }
+      }
+    };
+    window.addEventListener('avatarUpdated', handleAvatarUpdate);
+
+    // Проверяем, является ли пользователь гидом (только один раз для каждого пользователя)
+    const checkIfGuide = async (userId: string) => {
+      // Если уже проверено для этого пользователя - пропускаем
+      if (guideCheckedRef.current === userId) return;
+      
+      try {
+        // Проверяем кэш
+        const cachedTime = localStorage.getItem('tt_is_guide_time');
+        const cachedGuide = localStorage.getItem('tt_is_guide');
+        const cachedUserId = localStorage.getItem('tt_is_guide_user_id');
+        const now = Date.now();
+        
+        // Если кэш для этого пользователя свежий (менее 5 минут) - используем его
+        if (cachedUserId === userId && cachedTime && cachedGuide !== null) {
+          const cacheAge = now - parseInt(cachedTime);
+          if (cacheAge < 5 * 60 * 1000) {
+            setIsGuide(cachedGuide === 'true');
+            guideCheckedRef.current = userId; // Помечаем как проверенное
+            return;
+          }
+        }
+        
+        // Загружаем только если нет свежего кэша
+        const response = await fetch('/api/guide/rooms');
+        const data = await response.json();
+        const isGuideValue = data.success && data.rooms && data.rooms.length > 0;
+        setIsGuide(isGuideValue);
+        guideCheckedRef.current = userId; // Помечаем как проверенное
+        
+        // Кэшируем результат на 5 минут
+        localStorage.setItem('tt_is_guide', String(isGuideValue));
+        localStorage.setItem('tt_is_guide_time', now.toString());
+        localStorage.setItem('tt_is_guide_user_id', userId);
+      } catch (error) {
+        console.error('Ошибка проверки гида:', error);
+        guideCheckedRef.current = userId; // Помечаем как проверенное даже при ошибке
+      }
+    };
+    
+    // Проверяем только один раз при появлении нового пользователя
+    if (user && guideCheckedRef.current !== user.id) {
+      checkIfGuide(user.id);
+    }
+    
+    // Сбрасываем флаг при смене пользователя
+    if (!user && guideCheckedRef.current !== null) {
+      guideCheckedRef.current = null;
+      setIsGuide(false);
+    }
 
     return () => {
       subscription.unsubscribe();
       document.removeEventListener('visibilitychange', onVisible);
       window.removeEventListener('focus', onVisible);
+      window.removeEventListener('avatarUpdated', handleAvatarUpdate);
     };
-  }, [supabase]);
+  }, [supabase, user?.id]); // Зависимость только от user.id
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/');
-    router.refresh();
+    try {
+      setIsOpen(false); // Закрываем меню
+      
+      // Очищаем кэш
+      localStorage.removeItem('tt_profile');
+      sessionStorage.removeItem('tt_profile');
+      localStorage.removeItem('tt_is_guide');
+      localStorage.removeItem('tt_is_guide_time');
+      localStorage.removeItem('tt_is_guide_user_id');
+      
+      // Выход из Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Ошибка выхода:', error);
+        await alert('Ошибка при выходе. Попробуйте обновить страницу.', 'Ошибка', 'error');
+        return;
+      }
+      
+      // Сбрасываем состояние
+      setUser(null);
+      setProfile(null);
+      setIsGuide(false);
+      guideCheckedRef.current = null;
+      
+      // Перенаправляем на главную
+      router.push('/');
+      router.refresh();
+      
+      // Принудительная перезагрузка для очистки всех данных
+      window.location.href = '/';
+    } catch (error) {
+      console.error('Ошибка выхода:', error);
+      await alert('Ошибка при выходе. Попробуйте обновить страницу.', 'Ошибка', 'error');
+    }
   };
 
   // Пока не знаем состояние (и нет кэша) — ничего не показываем, чтобы не мигал "Вход"
   if (!authResolved && !profile) {
-    console.debug(logPrefix, 'рендер: плейсхолдер (аутентификация не определена, профиля нет)');
     return <div className="w-24 h-10" />;
   }
 
   const isAuthorizedByCache = !!profile?.role;
   const isAdmin = isAdminRole(profile?.role) || !!(user?.email && adminEmails.includes(user.email.toLowerCase()));
+  // Определяем, показывать ли панель гида: либо по роли, либо по наличию комнат
+  const showGuidePanel = (profile?.role === 'guide' || profile?.role === 'tour_admin') || isGuide;
   // Если пользователь не авторизован и нет кэша роли — показываем Вход
   if (!user && !isAuthorizedByCache) {
-    console.debug(logPrefix, 'рендер: показать кнопку входа', { пользователь: !!user, естьКэшРоли: isAuthorizedByCache, админ: isAdmin });
     return (
-      <div className="flex items-center gap-3">
-        <Link
-          href="/auth"
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-        >
-          Вход
-        </Link>
-      </div>
+      <Link
+        href="/auth"
+        className="header-auth-button"
+      >
+        Вход
+      </Link>
     );
   }
 
   // Если пользователь авторизован
-  console.debug(logPrefix, 'рендер: меню пользователя', { роль: profile?.role, пользователь: !!user, админ: isAdmin });
   return (
-    <div className="relative">
+    <div className="header-user-menu">
       {/* Кнопка профиля */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+        data-user-menu-button
+        onMouseDown={() => {
+          window.dispatchEvent(
+            new CustomEvent('ui:dropdown', { detail: { source: 'user-menu' } })
+          );
+        }}
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="header-user-button"
       >
         {profile?.avatar_url ? (
           <img
             src={profile.avatar_url}
             alt="Avatar"
-            className="w-10 h-10 rounded-full object-cover border-2 border-emerald-200"
+            className="header-user-avatar"
           />
         ) : (
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white font-bold shadow-md">
+          <div className="header-user-avatar header-user-avatar-placeholder">
             {profile?.first_name?.[0] || 'U'}{profile?.last_name?.[0] || ''}
           </div>
         )}
-        <span className="hidden md:block font-medium text-gray-900">
-          {profile?.first_name}
+        <span className="header-user-name">
+          {profile?.first_name || 'Пользователь'}
         </span>
       </button>
 
@@ -235,66 +457,160 @@ export default function UserMenu() {
         <>
           {/* Overlay для закрытия */}
           <div
-            className="fixed inset-0 z-10"
+            className="header-user-overlay"
             onClick={() => setIsOpen(false)}
           />
           
           {/* Меню */}
-          <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-20">
-            <Link
-              href="/profile"
-              onClick={() => setIsOpen(false)}
-              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
-            >
-              <User className="w-5 h-5 text-gray-600" />
-              <span className="text-gray-700">Мой профиль</span>
-            </Link>
+          <div className="header-user-dropdown" data-user-menu>
+            {/* Профиль */}
+            <div className="header-user-dropdown-section">
+              <Link
+                href="/profile"
+                prefetch={true}
+                onClick={() => setIsOpen(false)}
+                className="header-user-dropdown-item"
+              >
+                <div className="header-user-dropdown-icon-wrapper">
+                  <User className="header-user-dropdown-icon" />
+                </div>
+                <span className="header-user-dropdown-text">Мой профиль</span>
+              </Link>
+            </div>
+
+            {/* Социальные функции */}
+            <div className="header-user-dropdown-section">
+              <div className="header-user-dropdown-section-title">Социальные</div>
+              <Link
+                href={`/users/${profile?.username || user?.id}`}
+                prefetch={true}
+                onClick={() => setIsOpen(false)}
+                className="header-user-dropdown-item header-user-dropdown-item-emerald"
+              >
+                <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
+                  <BookOpen className="header-user-dropdown-icon header-user-dropdown-icon-emerald" />
+                </div>
+                <span className="header-user-dropdown-text">Мой туристический паспорт</span>
+              </Link>
+              
+              <Link
+                href="/messenger"
+                prefetch={true}
+                onClick={() => setIsOpen(false)}
+                className="header-user-dropdown-item header-user-dropdown-item-emerald"
+              >
+                <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
+                  <Mail className="header-user-dropdown-icon header-user-dropdown-icon-emerald" />
+                </div>
+                <span className="header-user-dropdown-text">Мессенджер</span>
+              </Link>
+              
+              <Link
+                href="/friends"
+                prefetch={true}
+                onClick={() => setIsOpen(false)}
+                className="header-user-dropdown-item header-user-dropdown-item-emerald"
+              >
+                <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
+                  <Users className="header-user-dropdown-icon header-user-dropdown-icon-emerald" />
+                </div>
+                <span className="header-user-dropdown-text">Друзья</span>
+              </Link>
+              
+              <Link
+                href="/my-rooms"
+                prefetch={true}
+                onClick={() => setIsOpen(false)}
+                className="header-user-dropdown-item header-user-dropdown-item-emerald"
+              >
+                <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
+                  <DoorOpen className="header-user-dropdown-icon header-user-dropdown-icon-emerald" />
+                </div>
+                <span className="header-user-dropdown-text">Мои комнаты</span>
+              </Link>
+            </div>
+
+            {/* Бронирования и настройки */}
+            <div className="header-user-dropdown-section">
+              <div className="header-user-dropdown-section-title">Управление</div>
+              <Link
+                href="/profile/bookings"
+                prefetch={true}
+                onClick={() => setIsOpen(false)}
+                className="header-user-dropdown-item"
+              >
+                <div className="header-user-dropdown-icon-wrapper">
+                  <Calendar className="header-user-dropdown-icon" />
+                </div>
+                <span className="header-user-dropdown-text">Мои бронирования</span>
+              </Link>
+              
+              <Link
+                href="/profile/settings"
+                prefetch={true}
+                onClick={() => setIsOpen(false)}
+                className="header-user-dropdown-item"
+              >
+                <div className="header-user-dropdown-icon-wrapper">
+                  <Settings className="header-user-dropdown-icon" />
+                </div>
+                <span className="header-user-dropdown-text">Настройки</span>
+              </Link>
+            </div>
             
-            <Link
-              href="/profile/bookings"
-              onClick={() => setIsOpen(false)}
-              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
-            >
-              <Calendar className="w-5 h-5 text-gray-600" />
-              <span className="text-gray-700">Мои бронирования</span>
-            </Link>
-            
-            <Link
-              href="/profile/settings"
-              onClick={() => setIsOpen(false)}
-              className="flex items-center gap-3 px-4 py-2 hover:bg-gray-50 transition-colors"
-            >
-              <Settings className="w-5 h-5 text-gray-600" />
-              <span className="text-gray-700">Настройки</span>
-            </Link>
-            
-            {/* Ссылка на админку (только для админов) */}
-            {isAdmin && (
-              <>
-                <hr className="my-2" />
+            {/* Админ-панель (для админов и гидов) */}
+            {(isAdmin || showGuidePanel) && (
+              <div className="header-user-dropdown-section">
+                <div className="header-user-dropdown-section-title">Администрирование</div>
+                {/* Комнаты туров только для гидов (не админов), так как у админов есть админ-панель */}
+                {showGuidePanel && !isAdmin && (
+                  <Link
+                    href="/admin/tour-rooms"
+                    onClick={() => setIsOpen(false)}
+                    className="header-user-dropdown-item header-user-dropdown-item-admin"
+                  >
+                    <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
+                      <DoorOpen className="header-user-dropdown-icon header-user-dropdown-icon-emerald" />
+                    </div>
+                    <span className="header-user-dropdown-text">Комнаты туров</span>
+                  </Link>
+                )}
                 <Link
                   href="/admin"
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-emerald-50 transition-colors text-emerald-600 font-medium"
+                  className="header-user-dropdown-item header-user-dropdown-item-admin"
                 >
-                  <Shield className="w-5 h-5" />
-                  <span>Админ-панель</span>
+                  <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
+                    <Shield className="header-user-dropdown-icon header-user-dropdown-icon-emerald" />
+                  </div>
+                  <span className="header-user-dropdown-text">Админ-панель</span>
                 </Link>
-              </>
+              </div>
             )}
             
-            <hr className="my-2" />
-            
-            <button
-              onClick={handleSignOut}
-              className="w-full flex items-center gap-3 px-4 py-2 hover:bg-red-50 transition-colors text-red-600"
-            >
-              <LogOut className="w-5 h-5" />
-              <span>Выйти</span>
-            </button>
+            {/* Выход */}
+            <div className="header-user-dropdown-section">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleSignOut();
+                }}
+                className="header-user-dropdown-item header-user-dropdown-item-danger"
+              >
+                <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-danger">
+                  <LogOut className="header-user-dropdown-icon header-user-dropdown-icon-danger" />
+                </div>
+                <span className="header-user-dropdown-text">Выйти</span>
+              </button>
+            </div>
           </div>
         </>
       )}
+
+      {/* Диалоги */}
+      {DialogComponents}
     </div>
   );
 }

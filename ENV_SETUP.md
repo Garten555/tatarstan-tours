@@ -69,7 +69,27 @@ EMAIL_FROM=noreply@tatarstan-tours.ru
 - **SendGrid:** smtp.sendgrid.net:587
 - **Mailgun:** smtp.mailgun.org:587
 
-### 5. App Configuration
+### 5. Pusher Configuration (Real-time чат)
+```env
+PUSHER_APP_ID=your-pusher-app-id
+NEXT_PUBLIC_PUSHER_KEY=your-pusher-key
+PUSHER_SECRET=your-pusher-secret
+NEXT_PUBLIC_PUSHER_CLUSTER=eu
+```
+
+**Где получить:**
+1. Зайдите на [pusher.com](https://pusher.com)
+2. Создайте бесплатный аккаунт
+3. Создайте новый Channels app
+4. Скопируйте:
+   - App ID → `PUSHER_APP_ID`
+   - Key → `NEXT_PUBLIC_PUSHER_KEY`
+   - Secret → `PUSHER_SECRET` (⚠️ держите в секрете!)
+   - Cluster → `NEXT_PUBLIC_PUSHER_CLUSTER` (обычно `eu`, `us`, `ap`)
+
+**Бесплатно:** До 200,000 сообщений/день, 100 одновременных подключений
+
+### 6. App Configuration
 ```env
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NODE_ENV=development
@@ -110,6 +130,12 @@ EMAIL_PORT=587
 EMAIL_USER=myemail@gmail.com
 EMAIL_PASSWORD=abcd efgh ijkl mnop
 EMAIL_FROM=noreply@tatarstan-tours.ru
+
+# Pusher (Real-time чат)
+PUSHER_APP_ID=1234567
+NEXT_PUBLIC_PUSHER_KEY=abcdefghijklmnop
+PUSHER_SECRET=abcdefghijklmnop1234567890
+NEXT_PUBLIC_PUSHER_CLUSTER=eu
 
 # App
 NEXT_PUBLIC_APP_URL=http://localhost:3000

@@ -19,16 +19,16 @@ export default async function AdminLayout({
     redirect('/auth');
   }
 
-  // Получаем роль пользователя
+  // Получаем роль пользователя и аватар
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, first_name, last_name')
+    .select('role, first_name, last_name, avatar_url')
     .eq('id', user.id)
     .single();
 
   // Явно подстрахуем тип, если генерация типов БД вернула never
   const typedProfile = (profile ?? null) as
-    | { role?: string | null; first_name?: string | null; last_name?: string | null }
+    | { role?: string | null; first_name?: string | null; last_name?: string | null; avatar_url?: string | null }
     | null;
   const userRole = typedProfile?.role || 'user';
 
@@ -43,11 +43,14 @@ export default async function AdminLayout({
       <AdminSidebar 
         userRole={userRole}
         userName={`${typedProfile?.first_name ?? ''} ${typedProfile?.last_name ?? ''}`}
+        avatarUrl={typedProfile?.avatar_url || null}
       />
 
       {/* Main content */}
-      <main className="flex-1 p-8">
-        {children}
+      <main className="flex-1 p-4 sm:p-6 md:p-8 overflow-x-hidden">
+        <div className="max-w-[100%]">
+          {children}
+        </div>
       </main>
     </div>
   );

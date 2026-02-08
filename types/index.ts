@@ -2,7 +2,7 @@
 // Database Types
 // ==========================================
 
-export type UserRole = 'user' | 'tour_admin' | 'support_admin' | 'super_admin';
+export type UserRole = 'user' | 'tour_admin' | 'support_admin' | 'super_admin' | 'guide';
 export type TourStatus = 'draft' | 'active' | 'completed' | 'cancelled';
 export type TourType = 'excursion' | 'hiking' | 'cruise' | 'bus_tour' | 'walking_tour';
 export type TourCategory = 'history' | 'nature' | 'culture' | 'architecture' | 'food' | 'adventure';
@@ -22,6 +22,17 @@ export interface Profile {
   avatar_url: string | null;
   created_at: string;
   updated_at: string;
+  is_banned?: boolean | null;
+  banned_at?: string | null;
+  ban_reason?: string | null;
+  ban_until?: string | null;
+  // Travel Passport fields
+  username: string | null;
+  display_name: string | null;
+  bio: string | null;
+  public_profile_enabled: boolean;
+  status_level: number; // 1-4 (Новичок-Эксперт)
+  reputation_score: number;
 }
 
 // ==========================================
@@ -74,6 +85,7 @@ export interface Tour {
   media?: TourMedia[];
   average_rating?: number;
   total_reviews?: number;
+  city?: { name: string } | null;
 }
 
 export interface TourMedia {
@@ -132,6 +144,62 @@ export interface ChatMessage {
 }
 
 // ==========================================
+// Tour Rooms (Комнаты для туров)
+// ==========================================
+
+export interface TourRoom {
+  id: string;
+  tour_id: string;
+  guide_id: string | null;
+  created_by: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  tour?: Tour;
+  guide?: Profile;
+  participants?: TourRoomParticipant[];
+}
+
+export interface TourRoomParticipant {
+  id: string;
+  room_id: string;
+  user_id: string;
+  booking_id: string | null;
+  joined_at: string;
+  user?: Profile;
+  booking?: Booking;
+}
+
+export interface TourRoomMessage {
+  id: string;
+  room_id: string;
+  user_id: string;
+  message: string | null;
+  image_url: string | null;
+  image_path: string | null;
+  created_at: string;
+  deleted_at: string | null;
+  user?: Profile;
+}
+
+export interface TourRoomMedia {
+  id: string;
+  room_id: string;
+  user_id: string;
+  media_type: MediaType;
+  media_url: string;
+  media_path: string;
+  thumbnail_url: string | null;
+  file_name: string | null;
+  file_size: number | null;
+  mime_type: string | null;
+  is_temporary: boolean;
+  archived_at: string | null;
+  created_at: string;
+  user?: Profile;
+}
+
+// ==========================================
 // Review
 // ==========================================
 
@@ -164,6 +232,134 @@ export interface ReviewCanSubmit {
   can_review: boolean;
   booking_id: string | null;
   reason: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  user_id: string;
+  title: string;
+  body: string | null;
+  type: string | null;
+  created_at: string;
+}
+
+// ==========================================
+// Travel Passport (Туристический паспорт)
+// ==========================================
+
+export type DiaryStatus = 'draft' | 'published' | 'private';
+export type DiaryVisibility = 'private' | 'friends' | 'public';
+export type ActivityType = 'diary_created' | 'diary_published' | 'review_posted' | 'achievement_unlocked' | 'tour_completed';
+
+export interface TravelDiary {
+  id: string;
+  user_id: string;
+  tour_id: string | null;
+  booking_id: string | null;
+  title: string;
+  content: string | null;
+  cover_image_url: string | null;
+  cover_image_path: string | null;
+  media_items: DiaryMediaItem[];
+  location_data: DiaryLocationData | null;
+  travel_date: string | null;
+  status: DiaryStatus;
+  visibility: DiaryVisibility;
+  user_consent: boolean;
+  auto_generated: boolean;
+  views_count: number;
+  likes_count: number;
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+  user?: Profile;
+  tour?: Tour;
+}
+
+export interface DiaryMediaItem {
+  type: 'image' | 'video';
+  url: string;
+  path: string;
+  description?: string;
+  order: number;
+  thumbnail_url?: string;
+}
+
+export interface DiaryLocationData {
+  locations?: Array<{
+    name: string;
+    coordinates: [number, number];
+    description?: string;
+  }>;
+  route?: Array<[number, number]>;
+  center?: [number, number];
+  zoom?: number;
+}
+
+export interface Achievement {
+  id: string;
+  user_id: string;
+  badge_type: string;
+  badge_name: string;
+  badge_description: string | null;
+  badge_icon_url: string | null;
+  tour_id: string | null;
+  diary_id: string | null;
+  unlock_date: string;
+  verification_data: Record<string, any> | null;
+  created_at: string;
+  user?: Profile;
+  tour?: Tour;
+}
+
+export interface UserFollow {
+  follower_id: string;
+  followed_id: string;
+  created_at: string;
+  follower?: Profile;
+  followed?: Profile;
+}
+
+export interface DiaryLike {
+  id: string;
+  diary_id: string;
+  user_id: string;
+  created_at: string;
+  user?: Profile;
+}
+
+export interface ActivityFeedItem {
+  id: string;
+  user_id: string;
+  activity_type: ActivityType;
+  target_type: string | null;
+  target_id: string | null;
+  metadata: Record<string, any> | null;
+  created_at: string;
+  user?: Profile;
+}
+
+export interface CreateDiaryRequest {
+  title: string;
+  content?: string;
+  tour_id?: string;
+  booking_id?: string;
+  travel_date?: string;
+  media_items?: DiaryMediaItem[];
+  location_data?: DiaryLocationData;
+  visibility?: DiaryVisibility;
+  auto_generated?: boolean;
+}
+
+export interface UpdateDiaryRequest {
+  title?: string;
+  content?: string;
+  cover_image_url?: string;
+  media_items?: DiaryMediaItem[];
+  location_data?: DiaryLocationData;
+  travel_date?: string;
+  status?: DiaryStatus;
+  visibility?: DiaryVisibility;
 }
 
 // ==========================================
