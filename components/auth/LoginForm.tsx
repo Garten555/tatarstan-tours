@@ -82,8 +82,8 @@ export default function LoginForm() {
           });
         }
 
-        // Успешный вход
-        router.push('/profile');
+        // Успешный вход - редирект на главную страницу
+        router.push('/');
         router.refresh();
       }
     } catch (err) {

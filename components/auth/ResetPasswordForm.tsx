@@ -296,8 +296,8 @@ export default function ResetPasswordForm() {
         // Небольшая задержка для применения сессии
         await new Promise(resolve => setTimeout(resolve, 300));
         
-        // Принудительный редирект на профиль
-        window.location.replace('/profile');
+        // Принудительный редирект на главную страницу
+        window.location.replace('/');
       } else {
         // Если сессия не создана, пробуем через magic link
         if (data.loginLink) {
@@ -362,19 +362,19 @@ export default function ResetPasswordForm() {
           <div className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
             Восстановление доступа
           </div>
-          <h1 className="mt-3 text-2xl md:text-3xl font-semibold text-gray-900">Сброс пароля</h1>
+          <h1 className="mt-3 text-3xl md:text-4xl font-bold text-gray-900">Сброс пароля</h1>
           {step === 'email' && (
-            <p className="mt-3 text-lg text-gray-700">
+            <p className="mt-3 text-base md:text-lg font-medium text-gray-800">
               Введите email для получения кода восстановления
             </p>
           )}
           {step === 'code' && (
-            <p className="mt-3 text-lg text-gray-700">
+            <p className="mt-3 text-base md:text-lg font-medium text-gray-800">
               Введите код из письма
             </p>
           )}
           {step === 'password' && (
-            <p className="mt-3 text-lg text-gray-700">
+            <p className="mt-3 text-base md:text-lg font-medium text-gray-800">
               Задайте новый пароль
             </p>
           )}
@@ -383,13 +383,13 @@ export default function ResetPasswordForm() {
         <div className="px-8 pb-8 space-y-6">
 
           {message && (
-            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl">
+            <div className="bg-emerald-50 border-2 border-emerald-300 text-emerald-900 px-5 py-4 rounded-xl font-semibold text-base">
               {message}
             </div>
           )}
 
           {error && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-xl">
+            <div className="bg-rose-50 border-2 border-rose-300 text-rose-900 px-5 py-4 rounded-xl font-semibold text-base">
               {error}
             </div>
           )}
@@ -398,25 +398,25 @@ export default function ResetPasswordForm() {
           {step === 'email' && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-800 mb-2.5">
+                <label className="block text-base font-bold text-gray-900 mb-2.5">
                   Адрес электронной почты
                 </label>
                 <input
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   type="email"
-                  className="w-full px-4 py-3.5 rounded-xl border border-gray-200 bg-white shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                  className="w-full px-4 py-3.5 rounded-xl border-2 border-gray-300 bg-white shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-gray-900 placeholder:text-gray-500 text-base font-medium"
                   placeholder="example@mail.ru"
                   disabled={sending}
                 />
-                <p className="mt-2 text-xs text-gray-500">
+                <p className="mt-2 text-sm text-gray-700 font-medium">
                   Код восстановления будет отправлен на указанный email
                 </p>
               </div>
               <button
                 onClick={sendResetCode}
                 disabled={sending}
-                className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:from-emerald-400 disabled:to-emerald-500 text-white font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-xl hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:from-emerald-400 disabled:to-emerald-500 !text-white font-bold text-base py-4 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-xl hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {sending ? (
                   <>
@@ -434,7 +434,7 @@ export default function ResetPasswordForm() {
           {step === 'code' && (
             <div className="space-y-6">
               <div>
-                <label className="block text-sm font-semibold text-gray-800 mb-5 text-center">
+                <label className="block text-lg font-bold text-gray-900 mb-5 text-center">
                   Код подтверждения
                 </label>
                 
@@ -452,22 +452,22 @@ export default function ResetPasswordForm() {
                       type="text"
                       inputMode="numeric"
                       maxLength={1}
-                      className="w-14 h-16 text-center text-3xl font-bold border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm text-gray-900"
+                      className="w-14 h-16 text-center text-3xl font-bold border-2 border-gray-400 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-white shadow-sm text-gray-900"
                       disabled={verifying}
                       autoFocus={index === 0}
                     />
                   ))}
                 </div>
                 
-                <p className="text-xs text-gray-500 text-center mt-5">
-                  Код отправлен на <span className="font-semibold text-gray-700">{email}</span>
+                <p className="text-sm text-gray-700 text-center mt-5 font-medium">
+                  Код отправлен на <span className="font-bold text-gray-900">{email}</span>
                 </p>
               </div>
               
               <button
                 onClick={verifyCode}
                 disabled={verifying || code.join('').length !== 6}
-                className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:from-emerald-300 disabled:to-emerald-400 text-white font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-xl hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2"
+                className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:from-emerald-300 disabled:to-emerald-400 !text-white font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-xl hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {verifying ? (
                   <>
@@ -490,7 +490,7 @@ export default function ResetPasswordForm() {
                     if (ref) ref.blur();
                   });
                 }}
-                className="w-full text-gray-600 hover:text-gray-800 text-sm py-2 transition-colors"
+                className="w-full text-gray-700 hover:text-gray-900 text-base font-semibold py-2 transition-colors"
               >
                 Изменить email
               </button>
@@ -500,44 +500,44 @@ export default function ResetPasswordForm() {
           {/* Шаг 3: Смена пароля */}
           {step === 'password' && (
             <div className="space-y-5">
-              <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+              <div className="bg-emerald-50 border-2 border-emerald-300 rounded-xl p-5">
                 <div className="flex items-center gap-2">
-                  <span className="text-emerald-600 font-bold">✓</span>
-                  <p className="text-sm text-emerald-800 font-semibold">
+                  <span className="text-emerald-700 font-bold text-xl">✓</span>
+                  <p className="text-base text-emerald-900 font-bold">
                     Email подтверждён
                   </p>
                 </div>
-                <p className="text-xs text-emerald-700 mt-1.5">
-                  Теперь задайте новый пароль для {verifiedEmail}
+                <p className="text-sm text-emerald-800 mt-2 font-semibold">
+                  Теперь задайте новый пароль для <span className="font-bold">{verifiedEmail}</span>
                 </p>
               </div>
               
               <div>
-                <label className="block text-sm font-semibold text-gray-800 mb-2.5">
+                <label className="block text-base font-bold text-gray-900 mb-2.5">
                   Новый пароль
                 </label>
                 <input
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   type="password"
-                  className="w-full px-4 py-3.5 rounded-xl border border-gray-200 bg-white shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                  className="w-full px-4 py-3.5 rounded-xl border-2 border-gray-300 bg-white shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-gray-900 placeholder:text-gray-500 text-base font-medium"
                   placeholder="Минимум 6 символов"
                   disabled={saving}
                 />
-                <p className="mt-2 text-xs text-gray-500">
+                <p className="mt-2 text-sm text-gray-700 font-medium">
                   Используйте комбинацию букв, цифр и символов
                 </p>
               </div>
               
               <div>
-                <label className="block text-sm font-semibold text-gray-800 mb-2.5">
+                <label className="block text-base font-bold text-gray-900 mb-2.5">
                   Подтверждение пароля
                 </label>
                 <input
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
                   type="password"
-                  className="w-full px-4 py-3.5 rounded-xl border border-gray-200 bg-white shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-gray-900 placeholder:text-gray-400"
+                  className="w-full px-4 py-3.5 rounded-xl border-2 border-gray-300 bg-white shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-gray-900 placeholder:text-gray-500 text-base font-medium"
                   placeholder="Повторите пароль"
                   disabled={saving}
                 />
@@ -546,7 +546,7 @@ export default function ResetPasswordForm() {
               <button
                 onClick={updatePassword}
                 disabled={saving}
-                className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:from-emerald-300 disabled:to-emerald-400 text-white font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-xl hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2"
+                className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:from-emerald-300 disabled:to-emerald-400 !text-white font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-xl hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {saving ? (
                   <>

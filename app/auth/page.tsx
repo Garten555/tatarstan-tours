@@ -15,9 +15,9 @@ export default async function AuthPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Если авторизован - редирект на профиль
+  // Если авторизован - редирект на главную страницу
   if (user) {
-    redirect('/profile');
+    redirect('/');
   }
 
   return (

@@ -25,12 +25,23 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
   const [sending, setSending] = useState(false);
   const [mode, setMode] = useState<'support' | 'ai'>('support');
   const [sessionStatus, setSessionStatus] = useState<'active' | 'closed' | 'deleted' | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const modeRef = useRef<'support' | 'ai'>('support');
   const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isInitializingRef = useRef(false);
+
+  // Проверяем авторизацию при монтировании
+  useEffect(() => {
+    const checkAuth = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      setIsAuthenticated(!!user);
+    };
+    checkAuth();
+  }, []);
 
   // Синхронизируем ref с state
   useEffect(() => {
@@ -314,6 +325,14 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
   const sendMessage = async () => {
     if (!input.trim() || sending) return;
     
+    // Проверяем авторизацию
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      alert('Для отправки сообщений необходимо войти в аккаунт');
+      return;
+    }
+    
     // Блокируем отправку, если сессия закрыта или удалена
     if (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted')) {
       return;
@@ -564,52 +583,64 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
 
       {/* Поле ввода */}
       <div className="p-2.5 sm:p-3 border-t border-gray-200 bg-white flex-shrink-0 safe-area-inset-bottom">
-        <div className="flex gap-1.5 sm:gap-2 items-end">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                sendMessage();
+        {!isAuthenticated ? (
+          <div className="text-center py-3 px-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p className="text-sm text-yellow-800 font-semibold">
+              Для отправки сообщений необходимо <a href="/auth/login" className="text-emerald-600 hover:underline">войти в аккаунт</a>
+            </p>
+          </div>
+        ) : (
+          <div className="flex gap-1.5 sm:gap-2 items-end">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  sendMessage();
+                }
+              }}
+              placeholder={
+                mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted')
+                  ? 'Сессия закрыта'
+                  : 'Напишите сообщение...'
               }
-            }}
-            placeholder={
-              mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted')
-                ? 'Сессия закрыта'
-                : 'Напишите сообщение...'
-            }
-            rows={1}
-            disabled={mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted')}
-            className={`flex-1 px-2.5 sm:px-3 py-2 sm:py-2.5 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-all resize-none overflow-hidden min-h-[44px] sm:min-h-[40px] max-h-[120px] sm:max-h-[120px] ${
-              mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted')
-                ? 'bg-gray-100 cursor-not-allowed'
-                : 'bg-white'
-            }`}
-            style={{ fontSize: '16px' }} // Предотвращает зум на iOS
-          />
-          <button
-            onClick={sendMessage}
-            disabled={
-              sending || 
-              !input.trim() || 
-              (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
-            }
-            className={`px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-lg text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 sm:gap-1.5 font-medium text-xs sm:text-sm transition-all shadow-md hover:shadow-lg ${
-              mode === 'ai' 
-                ? 'bg-blue-500 hover:bg-blue-600' 
-                : 'bg-emerald-500 hover:bg-emerald-600'
-            }`}
-          >
-            {sending ? (
-              <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
-            ) : (
-              <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            )}
-            <span className="hidden sm:inline">Отправить</span>
-          </button>
-        </div>
+              rows={1}
+              disabled={
+                !isAuthenticated ||
+                (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
+              }
+              className={`flex-1 px-2.5 sm:px-3 py-2 sm:py-2.5 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-all resize-none overflow-hidden min-h-[44px] sm:min-h-[40px] max-h-[120px] sm:max-h-[120px] ${
+                !isAuthenticated || (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
+                  ? 'bg-gray-100 cursor-not-allowed'
+                  : 'bg-white'
+              }`}
+              style={{ fontSize: '16px' }} // Предотвращает зум на iOS
+            />
+            <button
+              onClick={sendMessage}
+              disabled={
+                !isAuthenticated ||
+                sending || 
+                !input.trim() || 
+                (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
+              }
+              className={`flex-shrink-0 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-lg !text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 sm:gap-1.5 font-medium text-xs sm:text-sm transition-all shadow-md hover:shadow-lg ${
+                mode === 'ai' 
+                  ? 'bg-blue-500 hover:bg-blue-600' 
+                  : 'bg-emerald-500 hover:bg-emerald-600'
+              }`}
+            >
+              {sending ? (
+                <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
+              ) : (
+                <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              )}
+              <span className="hidden sm:inline">Отправить</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

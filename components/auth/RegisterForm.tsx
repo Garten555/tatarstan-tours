@@ -289,8 +289,8 @@ export default function RegisterForm() {
         // Если автовход не удался, редирект на страницу входа
         router.push('/auth/login?registered=true');
       } else {
-        // Успешный вход - редирект на профиль
-        router.push('/profile');
+        // Успешный вход - редирект на главную страницу
+        router.push('/');
       }
     } catch (err) {
       console.error('Ошибка регистрации:', err);
