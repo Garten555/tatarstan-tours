@@ -264,39 +264,28 @@ export default function UserGallery({ media, userId, isOwner, username, showView
             </div>
           </div>
           {videos.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
               {videos.map((video) => (
                 <div
                   key={video.id}
-                  className="group relative rounded-2xl overflow-hidden bg-black shadow-md hover:shadow-2xl transition-all duration-300"
+                  className="group relative rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 bg-black"
                 >
                   <video
                     src={video.media_url}
                     controls
+                    className="w-full h-auto"
                     preload="metadata"
-                    poster={video.thumbnail_url || undefined}
-                    className="w-full h-full max-h-[260px] object-cover bg-black"
-                  />
-                  {/* Полупрозрачный градиент и иконка воспроизведения поверх превью */}
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-between px-4 py-3">
-                    <div className="flex items-center gap-2 text-sm font-medium text-white/90">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 ring-2 ring-white/40">
-                        <Play className="w-4 h-4" />
-                      </div>
-                      <span className="line-clamp-1">
-                        Видео
-                      </span>
-                    </div>
-                  </div>
+                  >
+                    Ваш браузер не поддерживает видео.
+                  </video>
                   {isOwner && (
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        e.preventDefault();
                         handleDelete(video.id);
                       }}
-                      className="absolute top-3 right-3 p-1.5 bg-red-500/90 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      className="absolute top-2 right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
                       aria-label="Удалить"
                     >
                       <X className="w-4 h-4" />
