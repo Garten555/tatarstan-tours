@@ -251,49 +251,43 @@ export default function UserGallery({ media, userId, isOwner, username, showView
 
         {/* Видео */}
         <div className="mb-8 md:mb-12">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="px-3 py-1.5 bg-emerald-100/50 border border-emerald-200/50 rounded-xl">
-              <span className="text-sm font-bold text-emerald-700">Видео</span>
+          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center gap-3">
+              <div className="px-3 py-1.5 bg-emerald-100/50 border border-emerald-200/50 rounded-xl">
+                <span className="text-sm font-bold text-emerald-700">Видео</span>
+              </div>
+              <h3 className="text-2xl md:text-3xl lg:text-4xl font-black text-gray-900 flex items-center gap-3">
+                <Video className="w-6 h-6 md:w-7 md:h-7 text-emerald-600" />
+                Видео
+              </h3>
+              <span className="text-lg md:text-xl text-gray-600 font-medium">({videos.length})</span>
             </div>
-            <h3 className="text-2xl md:text-3xl lg:text-4xl font-black text-gray-900 flex items-center gap-3">
-              <Video className="w-6 h-6 md:w-7 md:h-7 text-emerald-600" />
-              Видео
-            </h3>
-            <span className="text-lg md:text-xl text-gray-600 font-medium">({videos.length})</span>
           </div>
           {videos.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-5">
               {videos.map((video) => (
                 <div
                   key={video.id}
-                  className="group relative aspect-square rounded-xl overflow-hidden cursor-pointer shadow-md hover:shadow-xl transition-all duration-300"
+                  className="group relative rounded-2xl overflow-hidden bg-black shadow-md hover:shadow-2xl transition-all duration-300"
                 >
-                  <a
-                    href={video.media_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full h-full block"
-                    aria-label="Открыть видео"
-                  >
-                    {video.thumbnail_url ? (
-                      <Image
-                        src={video.thumbnail_url}
-                        alt="Превью видео"
-                        fill
-                        className="object-cover group-hover:scale-110 transition-transform duration-500"
-                        sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                        <Play className="w-12 h-12 text-white" />
+                  <video
+                    src={video.media_url}
+                    controls
+                    preload="metadata"
+                    poster={video.thumbnail_url || undefined}
+                    className="w-full h-full max-h-[260px] object-cover bg-black"
+                  />
+                  {/* Полупрозрачный градиент и иконка воспроизведения поверх превью */}
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end justify-between px-4 py-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-white/90">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10 ring-2 ring-white/40">
+                        <Play className="w-4 h-4" />
                       </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                      <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <Play className="w-8 h-8 text-emerald-600 ml-1" fill="currentColor" />
-                      </div>
+                      <span className="line-clamp-1">
+                        Видео
+                      </span>
                     </div>
-                  </a>
+                  </div>
                   {isOwner && (
                     <button
                       type="button"
@@ -302,7 +296,7 @@ export default function UserGallery({ media, userId, isOwner, username, showView
                         e.preventDefault();
                         handleDelete(video.id);
                       }}
-                      className="absolute top-2 right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                      className="absolute top-3 right-3 p-1.5 bg-red-500/90 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
                       aria-label="Удалить"
                     >
                       <X className="w-4 h-4" />

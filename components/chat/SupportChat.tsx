@@ -53,6 +53,14 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       const response = await fetch(`/api/support/messages?mode=${mode}`, { cache: 'no-store' });
       
       if (!response.ok) {
+        // Если пользователь не авторизован, просто очищаем сообщения без ошибки
+        if (response.status === 401) {
+          setIsAuthenticated(false);
+          setMessages([]);
+          setLoading(false);
+          return;
+        }
+
         console.error('Ошибка загрузки сообщений:', response.status, response.statusText);
         setMessages([]);
         setLoading(false);
@@ -109,9 +117,21 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
   };
 
   useEffect(() => {
+    // Ждём, пока станет известен статус авторизации
+    if (isAuthenticated === null) {
+      return;
+    }
+
+    // Если пользователь не авторизован, не делаем запросы к API чата
+    if (!isAuthenticated) {
+      setMessages([]);
+      setLoading(false);
+      return;
+    }
+
     loadMessages();
 
-    // Pusher используется ТОЛЬКО для режима поддержки (реальные операторы)
+      // Pusher используется ТОЛЬКО для режима поддержки (реальные операторы)
     // ИИ работает через OpenRouter API и не использует Pusher
     if (mode === 'ai') {
       return; // ИИ не использует Pusher
