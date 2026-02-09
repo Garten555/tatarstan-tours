@@ -223,14 +223,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Отправляем через Pusher для real-time обновления
+    // Отправляем в канал пользователя (user.id) - админ подписан на этот канал через sessionId
     try {
-      await pusher.trigger(
-        `support-chat-${user.id}`,
-        'new-message',
-        { message: data }
-      );
+      const userChannel = `support-chat-${user.id}`;
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[API User] Sending message via Pusher to channel:', userChannel);
+      }
+      
+      // Отправляем в канал пользователя (для самого пользователя и для админа)
+      // Админ подписан на канал support-chat-${sessionId}, где sessionId = user.id
+      await pusher.trigger(userChannel, 'new-message', { message: data });
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[API User] Message sent via Pusher successfully');
+      }
     } catch (pusherError) {
-      console.error('Ошибка отправки через Pusher:', pusherError);
+      console.error('[API User] Ошибка отправки через Pusher:', pusherError);
     }
 
     return NextResponse.json({ success: true, message: data });

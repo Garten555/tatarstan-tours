@@ -149,13 +149,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Отправляем через Pusher
+    // Отправляем через Pusher синхронно, без задержек
+    // Нужно получить user_id из сессии, чтобы отправить в правильный канал
     try {
-      await pusher.trigger(`support-chat-${sessionId}`, 'new-message', {
+      // Получаем user_id из сессии
+      const { data: sessionData } = await serviceClient
+        .from('support_sessions')
+        .select('user_id')
+        .eq('session_id', sessionId)
+        .single();
+      
+      const userId = sessionData?.user_id;
+      if (!userId) {
+        console.error('[API Admin] Не удалось найти user_id для сессии:', sessionId);
+        return NextResponse.json({ success: true, message: newMessage });
+      }
+      
+      // Отправляем в канал пользователя (user.id), а не в канал сессии
+      // Пользователь подписан на канал support-chat-${user.id}
+      const userChannel = `support-chat-${userId}`;
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[API Admin] Sending message via Pusher to channel:', userChannel, 'for session:', sessionId);
+      }
+      
+      await pusher.trigger(userChannel, 'new-message', {
         message: newMessage,
       });
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[API Admin] Message sent via Pusher successfully');
+      }
     } catch (pusherError) {
-      console.error('Ошибка Pusher:', pusherError);
+      console.error('[API Admin] Ошибка Pusher:', pusherError);
       // Не прерываем выполнение, сообщение уже сохранено
     }
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { Send, Loader2, Search, MessageSquare, Menu, X, CheckCircle, Archive, AlertCircle, Trash2 } from 'lucide-react';
 import Pusher from 'pusher-js';
+import toast from 'react-hot-toast';
 
 type Session = {
   session_id: string;
@@ -26,6 +27,11 @@ type ChatMessage = {
 export default function SupportChatAdmin() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [activeSession, setActiveSession] = useState<Session | null>(null);
+  
+  // Обновляем ref при смене активной сессии
+  useEffect(() => {
+    currentUserIdRef.current = activeSession?.user_id || null;
+  }, [activeSession]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
@@ -40,6 +46,80 @@ export default function SupportChatAdmin() {
   const [deletingSession, setDeletingSession] = useState(false);
   const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<any>(null);
+  const lastMessageIdRef = useRef<string | null>(null);
+  const chatFocusedRef = useRef(true);
+  const currentUserIdRef = useRef<string | null>(null);
+
+  // Функция для воспроизведения звука уведомления
+  const playNotificationSound = () => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 880;
+      gainNode.gain.value = 0.06;
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.12);
+    } catch {
+      // Ignore sound errors (autoplay restrictions)
+    }
+  };
+
+  // Функция для показа браузерного уведомления
+  const showBrowserNotification = (title: string, body: string) => {
+    if (!('Notification' in window)) {
+      return;
+    }
+
+    if (Notification.permission === 'granted') {
+      new Notification(title, {
+        body,
+        icon: '/logo.svg',
+        badge: '/logo.svg',
+      });
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then((permission) => {
+        if (permission === 'granted') {
+          new Notification(title, {
+            body,
+            icon: '/logo.svg',
+            badge: '/logo.svg',
+          });
+        }
+      });
+    }
+  };
+
+  // Отслеживаем фокус окна
+  useEffect(() => {
+    const handleFocus = () => {
+      chatFocusedRef.current = true;
+    };
+    const handleBlur = () => {
+      chatFocusedRef.current = false;
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+    
+    // Запрашиваем разрешение на уведомления при первом открытии админского чата
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {
+        // Игнорируем ошибки запроса разрешения
+      });
+    }
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
 
   const loadSessions = async () => {
     try {
@@ -126,24 +206,66 @@ export default function SupportChatAdmin() {
       return;
     }
 
-    // Отключаем предыдущее подключение
-    if (pusherRef.current) {
+    // Отключаем предыдущее подключение - безопасная очистка
+    if (channelRef.current) {
+      const channel = channelRef.current;
       try {
-        const state = pusherRef.current.connection?.state;
-        if (state && state !== 'disconnected' && state !== 'disconnecting') {
-          pusherRef.current.disconnect();
+        if (channel && typeof channel.unbind_all === 'function') {
+          channel.unbind_all();
         }
       } catch (error) {
-        // Игнорируем ошибки, если соединение уже закрыто
+        // Игнорируем ошибки
       }
-    }
-    if (channelRef.current) {
       try {
-        channelRef.current.unbind_all();
-        channelRef.current.unsubscribe();
-      } catch (error) {
-        // Игнорируем ошибки, если канал уже закрыт
+        if (channel && typeof channel.unsubscribe === 'function') {
+          const pusher = pusherRef.current;
+          if (pusher && pusher.connection) {
+            const wsState = pusher.connection.state;
+            // Отписываемся только если WebSocket активен
+            if (wsState === 'connected' || wsState === 'connecting') {
+              try {
+                channel.unsubscribe();
+              } catch (unsubError: unknown) {
+                // Игнорируем ошибки при unsubscribe
+                const errorMsg = unsubError instanceof Error ? unsubError.message : String(unsubError);
+                if (process.env.NODE_ENV === 'development' && 
+                    !errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+                  console.warn('[SupportChatAdmin] Init cleanup unsubscribe warning:', errorMsg);
+                }
+              }
+            }
+          }
+        }
+      } catch (error: unknown) {
+        // Игнорируем ошибки
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (process.env.NODE_ENV === 'development' && 
+            !errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+          console.warn('[SupportChatAdmin] Init cleanup error:', errorMsg);
+        }
       }
+      channelRef.current = null;
+    }
+    
+    if (pusherRef.current) {
+      try {
+        const pusher = pusherRef.current;
+        if (pusher.connection) {
+          const state = pusher.connection.state;
+          // Отключаемся только если соединение активно
+          if (state === 'connected' || state === 'connecting') {
+            pusher.disconnect();
+          }
+        }
+      } catch (error: unknown) {
+        // Игнорируем ошибки, если соединение уже закрыто
+        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (process.env.NODE_ENV === 'development' && 
+            !errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+          console.warn('[SupportChatAdmin] Init cleanup disconnect warning:', errorMsg);
+        }
+      }
+      pusherRef.current = null;
     }
 
     const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
@@ -153,13 +275,25 @@ export default function SupportChatAdmin() {
 
     pusherRef.current = pusher;
 
-    // Подписываемся на канал конкретной сессии
-    const channelName = `support-chat-${activeSession.session_id}`;
+    // Подписываемся на канал пользователя (user_id), а не на канал сессии
+    // Это нужно для синхронизации с пользовательским чатом, который подписан на support-chat-${user.id}
+    const userId = activeSession.user_id;
+    if (!userId) {
+      console.error('[SupportChatAdmin] Нет user_id для сессии:', activeSession.session_id);
+      return;
+    }
+    
+    // Сохраняем userId в ref для использования в обработчиках
+    currentUserIdRef.current = userId;
+    
+    const channelName = `support-chat-${userId}`;
     const channel = pusher.subscribe(channelName);
     channelRef.current = channel;
 
     channel.bind('pusher:subscription_succeeded', () => {
-      console.log('[SupportChatAdmin] Pusher subscribed to channel:', channelName);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[SupportChatAdmin] Pusher subscribed to channel:', channelName, 'for user_id:', userId);
+      }
     });
 
     channel.bind('pusher:subscription_error', (error: any) => {
@@ -173,24 +307,123 @@ export default function SupportChatAdmin() {
         if (data.message.is_ai === true) {
           return;
         }
+        
+        // Пропускаем дубликаты
+        if (data.message.id === lastMessageIdRef.current) {
+          return;
+        }
+        lastMessageIdRef.current = data.message.id;
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[SupportChatAdmin] New message received via Pusher:', data.message.id, 'on channel:', channelName);
+        }
+        
+        // Если сообщение от пользователя (is_support === false)
+        if (data.message.is_support === false) {
+          // Проверяем, открыт ли чат с этим пользователем
+          // Используем ref для получения актуального userId
+          const currentUserId = currentUserIdRef.current;
+          const isCurrentChat = activeSession?.user_id === currentUserId;
+          const isChatFocused = chatFocusedRef.current && isCurrentChat;
+          
+          if (!isChatFocused) {
+            // Показываем уведомление только если чат не в фокусе или это другой пользователь
+            playNotificationSound();
+            const userName = isCurrentChat ? (activeSession?.user_label || 'Пользователь') : 'Пользователь';
+            const messagePreview = data.message.message.length > 100 
+              ? data.message.message.substring(0, 100) + '...' 
+              : data.message.message;
+            
+            showBrowserNotification(
+              `Новое сообщение от ${userName}`,
+              messagePreview
+            );
+            toast.success(`Новое сообщение от ${userName}`, {
+              icon: '💬',
+            });
+          } else {
+            // Если чат в фокусе, только звук
+            playNotificationSound();
+          }
+        }
+        
         setMessages((prev) => {
           // Проверяем, нет ли уже такого сообщения
           if (prev.some((m) => m.id === data.message.id)) {
             return prev;
           }
-          return [...prev, data.message];
+          // Удаляем временные сообщения при получении реального
+          const filtered = prev.filter((m) => !m.id.startsWith('temp-'));
+          return [...filtered, data.message];
         });
       }
     });
 
+    // Обработка удаления сообщения
+    channel.bind('message-deleted', (data: { messageId: string }) => {
+      if (data.messageId) {
+        setMessages((prev) => prev.filter((m) => m.id !== data.messageId));
+      }
+    });
+
+    // Обработка удаления нескольких сообщений
+    channel.bind('messages-deleted', (data: { messageIds: string[] }) => {
+      if (data.messageIds && Array.isArray(data.messageIds)) {
+        setMessages((prev) => prev.filter((m) => !data.messageIds.includes(m.id)));
+      }
+    });
+
     return () => {
-      // Очистка канала
+      // Очистка канала - безопасная отписка
       if (channelRef.current) {
+        const channel = channelRef.current;
         try {
-          channelRef.current.unbind_all();
-          channelRef.current.unsubscribe();
+          if (channel && typeof channel.unbind_all === 'function') {
+            channel.unbind_all();
+          }
         } catch (error) {
-          // Игнорируем ошибки, если канал уже закрыт
+          // Игнорируем ошибки при unbind_all
+        }
+        
+        try {
+          if (channel && typeof channel.unsubscribe === 'function') {
+            const pusher = pusherRef.current;
+            if (pusher && pusher.connection) {
+              const wsState = pusher.connection.state;
+              // Отписываемся только если WebSocket активен
+              if (wsState === 'connected' || wsState === 'connecting') {
+                try {
+                  channel.unsubscribe();
+                } catch (unsubError: unknown) {
+                  // Игнорируем ошибки при unsubscribe
+                  const errorMsg = unsubError instanceof Error ? unsubError.message : String(unsubError);
+                  if (process.env.NODE_ENV === 'development' && 
+                      !errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+                    console.warn('[SupportChatAdmin] Cleanup unsubscribe warning:', errorMsg);
+                  }
+                }
+              }
+            } else {
+              // Если нет соединения, просто пытаемся отписаться
+              try {
+                channel.unsubscribe();
+              } catch (unsubError: unknown) {
+                // Игнорируем ошибки
+                const errorMsg = unsubError instanceof Error ? unsubError.message : String(unsubError);
+                if (process.env.NODE_ENV === 'development' && 
+                    !errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+                  console.warn('[SupportChatAdmin] Cleanup unsubscribe warning (no connection):', errorMsg);
+                }
+              }
+            }
+          }
+        } catch (error: unknown) {
+          // Игнорируем ошибки при unsubscribe
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          if (process.env.NODE_ENV === 'development' && 
+              !errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+            console.warn('[SupportChatAdmin] Cleanup error:', errorMsg);
+          }
         }
         channelRef.current = null;
       }
@@ -198,13 +431,21 @@ export default function SupportChatAdmin() {
       // Очистка Pusher
       if (pusherRef.current) {
         try {
-          // Проверяем состояние соединения перед отключением
-          const state = pusherRef.current.connection?.state;
-          if (state && state !== 'disconnected' && state !== 'disconnecting') {
-            pusherRef.current.disconnect();
+          const pusher = pusherRef.current;
+          if (pusher.connection) {
+            const state = pusher.connection.state;
+            // Отключаемся только если соединение активно
+            if (state === 'connected' || state === 'connecting') {
+              pusher.disconnect();
+            }
           }
-        } catch (error) {
+        } catch (error: unknown) {
           // Игнорируем ошибки, если соединение уже закрыто
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          if (process.env.NODE_ENV === 'development' && 
+              !errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+            console.warn('[SupportChatAdmin] Cleanup disconnect warning:', errorMsg);
+          }
         }
         pusherRef.current = null;
       }
@@ -289,35 +530,74 @@ export default function SupportChatAdmin() {
       alert('Нельзя отправлять сообщения в завершенную сессию');
       return;
     }
+    
+    const messageText = input.trim();
+    setInput('');
+    // Сбрасываем высоту textarea сразу
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+    
+    // Оптимистичное обновление - добавляем сообщение сразу
+    const tempMessage: ChatMessage = {
+      id: `temp-${Date.now()}`,
+      message: messageText,
+      is_support: true,
+      is_ai: false,
+      created_at: new Date().toISOString(),
+    };
+    
+    setMessages((prev) => {
+      // Проверяем, нет ли уже такого временного сообщения
+      if (prev.some((m) => m.id === tempMessage.id)) {
+        return prev;
+      }
+      return [...prev, tempMessage];
+    });
+    
     setSending(true);
     try {
       const response = await fetch('/api/admin/support/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: activeSession.session_id, message: input }),
+        body: JSON.stringify({ session_id: activeSession.session_id, message: messageText }),
       });
 
       if (!response.ok) {
         console.error('Ошибка отправки сообщения:', response.status, response.statusText);
+        // Удаляем временное сообщение при ошибке
+        setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));
+        setInput(messageText); // Возвращаем текст обратно
         return;
       }
 
       const text = await response.text();
       if (!text) {
+        // Удаляем временное сообщение при пустом ответе
+        setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));
         return;
       }
 
       const data = JSON.parse(text);
-      if (data.success) {
-        setInput('');
-        // Сбрасываем высоту textarea
-        if (textareaRef.current) {
-          textareaRef.current.style.height = 'auto';
-        }
-        // Сообщение придет через Pusher, не добавляем вручную
+      if (data.success && data.message) {
+        // Заменяем временное сообщение на реальное
+        setMessages((prev) => {
+          const filtered = prev.filter((m) => m.id !== tempMessage.id);
+          // Проверяем, нет ли уже такого сообщения (могло прийти через Pusher)
+          if (!filtered.some((m) => m.id === data.message.id)) {
+            return [...filtered, data.message];
+          }
+          return filtered;
+        });
+      } else {
+        // Удаляем временное сообщение если не получили реальное
+        setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));
       }
     } catch (error) {
       console.error('Ошибка отправки сообщения:', error);
+      // Удаляем временное сообщение при ошибке
+      setMessages((prev) => prev.filter((m) => m.id !== tempMessage.id));
+      setInput(messageText); // Возвращаем текст обратно
     } finally {
       setSending(false);
     }

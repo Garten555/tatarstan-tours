@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Send, Loader2, MessageSquare, Bot, MessageCircle, Trash2, X } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { createClient } from '@/lib/supabase/client';
+import toast from 'react-hot-toast';
 
 type ChatMessage = {
   id: string;
@@ -19,6 +20,21 @@ type SupportChatProps = {
 };
 
 export default function SupportChat({ variant, onClose }: SupportChatProps) {
+  // Отслеживаем, открыт ли чат
+  useEffect(() => {
+    chatOpenRef.current = true;
+    
+    // Запрашиваем разрешение на уведомления при первом открытии чата
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {
+        // Игнорируем ошибки запроса разрешения
+      });
+    }
+    
+    return () => {
+      chatOpenRef.current = false;
+    };
+  }, []);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
@@ -32,6 +48,54 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isInitializingRef = useRef(false);
+  const chatOpenRef = useRef(true); // Чат открыт по умолчанию (виджет)
+  const lastMessageIdRef = useRef<string | null>(null);
+
+  // Функция для воспроизведения звука уведомления
+  const playNotificationSound = () => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioContext.createOscillator();
+      const gainNode = audioContext.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.value = 880;
+      gainNode.gain.value = 0.06;
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioContext.destination);
+
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + 0.12);
+    } catch {
+      // Ignore sound errors (autoplay restrictions)
+    }
+  };
+
+  // Функция для показа браузерного уведомления
+  const showBrowserNotification = (title: string, body: string) => {
+    if (!('Notification' in window)) {
+      return;
+    }
+
+    if (Notification.permission === 'granted') {
+      new Notification(title, {
+        body,
+        icon: '/logo.svg',
+        badge: '/logo.svg',
+      });
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then((permission) => {
+        if (permission === 'granted') {
+          new Notification(title, {
+            body,
+            icon: '/logo.svg',
+            badge: '/logo.svg',
+          });
+        }
+      });
+    }
+  };
 
   // Проверяем авторизацию при монтировании
   useEffect(() => {
@@ -48,9 +112,14 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
     modeRef.current = mode;
   }, [mode]);
 
-  const loadMessages = async () => {
+  const loadMessages = async (currentMode?: 'support' | 'ai') => {
+    const activeMode = currentMode || modeRef.current || mode;
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[SupportChat] Loading messages for mode:', activeMode);
+    }
     try {
-      const response = await fetch(`/api/support/messages?mode=${mode}`, { cache: 'no-store' });
+      setLoading(true);
+      const response = await fetch(`/api/support/messages?mode=${activeMode}`, { cache: 'no-store' });
       
       if (!response.ok) {
         // Если пользователь не авторизован, просто очищаем сообщения без ошибки
@@ -85,13 +154,20 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       }
       
       if (data.success) {
-        setMessages(data.messages || []);
+        const loadedMessages = data.messages || [];
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[SupportChat] Loaded messages:', loadedMessages.length, 'for mode:', activeMode);
+        }
+        setMessages(loadedMessages);
       } else {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[SupportChat] No messages loaded for mode:', activeMode);
+        }
         setMessages([]);
       }
 
       // Проверяем статус сессии (только для режима поддержки)
-      if (mode === 'support') {
+      if (activeMode === 'support') {
         try {
           const sessionResponse = await fetch(`/api/support/session-status`, { cache: 'no-store' });
           if (sessionResponse.ok) {
@@ -138,11 +214,14 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       return;
     }
 
-    loadMessages();
+    // Перезагружаем сообщения при изменении режима или авторизации
+    // Используем mode из зависимостей для получения актуального режима
+    loadMessages(mode);
 
       // Pusher используется ТОЛЬКО для режима поддержки (реальные операторы)
     // ИИ работает через OpenRouter API и не использует Pusher
     if (mode === 'ai') {
+      // Для режима ИИ не используем Pusher, но сообщения уже загружены
       return; // ИИ не использует Pusher
     }
 
@@ -163,21 +242,36 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
         if (channelRef.current) {
           try {
             const channel = channelRef.current;
-            // Проверяем состояние канала перед отпиской
+            // Отвязываем обработчики событий (безопасно)
             if (channel && typeof channel.unbind_all === 'function') {
-              channel.unbind_all();
+              try {
+                channel.unbind_all();
+              } catch (e) {
+                // Игнорируем ошибки
+              }
             }
+            // Отписываемся от канала (может вызвать ошибку, если WebSocket уже закрыт)
             if (channel && typeof channel.unsubscribe === 'function') {
-              // Проверяем состояние WebSocket перед отпиской
-              const pusher = pusherRef.current;
-              if (pusher && pusher.connection) {
-                const wsState = pusher.connection.state;
-                if (wsState && wsState !== 'disconnected' && wsState !== 'disconnecting' && wsState !== 'closed') {
-                  // Дополнительный try-catch для самого вызова unsubscribe
-                  try {
+              try {
+                // Проверяем состояние WebSocket перед отпиской
+                const pusher = pusherRef.current;
+                if (pusher && pusher.connection) {
+                  const wsState = pusher.connection.state;
+                  // Отписываемся только если WebSocket активен
+                  if (wsState === 'connected' || wsState === 'connecting') {
                     channel.unsubscribe();
-                  } catch (unsubError) {
-                    // Игнорируем ошибки при unsubscribe
+                  }
+                } else {
+                  // Если нет соединения, просто отписываемся
+                  channel.unsubscribe();
+                }
+              } catch (unsubError: unknown) {
+                // Игнорируем ошибки при unsubscribe (WebSocket может быть уже в CLOSING/CLOSED)
+                // Это нормально, если канал уже закрыт или закрывается
+                if (process.env.NODE_ENV === 'development') {
+                  const errorMsg = unsubError instanceof Error ? unsubError.message : String(unsubError);
+                  if (!errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+                    console.warn('[SupportChat] Unsubscribe warning:', errorMsg);
                   }
                 }
               }
@@ -191,12 +285,21 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
         if (pusherRef.current) {
           try {
             const pusher = pusherRef.current;
-            const state = pusher.connection?.state;
-            if (state && state !== 'disconnected' && state !== 'disconnecting' && state !== 'closed') {
-              pusher.disconnect();
+            if (pusher.connection) {
+              const state = pusher.connection.state;
+              // Отключаемся только если соединение активно
+              if (state === 'connected' || state === 'connecting') {
+                pusher.disconnect();
+              }
             }
-          } catch (error) {
+          } catch (error: unknown) {
             // Игнорируем ошибки при отключении
+            if (process.env.NODE_ENV === 'development') {
+              const errorMsg = error instanceof Error ? error.message : String(error);
+              if (!errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+                console.warn('[SupportChat] Disconnect warning:', errorMsg);
+              }
+            }
           }
           pusherRef.current = null;
         }
@@ -221,7 +324,9 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
         channelRef.current = channel;
 
         channel.bind('pusher:subscription_succeeded', () => {
-          console.log('[SupportChat] Pusher subscribed to channel:', channelName);
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[SupportChat] Pusher subscribed to channel:', channelName, 'for user_id:', userId);
+          }
           isInitializingRef.current = false;
         });
 
@@ -232,11 +337,55 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
               return; // Игнорируем сообщения от ИИ
             }
             
+            // Пропускаем дубликаты
+            if (data.message.id === lastMessageIdRef.current) {
+              return;
+            }
+            lastMessageIdRef.current = data.message.id;
+            
+            if (process.env.NODE_ENV === 'development') {
+              console.log('[SupportChat] New message received via Pusher:', data.message.id, 'on channel:', channelName);
+            }
+            
+            // Если сообщение от поддержки (is_support === true)
+            if (data.message.is_support === true) {
+              // Всегда воспроизводим звук
+              playNotificationSound();
+              
+              // Проверяем, видна ли страница и в фокусе ли окно
+              const isPageVisible = !document.hidden;
+              const isPageFocused = document.hasFocus();
+              
+              // Показываем уведомления если:
+              // 1. Страница не видна (вкладка в фоне) - всегда показываем
+              // 2. Страница видна, но не в фокусе - показываем
+              // 3. Страница в фокусе - показываем toast (браузерное уведомление только если разрешено)
+              const messagePreview = data.message.message.length > 100 
+                ? data.message.message.substring(0, 100) + '...' 
+                : data.message.message;
+              
+              // Всегда показываем toast уведомление
+              toast.success('Новое сообщение от поддержки', {
+                icon: '💬',
+              });
+              
+              // Браузерное уведомление показываем только если страница не в фокусе или не видна
+              if (!isPageVisible || !isPageFocused) {
+                showBrowserNotification(
+                  'Новое сообщение от поддержки',
+                  messagePreview
+                );
+              }
+            }
+            
             setMessages((prev) => {
+              // Проверяем, нет ли уже такого сообщения
               if (prev.some((m) => m.id === data.message.id)) {
                 return prev;
               }
-              return [...prev, data.message];
+              // Удаляем временные сообщения при получении реального
+              const filtered = prev.filter((m) => !m.id.startsWith('temp-'));
+              return [...filtered, data.message];
             });
           }
         });
@@ -263,7 +412,27 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
         channel.bind('new-session-created', async () => {
           // Обновляем статус и перезагружаем сообщения
           setSessionStatus('active');
-          await loadMessages();
+          await loadMessages(modeRef.current);
+        });
+
+        // Обработка удаления сообщения
+        channel.bind('message-deleted', (data: { messageId: string }) => {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[SupportChat] Message deleted event received:', data.messageId);
+          }
+          if (data.messageId) {
+            setMessages((prev) => prev.filter((m) => m.id !== data.messageId));
+          }
+        });
+
+        // Обработка удаления нескольких сообщений
+        channel.bind('messages-deleted', (data: { messageIds: string[] }) => {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[SupportChat] Messages deleted event received:', data.messageIds);
+          }
+          if (data.messageIds && Array.isArray(data.messageIds)) {
+            setMessages((prev) => prev.filter((m) => !data.messageIds.includes(m.id)));
+          }
         });
       } catch (error) {
         console.error('[SupportChat] Pusher initialization error:', error);
@@ -296,25 +465,40 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
             const pusher = pusherRef.current;
             if (pusher && pusher.connection) {
               const wsState = pusher.connection.state;
-              // Отписываемся только если WebSocket не закрыт
-              if (wsState && 
-                  wsState !== 'disconnected' && 
-                  wsState !== 'disconnecting' && 
-                  wsState !== 'closed') {
-                // Дополнительный try-catch для самого вызова unsubscribe
-                // так как состояние может измениться между проверкой и вызовом
+              // Отписываемся только если WebSocket активен
+              if (wsState === 'connected' || wsState === 'connecting') {
                 try {
                   channel.unsubscribe();
-                } catch (unsubError) {
+                } catch (unsubError: unknown) {
                   // Игнорируем ошибки при unsubscribe (WebSocket может быть уже в CLOSING/CLOSED)
-                  // Это нормально, если канал уже закрыт или закрывается
+                  const errorMsg = unsubError instanceof Error ? unsubError.message : String(unsubError);
+                  if (process.env.NODE_ENV === 'development' && 
+                      !errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+                    console.warn('[SupportChat] Cleanup unsubscribe warning:', errorMsg);
+                  }
+                }
+              }
+            } else {
+              // Если нет соединения, просто пытаемся отписаться
+              try {
+                channel.unsubscribe();
+              } catch (unsubError: unknown) {
+                // Игнорируем ошибки
+                const errorMsg = unsubError instanceof Error ? unsubError.message : String(unsubError);
+                if (process.env.NODE_ENV === 'development' && 
+                    !errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+                  console.warn('[SupportChat] Cleanup unsubscribe warning (no connection):', errorMsg);
                 }
               }
             }
           }
-        } catch (error) {
+        } catch (error: unknown) {
           // Игнорируем ошибки при unsubscribe (WebSocket может быть уже в CLOSING/CLOSED)
-          // Это нормально, если канал уже закрыт или закрывается
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          if (process.env.NODE_ENV === 'development' && 
+              !errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+            console.warn('[SupportChat] Cleanup error:', errorMsg);
+          }
         }
         
         channelRef.current = null;
@@ -324,19 +508,37 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       if (pusherRef.current) {
         try {
           const pusher = pusherRef.current;
-          const state = pusher.connection?.state;
-          if (state && 
-              state !== 'disconnected' && 
-              state !== 'disconnecting' && 
-              state !== 'closed') {
-            pusher.disconnect();
+          if (pusher.connection) {
+            const state = pusher.connection.state;
+            // Отключаемся только если соединение активно
+            if (state === 'connected' || state === 'connecting') {
+              pusher.disconnect();
+            }
           }
-        } catch (error) {
+        } catch (error: unknown) {
           // Игнорируем ошибки, если соединение уже закрыто
+          const errorMsg = error instanceof Error ? error.message : String(error);
+          if (process.env.NODE_ENV === 'development' && 
+              !errorMsg.includes('CLOSING') && !errorMsg.includes('CLOSED')) {
+            console.warn('[SupportChat] Cleanup disconnect warning:', errorMsg);
+          }
         }
         pusherRef.current = null;
       }
     };
+  }, [mode, isAuthenticated]);
+
+  // Отдельный эффект для перезагрузки сообщений при изменении режима
+  useEffect(() => {
+    if (isAuthenticated === null || !isAuthenticated) {
+      return;
+    }
+    // Перезагружаем сообщения при изменении режима, используя актуальный режим
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[SupportChat] Mode changed to:', mode, '- reloading messages');
+    }
+    loadMessages(mode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
   useEffect(() => {
@@ -367,13 +569,38 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       return;
     }
     
+    const messageText = input.trim();
+    setInput('');
+    // Сбрасываем высоту textarea сразу
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
+    
+    // Оптимистичное обновление для режима поддержки
+    if (mode === 'support') {
+      const tempMessage: ChatMessage = {
+        id: `temp-${Date.now()}`,
+        message: messageText,
+        is_support: false,
+        is_ai: false,
+        created_at: new Date().toISOString(),
+      };
+      
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === tempMessage.id)) {
+          return prev;
+        }
+        return [...prev, tempMessage];
+      });
+    }
+    
     setSending(true);
     try {
       const endpoint = mode === 'ai' ? '/api/support/ai' : '/api/support/messages';
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({ message: messageText }),
       });
 
       if (!response.ok) {
@@ -384,11 +611,20 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
           alert(errorData.error);
         }
         console.error('Ошибка отправки сообщения:', response.status, response.statusText);
+        // Удаляем временное сообщение при ошибке
+        if (mode === 'support') {
+          setMessages((prev) => prev.filter((m) => !m.id.startsWith('temp-')));
+          setInput(messageText); // Возвращаем текст обратно
+        }
         return;
       }
 
       const text = await response.text();
       if (!text) {
+        // Удаляем временное сообщение при пустом ответе
+        if (mode === 'support') {
+          setMessages((prev) => prev.filter((m) => !m.id.startsWith('temp-')));
+        }
         return;
       }
 
@@ -397,14 +633,14 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
         data = JSON.parse(text);
       } catch (parseError) {
         console.error('Ошибка парсинга JSON ответа:', parseError);
+        // Удаляем временное сообщение при ошибке парсинга
+        if (mode === 'support') {
+          setMessages((prev) => prev.filter((m) => !m.id.startsWith('temp-')));
+        }
         return;
       }
       
       if (data.success) {
-        setInput('');
-        if (textareaRef.current) {
-          textareaRef.current.style.height = 'auto';
-        }
         // ИИ работает через OpenRouter API - сообщения добавляем напрямую из ответа
         if (mode === 'ai' && data.messages && Array.isArray(data.messages)) {
           setMessages((prev) => {
@@ -413,11 +649,31 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
             );
             return [...prev, ...newMessages];
           });
+        } else if (mode === 'support' && data.message) {
+          // Для режима поддержки заменяем временное сообщение на реальное
+          setMessages((prev) => {
+            const filtered = prev.filter((m) => !m.id.startsWith('temp-'));
+            // Проверяем, нет ли уже такого сообщения (могло прийти через Pusher)
+            if (!filtered.some((m) => m.id === data.message.id)) {
+              return [...filtered, data.message];
+            }
+            return filtered;
+          });
         }
-        // Для режима поддержки сообщения придут через Pusher (реальные операторы)
+        // Для режима поддержки сообщения также придут через Pusher, но мы уже добавили оптимистично
+      } else {
+        // Удаляем временное сообщение если не получили успешный ответ
+        if (mode === 'support') {
+          setMessages((prev) => prev.filter((m) => !m.id.startsWith('temp-')));
+        }
       }
     } catch (error) {
       console.error('Ошибка отправки сообщения:', error);
+      // Удаляем временное сообщение при ошибке
+      if (mode === 'support') {
+        setMessages((prev) => prev.filter((m) => !m.id.startsWith('temp-')));
+        setInput(messageText); // Возвращаем текст обратно
+      }
     } finally {
       setSending(false);
     }
