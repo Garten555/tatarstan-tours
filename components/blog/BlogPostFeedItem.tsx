@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 interface BlogPostFeedItemProps {
   post: {
     id: string;
+    user_id?: string;
     title?: string;
     content?: string | null;
     slug: string;
@@ -50,12 +51,15 @@ export default function BlogPostFeedItem({ post }: BlogPostFeedItemProps) {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
       // Отладочное логирование
-      if (user && post.user) {
+      if (user) {
+        const postUserId = post.user_id || post.user?.id;
+        const isOwner = user.id === postUserId;
         console.log('User check:', {
           currentUserId: user.id,
-          postUserId: post.user.id,
-          postUserIdDirect: (post as any).user_id,
-          match: user.id === post.user.id || user.id === (post as any).user_id,
+          postUserId: postUserId,
+          postUserIdDirect: post.user_id,
+          postUserObjectId: post.user?.id,
+          isOwner,
         });
       }
     };
@@ -336,7 +340,7 @@ export default function BlogPostFeedItem({ post }: BlogPostFeedItemProps) {
             </div>
           </Link>
         </div>
-        {currentUser && (currentUser.id === post.user?.id || currentUser.id === (post as any).user_id) && (
+        {currentUser && (currentUser.id === post.user_id || currentUser.id === post.user?.id) && (
           <button
             type="button"
             onClick={async (e) => {

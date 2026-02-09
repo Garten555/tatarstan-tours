@@ -202,6 +202,9 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
     recentDiariesResult,
     recentAchievementsResult,
     isFollowingResult,
+    recentBlogPostsResult,
+    recentAchievementsListResult,
+    isFollowingCheckResult,
     locationsResult,
     toursWithLocationsResult,
     userGalleryResult,
@@ -311,27 +314,41 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
       .limit(6) : Promise.resolve({ data: [], error: null }),
     
     // Последние посты блога
-    serviceClient
-      .from('travel_blog_posts')
-      .select(`
-        id,
-        title,
-        slug,
-        excerpt,
-        content,
-        cover_image_url,
-        views_count,
-        likes_count,
-        comments_count,
-        created_at,
-        published_at,
-        user:profiles!travel_blog_posts_user_id_fkey(id, username, avatar_url),
-        category:blog_categories(id, name, color)
-      `)
-      .eq('user_id', profileData.id)
-      .eq('status', 'published')
-      .order('published_at', { ascending: false, nullsFirst: false })
-      .limit(6),
+    (() => {
+      const isOwner = currentUser?.id === profileData.id;
+      let query = serviceClient
+        .from('travel_blog_posts')
+        .select(`
+          id,
+          user_id,
+          title,
+          slug,
+          excerpt,
+          content,
+          cover_image_url,
+          views_count,
+          likes_count,
+          comments_count,
+          created_at,
+          published_at,
+          status,
+          visibility,
+          user:profiles!travel_blog_posts_user_id_fkey(id, username, avatar_url),
+          category:blog_categories(id, name, color)
+        `)
+        .eq('user_id', profileData.id);
+      
+      // Если это владелец профиля, показываем все посты (включая черновики)
+      // Если это чужой профиль, показываем только опубликованные и публичные
+      if (!isOwner) {
+        query = query.eq('status', 'published').eq('visibility', 'public');
+      }
+      
+      return query
+        .order('published_at', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .limit(6);
+    })(),
     
     // Последние достижения
     serviceClient
@@ -484,11 +501,11 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
   };
 
   const recentDiaries = recentDiariesResult.data || [];
-  const recentBlogPosts = recentDiariesResult.data || []; // Посты блога
+  const recentBlogPosts = recentBlogPostsResult.data || []; // Посты блога
   
   // Логирование для отладки
-  if (recentDiariesResult.error) {
-    console.error('Error fetching blog posts:', recentDiariesResult.error);
+  if (recentBlogPostsResult.error) {
+    console.error('Error fetching blog posts:', recentBlogPostsResult.error);
   }
   console.log('Blog posts fetched:', {
     count: recentBlogPosts.length,
@@ -497,16 +514,18 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
       title: p.title,
       slug: p.slug,
       publishedAt: p.published_at,
-      status: p.status
+      status: p.status,
+      visibility: p.visibility,
+      user_id: p.user_id
     }))
   });
   
-  const recentAchievements = recentAchievementsResult.data || [];
-  // Проверяем подписку: если isFollowingResult существует и data не null и не пустой массив, значит подписан
-  const isFollowing = isFollowingResult !== null && 
-    isFollowingResult?.data !== null && 
-    isFollowingResult?.data !== undefined &&
-    (Array.isArray(isFollowingResult.data) ? isFollowingResult.data.length > 0 : true);
+  const recentAchievements = recentAchievementsListResult.data || [];
+  // Проверяем подписку: если isFollowingCheckResult существует и data не null и не пустой массив, значит подписан
+  const isFollowing = isFollowingCheckResult !== null && 
+    isFollowingCheckResult?.data !== null && 
+    isFollowingCheckResult?.data !== undefined &&
+    (Array.isArray(isFollowingCheckResult.data) ? isFollowingCheckResult.data.length > 0 : true);
   // Все туры (подтвержденные и завершенные) для блога
   const allToursForBlog = (toursWithLocationsResult?.data || []).filter((b: any) => b.tour);
   const completedTours = allToursForBlog.filter((b: any) => b.status === 'completed');
