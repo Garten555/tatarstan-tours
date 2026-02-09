@@ -11,6 +11,7 @@ import { Trash2, Flag, X, Check } from 'lucide-react';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
 import { useDialog } from '@/hooks/useDialog';
 import toast from 'react-hot-toast';
+import { safeJsonParse } from '@/lib/utils/fetch';
 
 interface BlogPostFeedItemProps {
   post: {
@@ -71,7 +72,10 @@ export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeed
     try {
       setLoadingComments(true);
       const response = await fetch(`/api/blog/posts/${post.id}/comments`);
-      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      const data = await safeJsonParse(response);
       if (data.success) {
         // API возвращает комментарии с replies, нам нужны только корневые
         const rootComments = (data.comments || []).map((comment: any) => ({
@@ -261,14 +265,15 @@ export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeed
         body: JSON.stringify({ content: message }),
       });
 
-      const data = await response.json();
       if (response.status === 401) {
         await alert('Нужна авторизация, чтобы комментировать.', 'Требуется авторизация', 'warning');
         return;
       }
       if (!response.ok) {
-        throw new Error(data.error || 'Не удалось сохранить комментарий');
+        const errorText = await response.text().catch(() => 'Не удалось сохранить комментарий');
+        throw new Error(errorText.includes('error') ? JSON.parse(errorText).error : 'Не удалось сохранить комментарий');
       }
+      const data = await safeJsonParse(response);
 
       // Добавляем новый комментарий в список
       const newComment = data.comment;
@@ -359,10 +364,11 @@ export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeed
                 const response = await fetch(`/api/blog/posts/${post.id}`, {
                   method: 'DELETE',
                 });
-                const data = await response.json();
                 if (!response.ok) {
-                  throw new Error(data.error || 'Не удалось удалить пост');
+                  const errorText = await response.text().catch(() => 'Не удалось удалить пост');
+                  throw new Error(errorText.includes('error') ? JSON.parse(errorText).error : 'Не удалось удалить пост');
                 }
+                const data = await safeJsonParse(response);
                 toast('Пост удален', {
                   icon: <Trash2 className="w-5 h-5 text-red-500" />,
                   duration: 3000,
@@ -487,10 +493,11 @@ export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeed
                               const response = await fetch(`/api/blog/posts/${post.id}/comments/${comment.id}`, {
                                 method: 'DELETE',
                               });
-                              const data = await response.json();
                               if (!response.ok) {
-                                throw new Error(data.error || 'Не удалось удалить комментарий');
+                                const errorText = await response.text().catch(() => 'Не удалось удалить комментарий');
+                                throw new Error(errorText.includes('error') ? JSON.parse(errorText).error : 'Не удалось удалить комментарий');
                               }
+                              const data = await safeJsonParse(response);
                               setComments((prev) => prev.filter((c) => c.id !== comment.id));
                             } catch (error: any) {
                               await alert(error.message || 'Не удалось удалить комментарий', 'Ошибка', 'error');
@@ -513,14 +520,15 @@ export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeed
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify({ reason }),
                               });
-                              const data = await response.json();
                               if (response.status === 401) {
                                 await alert('Нужна авторизация, чтобы пожаловаться.', 'Требуется авторизация', 'warning');
                                 return;
                               }
                               if (!response.ok) {
-                                throw new Error(data.error || 'Не удалось отправить жалобу');
+                                const errorText = await response.text().catch(() => 'Не удалось отправить жалобу');
+                                throw new Error(errorText.includes('error') ? JSON.parse(errorText).error : 'Не удалось отправить жалобу');
                               }
+                              const data = await safeJsonParse(response);
                               await alert('Жалоба отправлена', 'Успешно', 'success');
                             } catch (error: any) {
                               await alert(error.message || 'Не удалось отправить жалобу', 'Ошибка', 'error');

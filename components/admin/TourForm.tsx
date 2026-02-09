@@ -6,6 +6,7 @@ import RichTextEditor from './RichTextEditor';
 import AutoResizeTextarea from './AutoResizeTextarea';
 import { Upload, Loader2, Save, AlertCircle, CheckCircle2, MapPin, Search, X, Copy, Calendar } from 'lucide-react';
 import Image from 'next/image';
+import { safeJsonParse } from '@/lib/utils/fetch';
 
 interface TourFormProps {
   mode: 'create' | 'edit';
@@ -107,7 +108,10 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
   useEffect(() => {
     if (mode === 'edit' && initialData?.city_id && !selectedCity) {
       fetch(`/api/admin/cities/${initialData.city_id}`)
-        .then(res => res.json())
+        .then(async res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return safeJsonParse(res);
+        })
         .then(data => {
           if (data.city) {
             setSelectedCity({ id: data.city.id, name: data.city.name });
@@ -128,7 +132,10 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
 
     const timeoutId = setTimeout(() => {
       fetch(`/api/admin/cities?search=${encodeURIComponent(citySearch)}`)
-        .then(res => res.json())
+        .then(async res => {
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          return safeJsonParse(res);
+        })
         .then(data => {
           const foundCities = data.cities || [];
           setCities(foundCities);
@@ -405,11 +412,20 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
         });
 
         if (!uploadResponse.ok) {
-          const uploadError = await uploadResponse.json();
-          throw new Error(uploadError.error || 'Не удалось загрузить обложку');
+          const contentType = uploadResponse.headers.get('content-type');
+          let errorMessage = 'Не удалось загрузить обложку';
+          if (contentType && contentType.includes('application/json')) {
+            try {
+              const uploadError = await uploadResponse.json();
+              errorMessage = uploadError.error || errorMessage;
+            } catch {
+              // Если не удалось распарсить JSON, используем дефолтное сообщение
+            }
+          }
+          throw new Error(errorMessage);
         }
         
-        const uploadData = await uploadResponse.json();
+        const uploadData = await safeJsonParse(uploadResponse);
         if (!uploadData.url) {
           throw new Error('Не получен URL загруженной обложки');
         }
@@ -449,14 +465,29 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        const errorMessage = errorData.details 
-          ? `${errorData.error}: ${errorData.details}`
-          : errorData.error || 'Не удалось сохранить тур';
+        const contentType = response.headers.get('content-type');
+        let errorMessage = 'Не удалось сохранить тур';
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const errorData = await response.json();
+            errorMessage = errorData.details 
+              ? `${errorData.error}: ${errorData.details}`
+              : errorData.error || errorMessage;
+          } catch {
+            // Если не удалось распарсить JSON, используем дефолтное сообщение
+          }
+        } else {
+          const text = await response.text().catch(() => '');
+          if (text) {
+            errorMessage = `HTTP ${response.status}: ${text.substring(0, 100)}`;
+          } else {
+            errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+          }
+        }
         throw new Error(errorMessage);
       }
 
-      const result = await response.json();
+      const result = await safeJsonParse(response);
       const tourId = mode === 'create' ? result.data.id : initialData.id;
 
       // Upload gallery photos and videos ПАРАЛЛЕЛЬНО (быстрее!)
@@ -528,11 +559,21 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
           body: JSON.stringify({ dates: datesPayload }),
         });
 
-        const duplicateResult = await duplicateResponse.json();
-
         if (!duplicateResponse.ok) {
-          throw new Error(duplicateResult.error || 'Не удалось добавить дополнительные даты');
+          const contentType = duplicateResponse.headers.get('content-type');
+          let errorMessage = 'Не удалось добавить дополнительные даты';
+          if (contentType && contentType.includes('application/json')) {
+            try {
+              const duplicateResult = await duplicateResponse.json();
+              errorMessage = duplicateResult.error || errorMessage;
+            } catch {
+              // Если не удалось распарсить JSON, используем дефолтное сообщение
+            }
+          }
+          throw new Error(errorMessage);
         }
+        
+        const duplicateResult = await safeJsonParse(duplicateResponse);
       }
 
       setLoadingStatus('Завершение...');
