@@ -51,3 +51,21 @@ next-env.d.ts
 
 # OS
 Thumbs.db
+
+# Documentation (keep only README.md)
+*.md
+!README.md
+
+# Temporary commit files
+commit-*.txt
+
+# Diploma scripts
+generate_diploma.py
+run_diploma.bat
+src/generate_*.py
+
+# SQL files (keep local, remove from repo)
+*.sql
+
+# Supabase migrations (keep local, remove from repo)
+supabase/migrations/
