@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { format } from 'date-fns';
@@ -41,6 +41,7 @@ export default function BlogPostFeedItem({ post }: BlogPostFeedItemProps) {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [avatarViewerOpen, setAvatarViewerOpen] = useState(false);
   const [postDeleted, setPostDeleted] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
   const { confirm, alert, prompt, DialogComponents } = useDialog();
   const supabase = createClient();
 
@@ -94,6 +95,135 @@ export default function BlogPostFeedItem({ post }: BlogPostFeedItemProps) {
       loadComments();
     }
   }, [postDeleted, loadComments]);
+
+  // Заменяем обычные video на VideoPlayer с Plyr после рендера
+  useEffect(() => {
+    if (!post.content || !contentRef.current) return;
+
+    const container = contentRef.current;
+    const videoElements = container.querySelectorAll('video');
+    
+    videoElements.forEach((videoEl) => {
+      // Проверяем, не заменен ли уже на VideoPlayer
+      if (videoEl.closest('.plyr-container')) return;
+      
+      const source = videoEl.querySelector('source');
+      const videoSrc = source?.getAttribute('src') || videoEl.getAttribute('src');
+      if (!videoSrc) return;
+
+      const videoType = source?.getAttribute('type') || undefined;
+      
+      // Создаем контейнер для VideoPlayer
+      const wrapper = document.createElement('div');
+      wrapper.className = 'my-4';
+      
+      // Создаем временный элемент для React компонента
+      const tempDiv = document.createElement('div');
+      wrapper.appendChild(tempDiv);
+      
+      // Заменяем video на wrapper
+      videoEl.parentNode?.replaceChild(wrapper, videoEl);
+      
+      // Используем React для рендера VideoPlayer
+      // Но так как мы не можем использовать React в useEffect напрямую,
+      // создадим video элемент с классом plyr и инициализируем Plyr
+      const newVideo = document.createElement('video');
+      newVideo.className = 'plyr w-full rounded-xl';
+      newVideo.setAttribute('playsinline', '');
+      newVideo.setAttribute('controls', '');
+      newVideo.setAttribute('preload', 'metadata');
+      
+      const sourceEl = document.createElement('source');
+      sourceEl.src = videoSrc;
+      if (videoType) {
+        sourceEl.type = videoType;
+      }
+      newVideo.appendChild(sourceEl);
+      
+      wrapper.replaceChild(newVideo, tempDiv);
+      
+      // Инициализируем Plyr
+      import('plyr').then((PlyrModule) => {
+        const Plyr = PlyrModule.default;
+        new Plyr(newVideo, {
+          controls: [
+            'play-large',
+            'restart',
+            'rewind',
+            'play',
+            'fast-forward',
+            'progress',
+            'current-time',
+            'duration',
+            'mute',
+            'volume',
+            'settings',
+            'pip',
+            'airplay',
+            'fullscreen',
+          ],
+          settings: ['quality', 'speed'],
+          speed: {
+            selected: 1,
+            options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
+          },
+          keyboard: {
+            focused: true,
+            global: false,
+          },
+          tooltips: {
+            controls: true,
+            seek: true,
+          },
+          i18n: {
+            restart: 'Перезапустить',
+            rewind: 'Перемотать назад',
+            play: 'Воспроизвести',
+            pause: 'Пауза',
+            fastForward: 'Перемотать вперед',
+            seek: 'Перейти',
+            seekLabel: '{currentTime} из {duration}',
+            played: 'Воспроизведено',
+            buffered: 'Буферизовано',
+            currentTime: 'Текущее время',
+            duration: 'Длительность',
+            volume: 'Громкость',
+            mute: 'Отключить звук',
+            unmute: 'Включить звук',
+            enableCaptions: 'Включить субтитры',
+            disableCaptions: 'Выключить субтитры',
+            download: 'Скачать',
+            enterFullscreen: 'Полноэкранный режим',
+            exitFullscreen: 'Выйти из полноэкранного режима',
+            frameTitle: 'Плеер для {title}',
+            captions: 'Субтитры',
+            settings: 'Настройки',
+            pip: 'Картинка в картинке',
+            menu: 'Меню',
+            quality: 'Качество',
+            loop: 'Зациклить',
+            start: 'Начать',
+            end: 'Конец',
+            all: 'Все',
+            reset: 'Сбросить',
+            disabled: 'Отключено',
+            enabled: 'Включено',
+            advertisement: 'Реклама',
+            qualityBadge: {
+              2160: '4K',
+              1440: 'HD',
+              1080: 'HD',
+              720: 'HD',
+              576: 'SD',
+              480: 'SD',
+            },
+          },
+        });
+      }).catch((err) => {
+        console.error('Plyr init error:', err);
+      });
+    });
+  }, [post.content]);
 
   const displayDate = post.published_at || post.created_at;
   const authorUsername = post.user?.username || post.user?.id;
@@ -263,6 +393,7 @@ export default function BlogPostFeedItem({ post }: BlogPostFeedItemProps) {
         {/* Основной контент */}
         {post.content && (
           <div 
+            ref={contentRef}
             className="text-gray-700 whitespace-pre-line break-words text-lg md:text-xl leading-relaxed"
             style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
             dangerouslySetInnerHTML={{ __html: post.content }}
