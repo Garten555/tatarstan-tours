@@ -101,13 +101,13 @@ export default function BlogPostCard({ post }: BlogPostCardProps) {
         {/* Контент */}
         <div className="p-6 flex-1 flex flex-col">
           {/* Заголовок */}
-          <h2 className="text-2xl font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-emerald-600 transition-colors">
+          <h2 className="text-xl sm:text-2xl md:text-2xl font-bold text-gray-900 mb-3 line-clamp-2 group-hover:text-emerald-600 transition-colors leading-tight">
             {escapeHtml(post.title)}
           </h2>
 
           {/* Краткое описание */}
           {post.excerpt && (
-            <p className="text-gray-600 mb-4 line-clamp-3">
+            <p className="text-sm sm:text-base md:text-base text-gray-600 mb-4 line-clamp-3 leading-relaxed" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>
               {escapeHtml(post.excerpt)}
             </p>
           )}

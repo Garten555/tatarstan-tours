@@ -316,6 +316,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
     // Последние посты блога
     (() => {
       const isOwner = currentUser?.id === profileData.id;
+      const isPublicProfile = profileData.public_profile_enabled;
       let query = serviceClient
         .from('travel_blog_posts')
         .select(`
@@ -338,9 +339,9 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
         `)
         .eq('user_id', profileData.id);
       
-      // Если это владелец профиля, показываем все посты (включая черновики)
-      // Если это чужой профиль, показываем только опубликованные и публичные
-      if (!isOwner) {
+      // Если это владелец профиля ИЛИ туристический паспорт публичный, показываем все посты (включая черновики)
+      // Если это чужой профиль и паспорт не публичный, показываем только опубликованные и публичные
+      if (!isOwner && !isPublicProfile) {
         query = query.eq('status', 'published').eq('visibility', 'public');
       }
       

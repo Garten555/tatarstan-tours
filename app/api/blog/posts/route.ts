@@ -45,11 +45,23 @@ export async function GET(request: NextRequest) {
       query = query.contains('tag_ids', [tagId]);
     }
 
+    // Проверяем, является ли профиль пользователя публичным (если запрашиваются посты конкретного пользователя)
+    let isPublicProfile = false;
+    if (userId && userId !== user?.id) {
+      const { data: profile } = await serviceClient
+        .from('profiles')
+        .select('public_profile_enabled')
+        .eq('id', userId)
+        .maybeSingle();
+      isPublicProfile = profile?.public_profile_enabled === true;
+    }
+
     if (status) {
       query = query.eq('status', status);
     } else {
       // По умолчанию показываем только опубликованные
-      if (!userId || userId !== user?.id) {
+      // Исключение: если это владелец постов ИЛИ туристический паспорт публичный, показываем все
+      if (!userId || (userId !== user?.id && !isPublicProfile)) {
         query = query.eq('status', 'published');
       }
     }
@@ -58,7 +70,8 @@ export async function GET(request: NextRequest) {
       query = query.eq('visibility', visibility);
     } else {
       // По умолчанию показываем только публичные
-      if (!userId || userId !== user?.id) {
+      // Исключение: если это владелец постов ИЛИ туристический паспорт публичный, показываем все
+      if (!userId || (userId !== user?.id && !isPublicProfile)) {
         query = query.eq('visibility', 'public');
       }
     }

@@ -31,9 +31,10 @@ interface BlogPostFeedItemProps {
       avatar_url?: string | null;
     };
   };
+  isOwner?: boolean; // Передаем информацию о владельце для быстрого отображения кнопки удаления
 }
 
-export default function BlogPostFeedItem({ post }: BlogPostFeedItemProps) {
+export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeedItemProps) {
   const [comments, setComments] = useState<any[]>([]);
   const [commentFormOpen, setCommentFormOpen] = useState(false);
   const [commentInput, setCommentInput] = useState('');
@@ -340,7 +341,7 @@ export default function BlogPostFeedItem({ post }: BlogPostFeedItemProps) {
             </div>
           </Link>
         </div>
-        {currentUser && (currentUser.id === post.user_id || currentUser.id === post.user?.id) && (
+        {(isOwner || (currentUser && (currentUser.id === post.user_id || currentUser.id === post.user?.id))) && (
           <button
             type="button"
             onClick={async (e) => {
@@ -389,7 +390,7 @@ export default function BlogPostFeedItem({ post }: BlogPostFeedItemProps) {
       <div className="mt-6">
         {/* Заголовок только если есть и не "Новый пост" */}
         {postTitle && (
-          <h3 className="font-bold text-2xl md:text-3xl text-gray-900 mb-6">
+          <h3 className="font-bold text-xl sm:text-2xl md:text-3xl lg:text-3xl text-gray-900 mb-4 sm:mb-5 md:mb-6 leading-tight">
             {escapeHtml(postTitle)}
           </h3>
         )}
@@ -398,8 +399,8 @@ export default function BlogPostFeedItem({ post }: BlogPostFeedItemProps) {
         {post.content && (
           <div 
             ref={contentRef}
-            className="text-gray-700 whitespace-pre-line break-words text-lg md:text-xl leading-relaxed"
-            style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
+            className="text-gray-700 whitespace-pre-line break-words text-base sm:text-lg md:text-xl lg:text-xl leading-relaxed sm:leading-relaxed md:leading-relaxed lg:leading-relaxed"
+            style={{ wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%' }}
             dangerouslySetInnerHTML={{ __html: post.content }}
           />
         )}
@@ -530,7 +531,7 @@ export default function BlogPostFeedItem({ post }: BlogPostFeedItemProps) {
                       )}
                     </div>
                   </div>
-                  <div className="text-base md:text-lg text-gray-900 mt-2 whitespace-pre-line break-words">
+                  <div className="text-sm sm:text-base md:text-lg text-gray-900 mt-2 whitespace-pre-line break-words leading-relaxed" style={{ wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%' }}>
                     {escapeHtml(comment.content || '')}
                   </div>
                 </div>

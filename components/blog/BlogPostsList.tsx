@@ -75,7 +75,7 @@ export default function BlogPostsList({
       {posts.length > 0 ? (
         <div className="w-full space-y-6">
           {posts.map((post: any) => (
-            <BlogPostFeedItem key={post.id} post={post} />
+            <BlogPostFeedItem key={post.id} post={post} isOwner={isOwner && post.user_id === userId} />
           ))}
         </div>
       ) : (
