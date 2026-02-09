@@ -75,6 +75,8 @@ export async function POST(request: NextRequest) {
 
     // Отправляем письмо с кодом
     const emailHtml = getPasswordResetCodeEmail(userName, code);
+    console.log(`📧 Sending reset code email to ${email.trim()}`);
+    
     const emailSent = await sendEmail({
       to: email.trim(),
       subject: 'Код восстановления пароля - Туры по Татарстану',
@@ -82,10 +84,18 @@ export async function POST(request: NextRequest) {
     });
 
     if (!emailSent) {
-      console.error('Failed to send reset code email');
-      // Все равно возвращаем успех для безопасности
+      console.error('❌ Failed to send reset code email to', email.trim());
+      // Возвращаем ошибку, чтобы пользователь знал о проблеме
+      return NextResponse.json(
+        { 
+          error: 'Не удалось отправить письмо. Пожалуйста, проверьте настройки email на сервере или попробуйте позже.' 
+        },
+        { status: 500 }
+      );
     }
 
+    console.log(`✅ Reset code email sent successfully to ${email.trim()}`);
+    
     return NextResponse.json(
       { 
         success: true, 

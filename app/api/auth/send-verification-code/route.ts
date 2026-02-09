@@ -69,6 +69,8 @@ export async function POST(request: NextRequest) {
 
     // Отправляем письмо с кодом
     const emailHtml = getEmailVerificationCodeEmail(userName, code);
+    console.log(`📧 Sending verification code email to ${email.trim()}`);
+    
     const emailSent = await sendEmail({
       to: email.trim(),
       subject: 'Код подтверждения email - Туры по Татарстану',
@@ -76,12 +78,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (!emailSent) {
-      console.error('Failed to send verification code email');
+      console.error('❌ Failed to send verification code email to', email.trim());
       return NextResponse.json(
-        { error: 'Не удалось отправить письмо. Проверьте настройки email.' },
+        { error: 'Не удалось отправить письмо. Пожалуйста, проверьте настройки email на сервере или попробуйте позже.' },
         { status: 500 }
       );
     }
+
+    console.log(`✅ Verification code email sent successfully to ${email.trim()}`);
 
     return NextResponse.json(
       { 

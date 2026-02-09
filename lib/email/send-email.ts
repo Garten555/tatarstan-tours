@@ -10,16 +10,22 @@ interface EmailOptions {
 
 // Создаем transporter для отправки email
 function createTransporter() {
-  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const smtpPort = parseInt(process.env.SMTP_PORT || '587');
+  const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com';
+  const smtpPort = parseInt(process.env.SMTP_PORT || process.env.EMAIL_PORT || '587');
   const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
   const smtpPassword = process.env.SMTP_PASSWORD || process.env.EMAIL_PASSWORD;
   const smtpFrom = process.env.SMTP_FROM || process.env.EMAIL_FROM || smtpUser;
 
   if (!smtpUser || !smtpPassword) {
-    console.warn('⚠️ SMTP credentials not configured. Email sending will be disabled.');
+    console.error('❌ SMTP credentials not configured!');
+    console.error('Required environment variables:');
+    console.error('  - SMTP_USER or EMAIL_USER');
+    console.error('  - SMTP_PASSWORD or EMAIL_PASSWORD');
+    console.error('Optional: SMTP_HOST, SMTP_PORT, SMTP_FROM');
     return null;
   }
+
+  console.log(`📧 Creating SMTP transporter: ${smtpHost}:${smtpPort} (user: ${smtpUser})`);
 
   return nodemailer.createTransport({
     host: smtpHost,
@@ -29,6 +35,10 @@ function createTransporter() {
       user: smtpUser,
       pass: smtpPassword,
     },
+    connectionTimeout: 10000, // 10 секунд на подключение
+    greetingTimeout: 5000, // 5 секунд на приветствие
+    socketTimeout: 10000, // 10 секунд на операции
+    debug: process.env.NODE_ENV === 'development', // Включаем debug в dev режиме
   });
 }
 
@@ -37,13 +47,17 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
     const transporter = createTransporter();
     
     if (!transporter) {
-      console.warn('⚠️ Email transporter not available. Skipping email send.');
+      console.error('❌ Email transporter not available. Cannot send email.');
       return false;
     }
 
     const smtpFrom = process.env.SMTP_FROM || process.env.EMAIL_FROM || process.env.SMTP_USER || process.env.EMAIL_USER;
 
-    await transporter.sendMail({
+    console.log(`📤 Attempting to send email to ${options.to}...`);
+    console.log(`📧 From: ${smtpFrom}`);
+    console.log(`📝 Subject: ${options.subject}`);
+
+    const result = await transporter.sendMail({
       from: smtpFrom,
       to: options.to,
       subject: options.subject,
@@ -51,10 +65,31 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
       text: options.text || options.html.replace(/<[^>]*>/g, ''),
     });
 
-    console.log(`✅ Email sent to ${options.to}`);
+    console.log(`✅ Email sent successfully to ${options.to}`);
+    console.log(`📬 Message ID: ${result.messageId}`);
     return true;
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Error sending email:', error);
+    
+    // Детальная информация об ошибке
+    if (error.code) {
+      console.error(`   Error code: ${error.code}`);
+    }
+    if (error.response) {
+      console.error(`   SMTP response: ${error.response}`);
+    }
+    if (error.responseCode) {
+      console.error(`   Response code: ${error.responseCode}`);
+    }
+    if (error.command) {
+      console.error(`   Failed command: ${error.command}`);
+    }
+    
+    // Логируем полную ошибку в dev режиме
+    if (process.env.NODE_ENV === 'development') {
+      console.error('   Full error:', JSON.stringify(error, null, 2));
+    }
+    
     return false;
   }
 }
