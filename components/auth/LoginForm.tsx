@@ -135,8 +135,10 @@ export default function LoginForm() {
           });
         }
 
-        // Успешный вход - редирект на главную страницу
-        router.push('/');
+        // Успешный вход - редирект на redirect параметр или на главную
+        const urlParams = new URLSearchParams(window.location.search);
+        const redirectTo = urlParams.get('redirect') || '/';
+        router.push(redirectTo);
         router.refresh();
       }
     } catch (err) {

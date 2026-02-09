@@ -7,17 +7,23 @@ export const metadata = {
   description: 'Войдите в свой аккаунт или создайте новый для бронирования туров',
 };
 
-export default async function AuthPage() {
+export default async function AuthPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ redirect?: string }>;
+}) {
   const supabase = await createClient();
+  const params = await searchParams;
   
   // Проверяем, авторизован ли пользователь
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Если авторизован - редирект на главную страницу
+  // Если авторизован - редирект на redirect параметр или на главную
   if (user) {
-    redirect('/');
+    const redirectTo = params.redirect || '/';
+    redirect(redirectTo);
   }
 
   return (

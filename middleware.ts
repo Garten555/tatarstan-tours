@@ -61,11 +61,23 @@ export async function middleware(request: NextRequest) {
     error: authError,
   } = await supabase.auth.getUser();
 
+  // Логирование для отладки (только в development)
+  if (process.env.NODE_ENV === 'development' && request.nextUrl.pathname.startsWith('/admin')) {
+    console.log('[Middleware] Admin route check:', {
+      path: request.nextUrl.pathname,
+      hasUser: !!user,
+      userId: user?.id,
+      authError: authError?.message,
+      cookies: request.cookies.getAll().map(c => c.name)
+    });
+  }
+
   // Защита админских маршрутов
   if (request.nextUrl.pathname.startsWith('/admin')) {
-    if (authError || !user) {
+    // Проверяем только наличие пользователя (не проверяем authError, так как он может быть даже при валидной сессии)
+    if (!user) {
       // Перенаправление на логин
-      const redirectUrl = new URL('/login', request.url);
+      const redirectUrl = new URL('/auth', request.url);
       redirectUrl.searchParams.set('redirect', request.nextUrl.pathname);
       return NextResponse.redirect(redirectUrl);
     }
@@ -101,7 +113,7 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/my-bookings')
   ) {
     if (authError || !user) {
-      const redirectUrl = new URL('/login', request.url);
+      const redirectUrl = new URL('/auth', request.url);
       redirectUrl.searchParams.set('redirect', request.nextUrl.pathname);
       return NextResponse.redirect(redirectUrl);
     }
