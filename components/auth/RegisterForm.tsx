@@ -183,6 +183,10 @@ export default function RegisterForm() {
     setSending(true);
 
     try {
+      // Добавляем таймаут для запроса (30 секунд)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
       const response = await fetch('/api/auth/send-verification-code', {
         method: 'POST',
         headers: {
@@ -192,7 +196,10 @@ export default function RegisterForm() {
           email: formData.email.trim(),
           firstName: formData.firstName,
         }),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       const data = await response.json();
 
@@ -204,9 +211,13 @@ export default function RegisterForm() {
       setStep('code');
     } catch (err) {
       console.error('Ошибка отправки кода:', err);
-      setError(
-        err instanceof Error ? err.message : 'Произошла ошибка при отправке кода'
-      );
+      if (err instanceof Error && err.name === 'AbortError') {
+        setError('Превышено время ожидания. Пожалуйста, попробуйте еще раз.');
+      } else {
+        setError(
+          err instanceof Error ? err.message : 'Произошла ошибка при отправке кода'
+        );
+      }
     } finally {
       setSending(false);
     }
@@ -527,12 +538,12 @@ export default function RegisterForm() {
           <button
             type="submit"
             disabled={sending}
-            className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 disabled:from-emerald-400 disabled:to-emerald-500 text-white !text-white font-black text-base sm:text-lg py-4 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 shadow-xl hover:shadow-2xl hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 disabled:from-emerald-400 disabled:to-emerald-500 text-white !text-white font-black text-base sm:text-lg py-4 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 shadow-xl hover:shadow-2xl hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {sending ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Отправка кода...
+                Отправка письма...
               </>
             ) : (
               <>

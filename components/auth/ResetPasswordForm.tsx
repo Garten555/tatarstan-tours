@@ -90,13 +90,20 @@ export default function ResetPasswordForm() {
     setMessage(null);
     
     try {
+      // Добавляем таймаут для запроса (30 секунд)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
       const response = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ email: email.trim() }),
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
       
       const data = await response.json();
       
@@ -107,7 +114,11 @@ export default function ResetPasswordForm() {
       setMessage('Код восстановления отправлен на ваш email. Проверьте почту.');
       setStep('code');
     } catch (error: any) {
-      setError(error.message || 'Не удалось отправить письмо. Проверьте email.');
+      if (error.name === 'AbortError') {
+        setError('Превышено время ожидания. Пожалуйста, попробуйте еще раз.');
+      } else {
+        setError(error.message || 'Не удалось отправить письмо. Проверьте email.');
+      }
     } finally {
       setSending(false);
     }
@@ -405,12 +416,12 @@ export default function ResetPasswordForm() {
               <button
                 onClick={sendResetCode}
                 disabled={sending}
-                className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:from-emerald-300 disabled:to-emerald-400 text-white font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-xl hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2"
+                className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:from-emerald-400 disabled:to-emerald-500 text-white font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-xl hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {sending ? (
                   <>
                     <Loader2 className="w-5 h-5 animate-spin" />
-                    Отправка...
+                    Отправка письма...
                   </>
                 ) : (
                   'Отправить код'
