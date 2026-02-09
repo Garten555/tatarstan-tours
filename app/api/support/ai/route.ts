@@ -94,24 +94,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'AI сервис недоступен' }, { status: 503 });
     }
 
-    // Получаем туры с полной информацией
-    const { data: tours } = await (serviceClient as any)
+    // Получаем туры с полной информацией (только активные туры)
+    const now = new Date().toISOString();
+    const { data: tours, error: toursError } = await (serviceClient as any)
       .from('tours')
       .select(`
         id,
         title,
         slug,
         description,
+        short_desc,
         start_date,
         end_date,
         price_per_person,
         max_participants,
         current_participants,
-        city:cities(name),
-        category:tour_categories(name)
+        city:cities(id, name),
+        category
       `)
+      .eq('status', 'active')
+      .or(`end_date.is.null,end_date.gte.${now}`)
       .order('start_date', { ascending: true })
       .limit(30);
+
+    if (toursError) {
+      console.error('Ошибка загрузки туров для ИИ:', toursError);
+    }
+    
+    // Логируем количество туров для отладки
+    if (tours && tours.length > 0) {
+      console.log(`ИИ получил ${tours.length} туров для контекста`);
+    } else {
+      console.warn('ИИ не получил туры из базы данных. Проверьте, что есть туры со статусом "active"');
+    }
 
     // Получаем города
     const { data: cities } = await (serviceClient as any)
@@ -119,11 +134,16 @@ export async function POST(request: NextRequest) {
       .select('id, name')
       .limit(50);
 
-    // Получаем категории туров
-    const { data: categories } = await (serviceClient as any)
-      .from('tour_categories')
-      .select('id, name, description')
-      .limit(20);
+    // Получаем категории туров (используем enum из базы, так как category - это enum поле)
+    // Категории: history, nature, culture, architecture, food, adventure
+    const categories = [
+      { name: 'История', value: 'history' },
+      { name: 'Природа', value: 'nature' },
+      { name: 'Культура', value: 'culture' },
+      { name: 'Архитектура', value: 'architecture' },
+      { name: 'Еда', value: 'food' },
+      { name: 'Приключения', value: 'adventure' },
+    ];
 
     // Получаем историю сообщений для контекста (последние 10 сообщений)
     const { data: messageHistory } = await (serviceClient as any)
@@ -149,11 +169,11 @@ export async function POST(request: NextRequest) {
         const startDate = t.start_date ? new Date(t.start_date).toLocaleDateString('ru-RU') : 'без даты';
         const endDate = t.end_date ? new Date(t.end_date).toLocaleDateString('ru-RU') : '';
         const city = t.city?.name ? `, ${t.city.name}` : '';
-        const category = t.category?.name ? `, категория: ${t.category.name}` : '';
+        const category = t.category ? `, категория: ${t.category}` : '';
         const participants = t.max_participants 
           ? `, мест: ${t.current_participants || 0}/${t.max_participants}` 
           : '';
-        const description = t.description ? ` (${t.description.substring(0, 100)}...)` : '';
+        const description = (t.short_desc || t.description) ? ` (${(t.short_desc || t.description).substring(0, 100)}...)` : '';
         return `${idx + 1}. ${t.title}${description} — ${startDate}${endDate ? ` - ${endDate}` : ''}${city}${category}${participants}, от ${t.price_per_person} ₽, ссылка: /tours/${t.slug}`;
       })
       .join('\n');
@@ -164,9 +184,9 @@ export async function POST(request: NextRequest) {
       .join(', ');
 
     // Формируем список категорий
-    const categoriesList = (categories || [])
-      .map((c: any) => `${c.name}${c.description ? ` (${c.description})` : ''}`)
-      .join('\n');
+    const categoriesList = categories
+      .map((c: any) => c.name)
+      .join(', ');
 
     const systemPrompt = [
       'Ты умный и дружелюбный виртуальный помощник сайта туров по Татарстану.',
@@ -199,7 +219,9 @@ export async function POST(request: NextRequest) {
       categoriesList || 'Категории не найдены.',
       '',
       'СПИСОК ДОСТУПНЫХ ТУРОВ:',
-      toursContext || 'Туры не найдены.',
+      toursContext || 'Туры не найдены в базе данных.',
+      '',
+      toursContext ? `ВНИМАНИЕ: У тебя есть ${(tours || []).length} ${(tours || []).length === 1 ? 'тур' : 'туров'} в базе данных. ОБЯЗАТЕЛЬНО используй эту информацию при ответе на вопросы о турах!` : 'ВНИМАНИЕ: В базе данных нет туров. Если пользователь спрашивает про туры, честно скажи, что туры временно недоступны.',
       '',
       'ВАЖНО:',
       '- Отвечай ЕСТЕСТВЕННО и РАЗНООБРАЗНО, не используй заготовленные фразы',
