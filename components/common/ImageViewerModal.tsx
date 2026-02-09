@@ -92,10 +92,27 @@ export default function ImageViewerModal({
         <div className="ml-auto">
           <button
             onClick={onClose}
-            className="group relative bg-white/10 hover:bg-white/20 backdrop-blur-xl text-white rounded-2xl p-3 md:p-4 shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-110 border-2 border-white/20 hover:border-white/40"
+            className="group relative rounded-full p-3 md:p-4 transition-all duration-300 hover:scale-110 z-[60] min-w-[52px] min-h-[52px] flex items-center justify-center"
             aria-label="Закрыть"
+            style={{
+              background: 'linear-gradient(to bottom right, #ffffff, #f3f4f6)',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(255, 255, 255, 0.8)',
+              border: '2px solid rgba(255, 255, 255, 0.9)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(to bottom right, #f9fafb, #ffffff)';
+              e.currentTarget.style.boxShadow = '0 6px 30px rgba(16, 185, 129, 0.4), 0 0 0 2px rgba(16, 185, 129, 0.6)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(to bottom right, #ffffff, #f3f4f6)';
+              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(255, 255, 255, 0.8)';
+            }}
           >
-            <X className="w-6 h-6 md:w-7 md:h-7 transition-transform duration-300 group-hover:rotate-90" />
+            <X 
+              className="w-6 h-6 md:w-7 md:h-7 font-black transition-all duration-300 group-hover:rotate-90 relative z-10" 
+              strokeWidth={3.5}
+              style={{ color: '#111827', stroke: '#111827' }}
+            />
           </button>
         </div>
       </div>

@@ -92,9 +92,27 @@ export function TourGalleryViewer({ photos, title }: TourGalleryViewerProps) {
         >
           <button
             onClick={closeGallery}
-            className="absolute top-4 right-4 text-white hover:text-gray-300 z-10 bg-black/50 rounded-full p-2"
+            className="absolute top-4 right-4 z-[60] rounded-full p-3 md:p-4 transition-all duration-300 hover:scale-110 min-w-[52px] min-h-[52px] flex items-center justify-center"
+            aria-label="Закрыть"
+            style={{
+              background: 'linear-gradient(to bottom right, #ffffff, #f3f4f6)',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(255, 255, 255, 0.8)',
+              border: '2px solid rgba(255, 255, 255, 0.9)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(to bottom right, #f9fafb, #ffffff)';
+              e.currentTarget.style.boxShadow = '0 6px 30px rgba(16, 185, 129, 0.4), 0 0 0 2px rgba(16, 185, 129, 0.6)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'linear-gradient(to bottom right, #ffffff, #f3f4f6)';
+              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(255, 255, 255, 0.8)';
+            }}
           >
-            <X className="w-6 h-6" />
+            <X 
+              className="w-6 h-6 md:w-7 md:h-7 font-black transition-all duration-300 group-hover:rotate-90 relative z-10" 
+              strokeWidth={3.5}
+              style={{ color: '#111827', stroke: '#111827' }}
+            />
           </button>
 
           <div className="relative max-w-7xl max-h-[90vh] w-full" onClick={(e) => e.stopPropagation()}>
