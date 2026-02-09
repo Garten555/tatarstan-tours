@@ -55,14 +55,15 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  // Проверка аутентификации
+  // Проверка аутентификации (используем getUser() для безопасности)
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
 
   // Защита админских маршрутов
   if (request.nextUrl.pathname.startsWith('/admin')) {
-    if (!session) {
+    if (authError || !user) {
       // Перенаправление на логин
       const redirectUrl = new URL('/login', request.url);
       redirectUrl.searchParams.set('redirect', request.nextUrl.pathname);
@@ -73,7 +74,7 @@ export async function middleware(request: NextRequest) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single();
 
     // Маппинг маршрутов на требуемые роли
@@ -99,7 +100,7 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/profile') ||
     request.nextUrl.pathname.startsWith('/my-bookings')
   ) {
-    if (!session) {
+    if (authError || !user) {
       const redirectUrl = new URL('/login', request.url);
       redirectUrl.searchParams.set('redirect', request.nextUrl.pathname);
       return NextResponse.redirect(redirectUrl);
@@ -110,7 +111,7 @@ export async function middleware(request: NextRequest) {
       const { data: profile } = await supabase
         .from('profiles')
         .select('is_banned, ban_until')
-        .eq('id', session.user.id)
+        .eq('id', user.id)
         .single();
 
       if (profile?.is_banned) {
@@ -131,7 +132,7 @@ export async function middleware(request: NextRequest) {
 
   // Проверка бана для всех защищённых маршрутов (кроме /banned и /auth)
   if (
-    session &&
+    user &&
     !request.nextUrl.pathname.startsWith('/banned') &&
     !request.nextUrl.pathname.startsWith('/auth') &&
     !request.nextUrl.pathname.startsWith('/api')
@@ -139,7 +140,7 @@ export async function middleware(request: NextRequest) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('is_banned, ban_until')
-      .eq('id', session.user.id)
+      .eq('id', user.id)
       .single();
 
     if (profile?.is_banned) {
