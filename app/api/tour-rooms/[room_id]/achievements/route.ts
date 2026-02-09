@@ -2,6 +2,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { rateLimit } from '@/lib/security/rate-limit';
+import Pusher from 'pusher';
+
+const pusher = new Pusher({
+  appId: process.env.PUSHER_APP_ID!,
+  key: process.env.NEXT_PUBLIC_PUSHER_KEY!,
+  secret: process.env.PUSHER_SECRET!,
+  cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'eu',
+  useTLS: true,
+});
 
 // POST /api/tour-rooms/[room_id]/achievements - выдача достижения участнику
 export async function POST(
@@ -96,6 +105,53 @@ export async function POST(
         { error: 'Не удалось выдать достижение' },
         { status: 500 }
       );
+    }
+
+    // Создаем запись в таблице notifications и отправляем real-time событие через Pusher
+    if (achievement) {
+      try {
+        // Получаем имя пользователя, который выдал достижение (гид/админ)
+        const { data: giverProfile } = await serviceClient
+          .from('profiles')
+          .select('username, first_name, last_name')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        const giverName =
+          giverProfile?.first_name && giverProfile?.last_name
+            ? `${giverProfile.first_name} ${giverProfile.last_name}`
+            : giverProfile?.username || 'Гид';
+
+        const title = achievement.badge_name || 'Новое достижение';
+        const body =
+          achievement.badge_description ||
+          `${giverName} выдал(а) вам достижение «${achievement.badge_name || 'Без названия'}»`;
+
+        const { data: notification, error: notificationError } = await serviceClient
+          .from('notifications')
+          .insert({
+            user_id,
+            title,
+            body,
+            type: 'achievement',
+          })
+          .select('id, user_id, title, body, type, created_at')
+          .single();
+
+        if (notificationError) {
+          console.error('Ошибка создания уведомления о достижении:', notificationError);
+        } else if (notification && pusher) {
+          try {
+            await pusher.trigger(`notifications-${user_id}`, 'new-notification', {
+              notification,
+            });
+          } catch (pusherError) {
+            console.error('Ошибка отправки уведомления о достижении через Pusher:', pusherError);
+          }
+        }
+      } catch (notifyError) {
+        console.error('Ошибка обработки уведомления о достижении:', notifyError);
+      }
     }
 
     return NextResponse.json({

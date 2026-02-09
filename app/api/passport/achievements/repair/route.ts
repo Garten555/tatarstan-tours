@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import Pusher from 'pusher';
+
+const pusher = new Pusher({
+  appId: process.env.PUSHER_APP_ID!,
+  key: process.env.NEXT_PUBLIC_PUSHER_KEY!,
+  secret: process.env.PUSHER_SECRET!,
+  cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'eu',
+  useTLS: true,
+});
 
 export async function POST(_request: NextRequest) {
   try {
@@ -125,7 +134,7 @@ export async function POST(_request: NextRequest) {
 
       if (existing) return 0;
 
-      const { error: insertError } = await serviceClient
+      const { data: newAchievement, error: insertError } = await serviceClient
         .from('achievements')
         .insert({
           user_id: user.id,
@@ -134,11 +143,35 @@ export async function POST(_request: NextRequest) {
           badge_description: badge.badge_description,
           tour_id: tourId,
           verification_data: verificationData || null,
-        });
+        })
+        .select()
+        .single();
 
       if (insertError) {
         console.error('Ошибка создания достижения:', insertError);
         return 0;
+      }
+
+      // Отправляем уведомление через Pusher
+      if (pusher && newAchievement) {
+        try {
+          await pusher.trigger(
+            `notifications-${user.id}`,
+            'new-notification',
+            {
+              notification: {
+                id: newAchievement.id,
+                title: newAchievement.badge_name || 'Новое достижение',
+                body: newAchievement.badge_description || null,
+                type: 'achievement',
+                created_at: newAchievement.unlock_date || new Date().toISOString(),
+              },
+            }
+          );
+        } catch (pusherError) {
+          console.error('Ошибка отправки уведомления через Pusher:', pusherError);
+          // Не прерываем выполнение, достижение уже создано
+        }
       }
 
       return 1;
