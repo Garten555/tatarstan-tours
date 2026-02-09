@@ -222,8 +222,8 @@ export default async function TourPage({ params }: TourPageProps) {
           <span className="font-bold text-sm sm:text-base">Назад на главную</span>
         </Link>
 
-        <div className="mt-4 sm:mt-6 flex flex-col lg:flex-row gap-6 sm:gap-8 w-full items-start">
-          <div className="w-full lg:w-[320px] xl:w-[380px] flex-shrink-0">
+        <div className="mt-4 sm:mt-6 flex flex-col md:flex-col lg:flex-row gap-6 sm:gap-8 w-full items-start">
+          <div className="w-full md:w-full lg:w-[320px] xl:w-[380px] 2xl:w-[400px] flex-shrink-0">
             <TourBookingCard
               price={t.price_per_person}
               availableSpots={availableSpots}
