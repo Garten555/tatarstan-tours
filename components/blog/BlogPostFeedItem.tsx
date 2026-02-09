@@ -48,9 +48,18 @@ export default function BlogPostFeedItem({ post }: BlogPostFeedItemProps) {
     const loadUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
+      // Отладочное логирование
+      if (user && post.user) {
+        console.log('User check:', {
+          currentUserId: user.id,
+          postUserId: post.user.id,
+          postUserIdDirect: (post as any).user_id,
+          match: user.id === post.user.id || user.id === (post as any).user_id,
+        });
+      }
     };
     loadUser();
-  }, [supabase]);
+  }, [supabase, post]);
 
   const loadComments = useCallback(async () => {
     try {
@@ -197,7 +206,7 @@ export default function BlogPostFeedItem({ post }: BlogPostFeedItemProps) {
             </div>
           </Link>
         </div>
-        {currentUser && currentUser.id === post.user?.id && (
+        {currentUser && (currentUser.id === post.user?.id || currentUser.id === (post as any).user_id) && (
           <button
             type="button"
             onClick={async (e) => {
@@ -229,6 +238,7 @@ export default function BlogPostFeedItem({ post }: BlogPostFeedItemProps) {
               } catch (error: any) {
                 // Откатываем оптимистичное обновление при ошибке
                 setPostDeleted(false);
+                console.error('Error deleting post:', error);
                 toast.error(error.message || 'Не удалось удалить пост');
               }
             }}

@@ -264,13 +264,30 @@ export async function DELETE(
     }
 
     // Проверяем права
-    const { data: post } = await serviceClient
+    const { data: post, error: postError } = await serviceClient
       .from('travel_blog_posts')
       .select('user_id')
       .eq('id', id)
       .single();
 
-    if (!post || post.user_id !== user.id) {
+    if (postError) {
+      console.error('Error fetching post for deletion:', postError);
+      return NextResponse.json(
+        { error: 'Пост не найден' },
+        { status: 404 }
+      );
+    }
+
+    if (!post) {
+      return NextResponse.json(
+        { error: 'Пост не найден' },
+        { status: 404 }
+      );
+    }
+
+    // Проверяем, что пользователь является владельцем поста
+    if (post.user_id !== user.id) {
+      console.warn(`User ${user.id} tried to delete post ${id} owned by ${post.user_id}`);
       return NextResponse.json(
         { error: 'Нет доступа к удалению этого поста' },
         { status: 403 }
