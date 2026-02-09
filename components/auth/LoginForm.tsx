@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, Loader2, LogIn, Mail, Lock } from 'lucide-react';
@@ -197,6 +198,16 @@ export default function LoginForm() {
             )}
           </button>
         </div>
+      </div>
+
+      {/* Ссылка на восстановление пароля */}
+      <div className="flex justify-end">
+        <Link
+          href="/auth/reset"
+          className="text-sm sm:text-base text-emerald-600 hover:text-emerald-700 font-semibold transition-colors hover:underline"
+        >
+          Забыли пароль?
+        </Link>
       </div>
 
       {/* Кнопка входа */}
