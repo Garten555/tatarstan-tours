@@ -26,7 +26,8 @@ export async function POST(request: NextRequest) {
         .eq('id', user.id)
         .single();
       
-      if (!profile || !['super_admin', 'tour_admin'].includes((profile as any).role)) {
+      const profileRole = (profile as { role?: string } | null)?.role;
+      if (!profileRole || !['super_admin', 'tour_admin'].includes(profileRole)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
@@ -67,18 +68,57 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    interface MessageWithRoom {
+      id: unknown;
+      image_url: unknown;
+      image_path: unknown;
+      room_id: unknown;
+      room: Array<{
+        tour: Array<{
+          id: unknown;
+          end_date: unknown;
+        }> | {
+          id: unknown;
+          end_date: unknown;
+        } | null;
+      }> | {
+        tour: Array<{
+          id: unknown;
+          end_date: unknown;
+        }> | {
+          id: unknown;
+          end_date: unknown;
+        } | null;
+      } | null;
+    }
+
     const now = new Date();
     let deletedCount = 0;
     const filesToDelete: string[] = [];
 
     // Фильтруем сообщения из закончившихся туров
     for (const message of messages) {
-      const msg = message as any;
-      const tour = msg?.room?.tour;
+      const msg = message as MessageWithRoom;
+      let room = null;
+      if (Array.isArray(msg.room) && msg.room.length > 0) {
+        room = msg.room[0];
+      } else if (msg.room && !Array.isArray(msg.room)) {
+        room = msg.room;
+      }
+
+      let tour = null;
+      if (room && room.tour) {
+        if (Array.isArray(room.tour) && room.tour.length > 0) {
+          tour = room.tour[0];
+        } else if (!Array.isArray(room.tour)) {
+          tour = room.tour;
+        }
+      }
+
       if (tour && tour.end_date) {
-        const tourEndDate = new Date(tour.end_date);
+        const tourEndDate = new Date(String(tour.end_date));
         if (tourEndDate < now && msg.image_path) {
-          filesToDelete.push(msg.image_path);
+          filesToDelete.push(String(msg.image_path));
         }
       }
     }
@@ -96,8 +136,10 @@ export async function POST(request: NextRequest) {
 
     // Очищаем image_url и image_path в БД для удаленных файлов
     if (filesToDelete.length > 0) {
-      const messageIds = (messages as any[]).filter((m: any) => filesToDelete.includes(m.image_path || '')).map((m: any) => m.id);
-      const { error: updateError } = await (serviceClient as any)
+      const messageIds = (messages as MessageWithRoom[])
+        .filter((m) => m.image_path && filesToDelete.includes(String(m.image_path)))
+        .map((m) => String(m.id));
+      const { error: updateError } = await serviceClient
         .from('tour_room_messages')
         .update({
           image_url: null,

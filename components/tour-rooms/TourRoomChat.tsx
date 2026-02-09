@@ -277,10 +277,35 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
       });
 
       console.log('[TourRoomChat] Message response status:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        let errorData: any = {};
+        try {
+          errorData = errorText ? JSON.parse(errorText) : {};
+        } catch {
+          // Игнорируем ошибки парсинга
+        }
+        const errorMessage = errorData.details || errorData.error || 'Не удалось отправить сообщение';
+        console.error('[TourRoomChat] Message send error:', errorMessage);
+        
+        if (errorData.migration_required) {
+          toast.error('Ошибка: Миграция базы данных не применена. Пожалуйста, примените миграцию 018 в Supabase.');
+        } else {
+          toast.error(`Ошибка отправки сообщения: ${errorMessage}`);
+        }
+        
+        setNewMessage(messageText);
+        if (imageUrl && selectedImage) {
+          setSelectedImage({ file: selectedImage.file, preview: selectedImage.preview });
+        }
+        return;
+      }
+      
       const data = await response.json();
       console.log('[TourRoomChat] Message response data:', data);
       
-      if (!response.ok || !data.success) {
+      if (!data.success) {
         const errorMessage = data.details || data.error || 'Не удалось отправить сообщение';
         console.error('[TourRoomChat] Message send error:', errorMessage);
         

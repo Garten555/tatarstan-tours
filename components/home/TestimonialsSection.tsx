@@ -125,7 +125,7 @@ export async function TestimonialsSection() {
 
                 {/* Текст отзыва */}
                 <p className="text-lg md:text-xl text-gray-700 leading-relaxed mb-6 relative z-10">
-                  "{item.text}"
+                  &ldquo;{item.text}&rdquo;
                 </p>
 
                 {/* Информация о пользователе */}

@@ -62,16 +62,22 @@ export function TourRoom({ roomId, initialRoom }: TourRoomProps) {
     try {
       setLoading(true);
       const response = await fetch(`/api/tour-rooms/${roomId}`);
+      if (!response.ok) {
+        if (response.status === 403) {
+          toast.error('У вас нет доступа к этой комнате');
+        } else {
+          console.error('Ошибка загрузки комнаты:', response.status, response.statusText);
+          toast.error('Ошибка загрузки комнаты. Попробуйте обновить страницу.');
+        }
+        return;
+      }
       const data = await response.json();
       
       if (data.success) {
         setRoom(data.room);
       } else {
-        if (response.status === 403) {
-          toast.error(data.error || 'У вас нет доступа к этой комнате');
-        } else {
-          console.error('Ошибка загрузки комнаты:', data.error);
-        }
+        console.error('Ошибка загрузки комнаты:', data.error);
+        toast.error(data.error || 'Ошибка загрузки комнаты');
       }
     } catch (error) {
       console.error('Ошибка загрузки комнаты:', error);

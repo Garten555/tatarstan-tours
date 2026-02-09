@@ -57,13 +57,39 @@ export default async function EditTourPage({ params }: EditTourPageProps) {
     .eq('tour_id', id)
     .order('created_at', { ascending: true });
 
-  const mediaTyped = (media ?? []) as any[];
+  interface TourMedia {
+    id: string;
+    media_type: string;
+    media_url: string;
+    created_at: string;
+  }
+
+  interface TourData {
+    id: string;
+    title: string;
+    slug: string;
+    short_desc: string | null;
+    full_desc: string | null;
+    tour_type: string;
+    category: string;
+    price_per_person: number;
+    start_date: string;
+    end_date: string | null;
+    max_participants: number;
+    status: string;
+    yandex_map_url: string | null;
+    cover_image: string | null;
+    description: string;
+    city_id: string | null;
+  }
+
+  const mediaTyped = (media ?? []) as TourMedia[];
   const gallery = mediaTyped.filter((m) => m.media_type === 'image' || m.media_type === 'photo');
   const videos = mediaTyped.filter((m) => m.media_type === 'video');
 
   // Подготавливаем данные для формы
   const tourData = {
-    ...(tour as any),
+    ...(tour as TourData),
     gallery_photos: gallery.map((g) => g.media_url),
     video_urls: videos.map((v) => v.media_url),
   };
@@ -74,7 +100,7 @@ export default async function EditTourPage({ params }: EditTourPageProps) {
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Редактировать тур</h1>
         <p className="mt-2 text-gray-600">
-          Обновите информацию о туре &quot;{(tour as any)?.title}&quot;
+          Обновите информацию о туре &quot;{(tour as TourData)?.title}&quot;
         </p>
       </div>
 

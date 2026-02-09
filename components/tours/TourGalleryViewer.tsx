@@ -17,8 +17,6 @@ interface TourGalleryViewerProps {
 export function TourGalleryViewer({ photos, title }: TourGalleryViewerProps) {
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
 
-  if (photos.length === 0) return null;
-
   const openGallery = (index: number) => {
     setSelectedIndex(index);
   };
@@ -58,6 +56,8 @@ export function TourGalleryViewer({ photos, title }: TourGalleryViewerProps) {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedIndex, photos.length]);
+
+  if (photos.length === 0) return null;
 
   return (
     <>

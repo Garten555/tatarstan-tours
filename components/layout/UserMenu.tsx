@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { User, LogOut, Settings, Calendar, Shield, Crown, MessageSquare, BookOpen, Compass, Search, Users, Home, Mail, DoorOpen } from 'lucide-react';
+import { User, LogOut, Settings, Calendar, Shield, BookOpen, Users, Mail, DoorOpen } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { useDialog } from '@/hooks/useDialog';
 
@@ -19,15 +19,9 @@ export default function UserMenu() {
   const [authResolved, setAuthResolved] = useState(false); // чтобы не мигала кнопка "Вход"
   const [isGuide, setIsGuide] = useState(false); // Является ли пользователь гидом
   const guideCheckedRef = useRef<string | null>(null); // ID пользователя, для которого уже проверено
-  
-  // Диагностика: единый префикс для логов
-  const logPrefix = '[МенюПользователя]';
 
   const isAdminRole = (role: any) =>
     role === 'super_admin' || role === 'tour_admin' || role === 'support_admin';
-  
-  // Проверяем, является ли пользователь гидом по роли или по наличию комнат
-  const isGuideByRole = profile?.role === 'guide' || profile?.role === 'tour_admin';
 
   // Белый список админов по email (через NEXT_PUBLIC_ADMIN_EMAILS="a@b.com,c@d.com")
   const adminEmails: string[] = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '')
@@ -41,9 +35,10 @@ export default function UserMenu() {
     const email = user?.email?.toLowerCase();
     const isAdminByRole = isAdminRole(role);
     const isAdminByEmail = !!(email && adminEmails.includes(email));
-    const isAdmin = isAdminByRole || isAdminByEmail;
     // Логирование отключено для производительности
-  }, [profile?.role, user?.email]);
+    // isAdmin вычисляется, но не используется (закомментировано для будущего использования)
+    void (isAdminByRole || isAdminByEmail);
+  }, [profile?.role, user?.email, adminEmails]);
 
   // Хелперы кэша
   const readCachedProfile = (): any | null => {
@@ -98,7 +93,10 @@ export default function UserMenu() {
     // Быстрый старт из localStorage, чтобы ссылка Админ-панель не пропадала при пробуждении вкладки
     const cached = readCachedProfile();
       if (cached && (cached.role || cached.first_name || cached.last_name)) {
-        setProfile(cached);
+        // Используем setTimeout для избежания синхронного setState в эффекте
+        setTimeout(() => {
+          setProfile(cached);
+        }, 0);
       }
 
     // Получаем текущего пользователя

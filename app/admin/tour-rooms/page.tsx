@@ -2,7 +2,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
   Search, 
@@ -16,7 +15,6 @@ import {
   Trash2,
   DoorOpen
 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
 
 interface TourRoom {
   id: string;
@@ -42,18 +40,28 @@ interface TourRoom {
   participants_count?: number;
 }
 
+interface User {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+}
+
+interface Tour {
+  id: string;
+  title: string;
+}
+
 export default function TourRoomsPage() {
-  const router = useRouter();
-  const supabase = createClient();
   const [rooms, setRooms] = useState<TourRoom[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [assigningGuide, setAssigningGuide] = useState(false);
-  const [users, setUsers] = useState<any[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [showUserSelect, setShowUserSelect] = useState(false);
   const [deletingRoom, setDeletingRoom] = useState<string | null>(null);
-  const [tours, setTours] = useState<any[]>([]);
+  const [tours, setTours] = useState<Tour[]>([]);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [creatingRoom, setCreatingRoom] = useState(false);
   const [selectedTourId, setSelectedTourId] = useState<string | null>(null);

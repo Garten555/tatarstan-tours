@@ -39,7 +39,6 @@ const CATEGORY_META: Record<string, { label: string; emoji: string }> = {
 };
 
 export default function TourCard({
-  id,
   title,
   slug,
   short_desc,

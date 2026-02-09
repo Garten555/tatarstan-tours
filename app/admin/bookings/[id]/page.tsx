@@ -76,10 +76,66 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
     .eq('booking_id', id)
     .order('created_at', { ascending: true });
 
+  // Типизируем booking с вложенными данными
+  interface BookingWithRelations {
+    id: string;
+    user_id: string;
+    tour_id: string;
+    booking_date: string;
+    num_people: number;
+    total_price: number;
+    status: string;
+    payment_status?: string;
+    ticket_url: string | null;
+    created_at: string;
+    updated_at: string;
+    user: Array<{
+      id: string;
+      first_name: string | null;
+      last_name: string | null;
+      email: string;
+      phone: string | null;
+    }> | {
+      id: string;
+      first_name: string | null;
+      last_name: string | null;
+      email: string;
+      phone: string | null;
+    } | null;
+    tour: Array<{
+      id: string;
+      title: string;
+      slug: string;
+      start_date: string;
+      end_date: string | null;
+      price_per_person: number;
+      max_participants: number;
+      current_participants: number;
+      city: { name: string } | null;
+    }> | {
+      id: string;
+      title: string;
+      slug: string;
+      start_date: string;
+      end_date: string | null;
+      price_per_person: number;
+      max_participants: number;
+      current_participants: number;
+      city: { name: string } | null;
+    } | null;
+  }
+
+  const typedBooking = booking as BookingWithRelations;
+  const normalizedBooking = {
+    ...typedBooking,
+    user: Array.isArray(typedBooking.user) ? typedBooking.user[0] : typedBooking.user,
+    tour: Array.isArray(typedBooking.tour) ? typedBooking.tour[0] : typedBooking.tour,
+  };
+
   return (
     <div className="space-y-6">
       <BookingDetails 
-        booking={booking as any}
+        booking={normalizedBooking}
         attendees={attendees || []}
       />
     </div>

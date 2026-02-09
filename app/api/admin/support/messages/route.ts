@@ -58,8 +58,16 @@ export async function GET(request: NextRequest) {
       .eq('session_id', sessionId)
       .order('created_at', { ascending: true });
     
+    interface ChatMessage {
+      id: string;
+      message: string;
+      is_support: boolean;
+      is_ai: boolean | null;
+      created_at: string;
+    }
+
     // Фильтруем ИИ-сообщения (оставляем только сообщения где is_ai = false или null)
-    const messages = (allMessages || []).filter((msg: any) => msg.is_ai !== true);
+    const messages = (allMessages || []).filter((msg: ChatMessage) => msg.is_ai !== true);
 
     if (error) {
       console.error('Ошибка загрузки сообщений поддержки:', error);

@@ -28,9 +28,18 @@ export default function PromptDialog({
 }: PromptDialogProps) {
   const [value, setValue] = useState(defaultValue);
 
+  // Сброс значения при открытии диалога
   useEffect(() => {
     if (isOpen) {
-      setValue(defaultValue);
+      // Используем setTimeout для избежания синхронного setState в эффекте
+      setTimeout(() => {
+        setValue(defaultValue);
+      }, 0);
+    }
+  }, [isOpen, defaultValue]);
+
+  useEffect(() => {
+    if (isOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = '';
@@ -38,7 +47,7 @@ export default function PromptDialog({
     return () => {
       document.body.style.overflow = '';
     };
-  }, [isOpen, defaultValue]);
+  }, [isOpen]);
 
   // Закрытие по Escape
   useEffect(() => {

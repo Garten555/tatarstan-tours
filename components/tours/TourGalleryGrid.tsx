@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import Image from 'next/image';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
 
@@ -19,11 +19,6 @@ type TourGalleryGridProps = {
 export default function TourGalleryGrid({ title, photos, images }: TourGalleryGridProps) {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
-
-  const photoUrls = useMemo(
-    () => photos.map((photo) => photo.media_url).filter(Boolean),
-    [photos]
-  );
 
   if (photos.length === 0) return null;
 

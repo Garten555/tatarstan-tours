@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
@@ -13,12 +13,23 @@ export default function TourMediaGallery({ photos }: TourMediaGalleryProps) {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
   const [scrollPosition, setScrollPosition] = useState(0);
+  const [canScrollRight, setCanScrollRight] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const imageUrls = useMemo(
     () => photos.map((photo) => photo.media_url).filter(Boolean),
     [photos]
   );
+
+  useEffect(() => {
+    const checkScrollRight = () => {
+      if (scrollContainerRef.current) {
+        const canScroll = scrollPosition < (scrollContainerRef.current.scrollWidth - scrollContainerRef.current.clientWidth - 10);
+        setCanScrollRight(canScroll);
+      }
+    };
+    checkScrollRight();
+  }, [scrollPosition]);
 
   if (photos.length === 0) return null;
 
@@ -50,9 +61,6 @@ export default function TourMediaGallery({ photos }: TourMediaGalleryProps) {
 
   const showSlider = photos.length > 3;
   const canScrollLeft = scrollPosition > 0;
-  const canScrollRight = scrollContainerRef.current 
-    ? scrollPosition < (scrollContainerRef.current.scrollWidth - scrollContainerRef.current.clientWidth - 10)
-    : false;
 
   return (
     <>

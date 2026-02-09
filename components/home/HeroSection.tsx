@@ -23,8 +23,14 @@ export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | n
   );
   const [activeIndex, setActiveIndex] = useState(0);
 
+  // Сброс индекса при изменении количества элементов
   useEffect(() => {
-    setActiveIndex(0);
+    setActiveIndex((current) => {
+      if (current >= items.length) {
+        return 0;
+      }
+      return current;
+    });
   }, [items.length]);
 
   useEffect(() => {
@@ -114,7 +120,7 @@ export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | n
                 { icon: Users, label: 'Поддержка 24/7', value: 'Всегда на связи' },
                 { icon: MapPin, label: 'Безопасно', value: 'Проверенные гиды' },
                 { icon: Calendar, label: 'Удобно', value: 'Быстрое бронирование' },
-              ].map((item, index) => {
+              ].map((item) => {
                 const Icon = item.icon;
                 return (
                   <div

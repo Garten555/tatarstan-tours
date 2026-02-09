@@ -1,6 +1,6 @@
 'use client';
 
-import { X, CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
+import { CheckCircle, AlertCircle, Info, AlertTriangle } from 'lucide-react';
 import { useEffect } from 'react';
 
 interface AlertDialogProps {

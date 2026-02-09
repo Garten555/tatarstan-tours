@@ -20,6 +20,12 @@ export default function NotificationBell() {
   const loadNotifications = async () => {
     try {
       const response = await fetch('/api/notifications');
+      if (!response.ok) {
+        console.error('Ошибка загрузки уведомлений:', response.status, response.statusText);
+        setNotifications([]);
+        setUnreadCount(0);
+        return;
+      }
       const data = await response.json();
       if (data.success) {
         setNotifications(data.notifications || []);
@@ -28,6 +34,8 @@ export default function NotificationBell() {
       }
     } catch (error) {
       console.error('Ошибка загрузки уведомлений:', error);
+      setNotifications([]);
+      setUnreadCount(0);
     } finally {
       setLoading(false);
     }

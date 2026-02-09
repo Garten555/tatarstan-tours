@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 
 const ADMIN_ROLES = ['super_admin', 'tour_admin', 'support_admin'];
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function GET(_request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -40,8 +41,16 @@ export async function GET(_request: NextRequest) {
       .eq('key', 'maintenance_mode')
       .single();
 
-    const enabled = Boolean((setting as any)?.value_json?.enabled);
-    const message = (setting as any)?.value_json?.message || '';
+    interface MaintenanceSetting {
+      value_json?: {
+        enabled?: boolean;
+        message?: string;
+      } | null;
+    }
+
+    const settingData = setting as MaintenanceSetting | null;
+    const enabled = Boolean(settingData?.value_json?.enabled);
+    const message = settingData?.value_json?.message || '';
 
     return NextResponse.json({ success: true, enabled, message });
   } catch (error) {
@@ -88,7 +97,7 @@ export async function PUT(request: NextRequest) {
     const enabled = Boolean(body?.enabled);
     const message = typeof body?.message === 'string' ? body.message.trim() : '';
 
-    const { error } = await (serviceClient as any)
+    const { error } = await serviceClient
       .from('site_settings')
       .upsert({
         key: 'maintenance_mode',

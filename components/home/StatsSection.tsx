@@ -16,7 +16,7 @@ export function StatsSection() {
 
       <div className="container mx-auto px-4 sm:px-5 md:px-6 lg:px-8 relative z-10">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-          {stats.map((item, index) => (
+          {stats.map((item) => (
             <div
               key={item.label}
               className="group relative rounded-xl sm:rounded-2xl bg-white/80 backdrop-blur-sm border border-emerald-100/50 p-4 sm:p-5 md:p-6 lg:p-8 text-center shadow-sm hover:shadow-xl transition-all duration-300 hover:-translate-y-2 hover:border-emerald-300"

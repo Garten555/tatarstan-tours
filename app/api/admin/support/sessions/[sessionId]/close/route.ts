@@ -51,7 +51,7 @@ export async function PATCH(
     const reason = typeof body?.reason === 'string' ? body.reason.trim() : null;
 
     // Обновляем статус сессии
-    const { data: updated, error } = await (serviceClient as any)
+    const { data: updated, error } = await serviceClient
       .from('support_sessions')
       .update({
         status: 'closed',

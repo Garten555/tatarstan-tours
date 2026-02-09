@@ -74,7 +74,16 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
         return;
       }
 
-      const data = JSON.parse(text);
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.error('Ошибка парсинга JSON сообщений:', parseError);
+        setMessages([]);
+        setLoading(false);
+        return;
+      }
+      
       if (data.success) {
         setMessages(data.messages || []);
       } else {
@@ -383,7 +392,14 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
         return;
       }
 
-      const data = JSON.parse(text);
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (parseError) {
+        console.error('Ошибка парсинга JSON ответа:', parseError);
+        return;
+      }
+      
       if (data.success) {
         setInput('');
         if (textareaRef.current) {

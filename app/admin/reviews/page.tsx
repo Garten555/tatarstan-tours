@@ -36,7 +36,7 @@ export default async function ReviewsPage() {
   }
 
   // Загружаем отзывы
-  const { data: reviews, error } = await serviceClient
+  const { data: reviews } = await serviceClient
     .from('reviews')
     .select(`
       id,
@@ -63,8 +63,35 @@ export default async function ReviewsPage() {
     `)
     .order('created_at', { ascending: false });
 
+  // Типизируем отзывы
+  interface ReviewWithRelations {
+    id: string;
+    user_id: string;
+    tour_id: string;
+    rating: number;
+    text: string | null;
+    is_approved: boolean;
+    is_published: boolean;
+    is_reported: boolean;
+    created_at: string;
+    user: Array<{
+      first_name: string | null;
+      last_name: string | null;
+      email: string;
+    }> | {
+      first_name: string | null;
+      last_name: string | null;
+      email: string;
+    } | null;
+    tour: Array<{ title: string }> | { title: string } | null;
+    review_media: Array<{
+      media_type: 'image' | 'video';
+      media_url: string;
+    }>;
+  }
+
   // Преобразуем данные для компонента
-  const reviewsData = (reviews || []).map((review: any) => {
+  const reviewsData = (reviews || []).map((review: ReviewWithRelations) => {
     const userData = Array.isArray(review.user) ? review.user[0] : review.user;
     const tourData = Array.isArray(review.tour) ? review.tour[0] : review.tour;
     
@@ -81,7 +108,7 @@ export default async function ReviewsPage() {
       user_name: userData ? `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || userData.email || 'Пользователь' : 'Пользователь',
       user_email: userData?.email || '',
       tour_title: tourData?.title || 'Тур удален',
-      media: (review.review_media || []).map((m: any) => ({
+      media: (review.review_media || []).map((m) => ({
         media_type: m.media_type,
         media_url: m.media_url,
       })),

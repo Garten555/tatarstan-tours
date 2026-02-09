@@ -46,29 +46,52 @@ export default async function GuideDashboard() {
     .eq('guide_id', user.id)
     .order('created_at', { ascending: false });
 
+  // Типизируем комнаты
+  interface RoomWithTour {
+    id: string;
+    created_at: string;
+    tour: Array<{
+      id: string;
+      title: string;
+      start_date: string;
+      end_date: string | null;
+      max_participants: number;
+    }> | {
+      id: string;
+      title: string;
+      start_date: string;
+      end_date: string | null;
+      max_participants: number;
+    } | null;
+  }
+
   // Подсчитываем статистику
   const now = new Date();
-  const activeRooms = (rooms || []).filter((room: any) => {
-    const startDate = room.tour?.start_date ? new Date(room.tour.start_date) : null;
-    const endDate = room.tour?.end_date ? new Date(room.tour.end_date) : null;
+  const typedRooms = (rooms || []) as RoomWithTour[];
+  const activeRooms = typedRooms.filter((room) => {
+    const tour = Array.isArray(room.tour) ? room.tour[0] : room.tour;
+    const startDate = tour?.start_date ? new Date(tour.start_date) : null;
+    const endDate = tour?.end_date ? new Date(tour.end_date) : null;
     if (!startDate) return false;
     return startDate <= now && (!endDate || endDate >= now);
   });
 
-  const upcomingRooms = (rooms || []).filter((room: any) => {
-    const startDate = room.tour?.start_date ? new Date(room.tour.start_date) : null;
+  const upcomingRooms = typedRooms.filter((room) => {
+    const tour = Array.isArray(room.tour) ? room.tour[0] : room.tour;
+    const startDate = tour?.start_date ? new Date(tour.start_date) : null;
     if (!startDate) return false;
     return startDate > now;
   });
 
-  const completedRooms = (rooms || []).filter((room: any) => {
-    const endDate = room.tour?.end_date ? new Date(room.tour.end_date) : null;
+  const completedRooms = typedRooms.filter((room) => {
+    const tour = Array.isArray(room.tour) ? room.tour[0] : room.tour;
+    const endDate = tour?.end_date ? new Date(tour.end_date) : null;
     if (!endDate) return false;
     return endDate < now;
   });
 
   // Получаем количество участников
-  const roomIds = (rooms || []).map((r: any) => r.id);
+  const roomIds = typedRooms.map((r) => r.id);
   let totalParticipants = 0;
   if (roomIds.length > 0) {
     const { count } = await supabase

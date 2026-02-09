@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { 
@@ -18,7 +18,6 @@ import {
   FileText,
   Video,
   Globe,
-  Settings,
   Layout,
   MoveUp,
   MoveDown,
@@ -26,19 +25,14 @@ import {
   Clock,
   Camera,
   Sparkles,
-  Compass,
   Heart,
   Sun,
-  Cloud,
-  Wind,
   Map,
-  Navigation,
   Zap
 } from 'lucide-react';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
 import { CreateDiaryRequest, UpdateDiaryRequest, TravelDiary, DiaryMediaItem } from '@/types';
-import { escapeHtml } from '@/lib/utils/sanitize';
 import RichTextEditor from '@/components/admin/RichTextEditor';
 
 interface DiaryEditorProps {

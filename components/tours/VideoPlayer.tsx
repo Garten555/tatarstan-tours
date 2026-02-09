@@ -8,9 +8,14 @@ interface VideoPlayerProps {
   title?: string;
 }
 
-export default function VideoPlayer({ src, mimeType, title }: VideoPlayerProps) {
+type PlyrInstance = {
+  destroy: () => void;
+  [key: string]: unknown;
+};
+
+export default function VideoPlayer({ src, mimeType }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const playerRef = useRef<any>(null);
+  const playerRef = useRef<PlyrInstance | null>(null);
   const [isClient, setIsClient] = useState(false);
 
   const resolveMimeType = () => {
@@ -121,7 +126,7 @@ export default function VideoPlayer({ src, mimeType, title }: VideoPlayerProps) 
       },
       });
 
-      playerRef.current = player;
+      playerRef.current = player as unknown as PlyrInstance;
     }).catch((err) => {
       console.error('Plyr init error:', err);
     });
