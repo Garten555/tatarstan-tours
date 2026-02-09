@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Получаем туры с полной информацией (только активные туры)
-    const now = new Date().toISOString();
+    const currentDate = new Date().toISOString();
     const { data: tours, error: toursError } = await (serviceClient as any)
       .from('tours')
       .select(`
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
         category
       `)
       .eq('status', 'active')
-      .or(`end_date.is.null,end_date.gte.${now}`)
+      .or(`end_date.is.null,end_date.gte.${currentDate}`)
       .order('start_date', { ascending: true })
       .limit(30);
 
