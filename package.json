@@ -32,6 +32,8 @@
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-hot-toast": "^2.6.0",
+    "speakeasy": "^2.0.0",
+    "qrcode": "^1.5.3",
     "zustand": "^5.0.8"
   },
   "devDependencies": {
@@ -39,8 +41,10 @@
     "@types/html2canvas": "^0.5.35",
     "@types/node": "^20",
     "@types/nodemailer": "^7.0.3",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/speakeasy": "^2.0.9",
     "baseline-browser-mapping": "^2.9.19",
     "eslint": "^9",
     "eslint-config-next": "16.0.0",

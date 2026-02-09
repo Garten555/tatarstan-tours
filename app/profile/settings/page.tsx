@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { escapeHtml } from '@/lib/utils/sanitize';
+import TwoFactorSettings from '@/components/auth/TwoFactorSettings';
 
 export default function ProfileSettingsPage() {
   const router = useRouter();
@@ -881,6 +882,11 @@ export default function ProfileSettingsPage() {
                 </div>
               </div>
             )}
+          </div>
+
+          {/* Двухфакторная аутентификация */}
+          <div className="border-t border-gray-200 pt-6">
+            <TwoFactorSettings />
           </div>
 
           {/* Кнопка сохранения */}
