@@ -59,7 +59,7 @@ const nextConfig: NextConfig = {
           "font-src 'self' data: https:",
           "style-src 'self' 'unsafe-inline' https:",
           "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
-          "connect-src 'self' https: wss: wss://*.supabase.co wss://gvgdwqlklryktqaevmnz.supabase.co",
+          "connect-src 'self' https: wss: wss://*.supabase.co wss://gvgdwqlklryktqaevmnz.supabase.co https://*.supabase.co https://gvgdwqlklryktqaevmnz.supabase.co",
           "media-src 'self' https: blob:",
         ].join('; '),
       },
