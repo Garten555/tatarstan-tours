@@ -162,19 +162,20 @@ export async function POST(request: NextRequest) {
     console.log('[Pusher Trigger] Message created successfully:', newMessage.id);
 
     // Отправляем событие через Pusher (публичный канал)
-    console.log('[Pusher Trigger] Triggering Pusher event...');
-    try {
-      await pusher.trigger(
-        `tour-room-${roomId}`,
-        'new-message',
-        {
+    // Если Pusher не сконфигурирован, просто пропускаем real-time без ошибки
+    if (pusher) {
+      console.log('[Pusher Trigger] Triggering Pusher event...');
+      try {
+        await pusher.trigger(`tour-room-${roomId}`, 'new-message', {
           message: newMessage,
-        }
-      );
-      console.log('[Pusher Trigger] Pusher event triggered successfully');
-    } catch (pusherError) {
-      console.error('[Pusher Trigger] Pusher error:', pusherError);
-      // Не прерываем выполнение, сообщение уже создано в БД
+        });
+        console.log('[Pusher Trigger] Pusher event triggered successfully');
+      } catch (pusherError) {
+        console.error('[Pusher Trigger] Pusher error:', pusherError);
+        // Не прерываем выполнение, сообщение уже создано в БД
+      }
+    } else {
+      console.warn('[Pusher Trigger] pusher is not configured, skipping real-time event');
     }
 
     return NextResponse.json({ success: true, message: newMessage });

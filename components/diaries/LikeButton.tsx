@@ -72,3 +72,4 @@ export function LikeButton({ diaryId, isLiked: initialIsLiked }: LikeButtonProps
 
 
 
+
