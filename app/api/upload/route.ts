@@ -149,11 +149,40 @@ export async function POST(request: NextRequest) {
       path: s3Path,
       fileName: uniqueFileName,
     });
-  } catch (error) {
-    console.error('Ошибка загрузки файла:', error);
+  } catch (error: any) {
+    console.error('❌ Ошибка загрузки файла:', error);
+    
+    // Детальное логирование ошибки
+    if (error.message) {
+      console.error('   Сообщение:', error.message);
+    }
+    if (error.code) {
+      console.error('   Код ошибки:', error.code);
+    }
+    if (error.stack) {
+      console.error('   Stack:', error.stack);
+    }
+    
+    // Определяем тип ошибки для более понятного сообщения
+    let errorMessage = 'Не удалось загрузить файл';
+    let statusCode = 500;
+    
+    if (error.message?.includes('S3') || error.message?.includes('S3_ENDPOINT') || error.message?.includes('S3_ACCESS_KEY')) {
+      errorMessage = 'Ошибка конфигурации хранилища файлов. Проверьте настройки S3 на сервере.';
+      statusCode = 500;
+    } else if (error.message?.includes('credentials') || error.message?.includes('access')) {
+      errorMessage = 'Ошибка доступа к хранилищу файлов. Проверьте права доступа.';
+      statusCode = 500;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
     return NextResponse.json(
-      { error: 'Не удалось загрузить файл' },
-      { status: 500 }
+      { 
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      },
+      { status: statusCode }
     );
   }
 }

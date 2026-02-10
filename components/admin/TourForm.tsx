@@ -414,15 +414,32 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
         if (!uploadResponse.ok) {
           const contentType = uploadResponse.headers.get('content-type');
           let errorMessage = 'Не удалось загрузить обложку';
+          let errorDetails = '';
+          
           if (contentType && contentType.includes('application/json')) {
             try {
               const uploadError = await uploadResponse.json();
               errorMessage = uploadError.error || errorMessage;
+              errorDetails = uploadError.details || '';
             } catch {
               // Если не удалось распарсить JSON, используем дефолтное сообщение
             }
+          } else {
+            // Пытаемся получить текст ошибки
+            try {
+              const errorText = await uploadResponse.text();
+              if (errorText) {
+                errorDetails = errorText;
+              }
+            } catch {
+              // Игнорируем ошибку чтения текста
+            }
           }
-          throw new Error(errorMessage);
+          
+          const fullErrorMessage = errorDetails 
+            ? `${errorMessage}. ${errorDetails}` 
+            : errorMessage;
+          throw new Error(fullErrorMessage);
         }
         
         const uploadData = await safeJsonParse(uploadResponse);
@@ -582,9 +599,25 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
       router.push('/admin/tours');
       router.refresh();
     } catch (error: any) {
-      console.error('Error saving tour:', error);
+      console.error('❌ Error saving tour:', error);
+      
+      // Детальное логирование
+      if (error.message) {
+        console.error('   Сообщение:', error.message);
+      }
+      if (error.stack) {
+        console.error('   Stack:', error.stack);
+      }
+      
       const errorMessage = error.message || 'Не удалось сохранить тур';
-      alert(errorMessage);
+      
+      // Показываем более понятное сообщение пользователю
+      if (errorMessage.includes('S3') || errorMessage.includes('хранилища')) {
+        alert(`Ошибка загрузки файла: ${errorMessage}\n\nПроверьте настройки хранилища файлов на сервере.`);
+      } else {
+        alert(errorMessage);
+      }
+      
       setLoadingStatus('');
     } finally {
       setLoading(false);

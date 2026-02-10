@@ -43,9 +43,37 @@ export async function uploadFileToS3(
     // Возвращаем публичный URL файла
     const publicUrl = `${S3_CONFIG.publicUrl}/${S3_CONFIG.bucket}/${path}`;
     return publicUrl;
-  } catch (error) {
-    console.error('Ошибка загрузки файла в S3:', error);
-    throw new Error('Не удалось загрузить файл в S3');
+  } catch (error: any) {
+    console.error('❌ Ошибка загрузки файла в S3:', error);
+    
+    // Детальное логирование
+    if (error.name) {
+      console.error('   Имя ошибки:', error.name);
+    }
+    if (error.message) {
+      console.error('   Сообщение:', error.message);
+    }
+    if (error.code) {
+      console.error('   Код ошибки:', error.code);
+    }
+    if (error.$metadata) {
+      console.error('   Метаданные:', error.$metadata);
+    }
+    
+    // Более детальное сообщение об ошибке
+    let errorMessage = 'Не удалось загрузить файл в S3';
+    
+    if (error.name === 'CredentialsProviderError' || error.message?.includes('credentials')) {
+      errorMessage = 'Ошибка аутентификации S3. Проверьте S3_ACCESS_KEY и S3_SECRET_KEY.';
+    } else if (error.name === 'NoSuchBucket' || error.message?.includes('bucket')) {
+      errorMessage = 'Бакет S3 не найден. Проверьте S3_BUCKET.';
+    } else if (error.name === 'InvalidAccessKeyId' || error.message?.includes('AccessKeyId')) {
+      errorMessage = 'Неверный ключ доступа S3. Проверьте S3_ACCESS_KEY.';
+    } else if (error.message) {
+      errorMessage = `Ошибка S3: ${error.message}`;
+    }
+    
+    throw new Error(errorMessage);
   }
 }
 
