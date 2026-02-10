@@ -416,28 +416,31 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
           let errorMessage = 'Не удалось загрузить обложку';
           let errorDetails = '';
           
-          if (contentType && contentType.includes('application/json')) {
-            try {
+          try {
+            if (contentType && contentType.includes('application/json')) {
               const uploadError = await uploadResponse.json();
               errorMessage = uploadError.error || errorMessage;
               errorDetails = uploadError.details || '';
-            } catch {
-              // Если не удалось распарсить JSON, используем дефолтное сообщение
-            }
-          } else {
-            // Пытаемся получить текст ошибки
-            try {
+            } else {
+              // Пытаемся получить текст ошибки
               const errorText = await uploadResponse.text();
               if (errorText) {
-                errorDetails = errorText;
+                try {
+                  const parsedError = JSON.parse(errorText);
+                  errorMessage = parsedError.error || errorMessage;
+                  errorDetails = parsedError.details || '';
+                } catch {
+                  errorDetails = errorText;
+                }
               }
-            } catch {
-              // Игнорируем ошибку чтения текста
             }
+          } catch (parseError) {
+            console.error('Ошибка парсинга ответа:', parseError);
+            // Используем дефолтное сообщение
           }
           
           const fullErrorMessage = errorDetails 
-            ? `${errorMessage}. ${errorDetails}` 
+            ? `${errorMessage}\n\nДетали: ${errorDetails}` 
             : errorMessage;
           throw new Error(fullErrorMessage);
         }
