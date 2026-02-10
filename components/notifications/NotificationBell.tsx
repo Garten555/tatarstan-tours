@@ -19,8 +19,33 @@ export default function NotificationBell() {
 
   const loadNotifications = async () => {
     try {
-      const response = await fetch('/api/notifications');
+      // Сначала проверяем, авторизован ли пользователь
+      const sessionResponse = await fetch('/api/auth/check-session', { cache: 'no-store' });
+      if (!sessionResponse.ok) {
+        setNotifications([]);
+        setUnreadCount(0);
+        setLoading(false);
+        return;
+      }
+      
+      const sessionData = await sessionResponse.json();
+      if (!sessionData.isAuthenticated) {
+        setNotifications([]);
+        setUnreadCount(0);
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch('/api/notifications', { cache: 'no-store' });
       if (!response.ok) {
+        // Если 401 - пользователь не авторизован, просто очищаем без ошибки
+        if (response.status === 401) {
+          setNotifications([]);
+          setUnreadCount(0);
+          setLoading(false);
+          return;
+        }
+        // Для других ошибок логируем
         console.error('Ошибка загрузки уведомлений:', response.status, response.statusText);
         setNotifications([]);
         setUnreadCount(0);
@@ -33,7 +58,7 @@ export default function NotificationBell() {
         setUnreadCount(data.notifications?.length || 0);
       }
     } catch (error) {
-      console.error('Ошибка загрузки уведомлений:', error);
+      // Игнорируем ошибки сети, просто очищаем
       setNotifications([]);
       setUnreadCount(0);
     } finally {
