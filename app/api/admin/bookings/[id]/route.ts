@@ -168,7 +168,7 @@ export async function PATCH(
           });
 
           const { sendEmail, getBookingCancellationEmail } = await import('@/lib/email/send-email');
-          await sendEmail({
+          const emailResult = await sendEmail({
             to: userProfile.email,
             subject: `Бронирование отменено: ${tourData.title}`,
             html: getBookingCancellationEmail(
@@ -179,6 +179,9 @@ export async function PATCH(
               parseFloat(oldBooking.total_price.toString())
             ),
           });
+          if (!emailResult.success) {
+            console.warn('⚠️ Failed to send booking cancellation email:', emailResult.error);
+          }
         }
       } catch (emailError) {
         // Не прерываем выполнение если email не отправился

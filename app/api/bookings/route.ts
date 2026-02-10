@@ -394,7 +394,7 @@ export async function POST(request: NextRequest) {
         });
 
         const { sendEmail, getBookingConfirmationEmail } = await import('@/lib/email/send-email');
-        await sendEmail({
+        const emailResult = await sendEmail({
           to: userProfile.email,
           subject: `Бронирование подтверждено: ${tourData.title}`,
           html: getBookingConfirmationEmail(
@@ -405,6 +405,9 @@ export async function POST(request: NextRequest) {
             parseFloat(total_price.toString())
           ),
         });
+        if (!emailResult.success) {
+          console.warn('⚠️ Failed to send booking confirmation email:', emailResult.error);
+        }
       }
     } catch (emailError) {
       // Не прерываем выполнение если email не отправился

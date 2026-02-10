@@ -117,22 +117,24 @@ export async function PATCH(
 
           if (status === 'approved') {
             const emailHtml = getAppealApprovedEmail(userName, reviewComment);
-            await sendEmail({
+            const emailResult = await sendEmail({
               to: userEmail,
               subject: 'Апелляция одобрена - Туры по Татарстану',
               html: emailHtml,
-            }).catch((error) => {
-              console.error('Ошибка отправки email об одобрении апелляции:', error);
             });
+            if (!emailResult.success) {
+              console.error('Ошибка отправки email об одобрении апелляции:', emailResult.error);
+            }
           } else if (status === 'rejected') {
             const emailHtml = getAppealRejectedEmail(userName, reviewComment);
-            await sendEmail({
+            const emailResult = await sendEmail({
               to: userEmail,
               subject: 'Апелляция отклонена - Туры по Татарстану',
               html: emailHtml,
-            }).catch((error) => {
-              console.error('Ошибка отправки email об отклонении апелляции:', error);
             });
+            if (!emailResult.success) {
+              console.error('Ошибка отправки email об отклонении апелляции:', emailResult.error);
+            }
           }
         }
       } catch (error) {

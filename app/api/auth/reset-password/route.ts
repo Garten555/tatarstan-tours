@@ -95,18 +95,41 @@ export async function POST(request: NextRequest) {
     const emailHtml = getPasswordResetCodeEmail(userName, code);
     console.log(`📧 Sending reset code email to ${email.trim()}`);
     
-    const emailSent = await sendEmail({
+    const emailResult = await sendEmail({
       to: email.trim(),
       subject: 'Код восстановления пароля - Туры по Татарстану',
       html: emailHtml,
     });
 
-    if (!emailSent) {
+    if (!emailResult.success) {
       console.error('❌ Failed to send reset code email to', email.trim());
+      
+      // Определяем тип ошибки для более понятного сообщения
+      const responseCode = emailResult.error?.responseCode;
+      const response = emailResult.error?.response || '';
+      
+      let errorMessage = 'Не удалось отправить письмо. ';
+      
+      // Специфичные ошибки от почтовых серверов
+      if (responseCode === 554 || response.includes('Spam message rejected')) {
+        errorMessage += 'Письмо было отклонено почтовым сервером как спам. ';
+        errorMessage += 'Пожалуйста, проверьте папку "Спам" или свяжитесь с поддержкой. ';
+        errorMessage += 'Также убедитесь, что ваш email-адрес не заблокирован.';
+      } else if (responseCode === 550 || response.includes('rejected')) {
+        errorMessage += 'Письмо было отклонено почтовым сервером получателя. ';
+        errorMessage += 'Проверьте правильность email-адреса или попробуйте позже.';
+      } else if (responseCode === 553 || response.includes('not allowed')) {
+        errorMessage += 'Отправка на этот адрес не разрешена. ';
+        errorMessage += 'Проверьте настройки email на сервере.';
+      } else {
+        errorMessage += 'Пожалуйста, проверьте настройки email на сервере или попробуйте позже.';
+      }
+      
       // Возвращаем ошибку, чтобы пользователь знал о проблеме
       return NextResponse.json(
         { 
-          error: 'Не удалось отправить письмо. Пожалуйста, проверьте настройки email на сервере или попробуйте позже.' 
+          error: errorMessage,
+          errorDetails: process.env.NODE_ENV === 'development' ? emailResult.error : undefined,
         },
         { status: 500 }
       );

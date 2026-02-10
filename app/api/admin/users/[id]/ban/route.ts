@@ -122,14 +122,15 @@ export async function PATCH(
         updateData.ban_until || null
       );
       
-      await sendEmail({
+      const emailResult = await sendEmail({
         to: userEmail,
         subject: 'Ваш аккаунт заблокирован - Туры по Татарстану',
         html: emailHtml,
-      }).catch((error) => {
-        console.error('Ошибка отправки email о бане:', error);
-        // Не прерываем выполнение, если email не отправился
       });
+      if (!emailResult.success) {
+        console.error('Ошибка отправки email о бане:', emailResult.error);
+        // Не прерываем выполнение, если email не отправился
+      }
     }
 
     return NextResponse.json({ success: true, profile: updated });

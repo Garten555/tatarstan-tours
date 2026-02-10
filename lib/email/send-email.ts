@@ -8,6 +8,16 @@ interface EmailOptions {
   text?: string;
 }
 
+export interface EmailSendResult {
+  success: boolean;
+  error?: {
+    code?: string;
+    response?: string;
+    responseCode?: number;
+    message?: string;
+  };
+}
+
 // Создаем transporter для отправки email
 function createTransporter() {
   const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com';
@@ -42,13 +52,18 @@ function createTransporter() {
   });
 }
 
-export async function sendEmail(options: EmailOptions): Promise<boolean> {
+export async function sendEmail(options: EmailOptions): Promise<EmailSendResult> {
   try {
     const transporter = createTransporter();
     
     if (!transporter) {
       console.error('❌ Email transporter not available. Cannot send email.');
-      return false;
+      return {
+        success: false,
+        error: {
+          message: 'Email transporter not configured',
+        },
+      };
     }
 
     const smtpFrom = process.env.SMTP_FROM || process.env.EMAIL_FROM || process.env.SMTP_USER || process.env.EMAIL_USER;
@@ -80,7 +95,7 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
         'X-Mailer': 'Tatarstan Tours',
         'X-Priority': '1',
         'Importance': 'high',
-        'Precedence': 'bulk',
+        // Убрали 'Precedence': 'bulk' - может вызывать подозрения у спам-фильтров
         'List-Unsubscribe': '<mailto:support@tatarstan-tours.ru>',
         'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
       },
@@ -91,22 +106,27 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
 
     console.log(`✅ Email sent successfully to ${options.to}`);
     console.log(`📬 Message ID: ${result.messageId}`);
-    return true;
+    return { success: true };
   } catch (error: any) {
     console.error('❌ Error sending email:', error);
     
     // Детальная информация об ошибке
+    const errorDetails: EmailSendResult['error'] = {};
+    
     if (error.code) {
       console.error(`   Error code: ${error.code}`);
+      errorDetails.code = error.code;
     }
     if (error.response) {
       console.error(`   SMTP response: ${error.response}`);
+      errorDetails.response = error.response;
     }
     if (error.responseCode) {
       console.error(`   Response code: ${error.responseCode}`);
+      errorDetails.responseCode = error.responseCode;
     }
-    if (error.command) {
-      console.error(`   Failed command: ${error.command}`);
+    if (error.message) {
+      errorDetails.message = error.message;
     }
     
     // Логируем полную ошибку в dev режиме
@@ -114,7 +134,10 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
       console.error('   Full error:', JSON.stringify(error, null, 2));
     }
     
-    return false;
+    return {
+      success: false,
+      error: errorDetails,
+    };
   }
 }
 

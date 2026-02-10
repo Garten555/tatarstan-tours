@@ -71,16 +71,26 @@ export async function POST(request: NextRequest) {
     const emailHtml = getEmailVerificationCodeEmail(userName, code);
     console.log(`📧 Sending verification code email to ${email.trim()}`);
     
-    const emailSent = await sendEmail({
+    const emailResult = await sendEmail({
       to: email.trim(),
       subject: 'Код подтверждения email - Туры по Татарстану',
       html: emailHtml,
     });
 
-    if (!emailSent) {
+    if (!emailResult.success) {
       console.error('❌ Failed to send verification code email to', email.trim());
+      const responseCode = emailResult.error?.responseCode;
+      const response = emailResult.error?.response || '';
+      
+      let errorMessage = 'Не удалось отправить письмо. ';
+      if (responseCode === 554 || response.includes('Spam message rejected')) {
+        errorMessage += 'Письмо было отклонено как спам. Проверьте папку "Спам" или свяжитесь с поддержкой.';
+      } else {
+        errorMessage += 'Пожалуйста, проверьте настройки email на сервере или попробуйте позже.';
+      }
+      
       return NextResponse.json(
-        { error: 'Не удалось отправить письмо. Пожалуйста, проверьте настройки email на сервере или попробуйте позже.' },
+        { error: errorMessage },
         { status: 500 }
       );
     }
