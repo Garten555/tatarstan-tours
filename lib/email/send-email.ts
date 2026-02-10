@@ -1,7 +1,9 @@
 // Утилита для отправки email уведомлений
 import nodemailer from 'nodemailer';
+import { sendEmailViaSendGrid } from './sendgrid';
+import { sendEmailViaResend } from './resend';
 
-interface EmailOptions {
+export interface EmailOptions {
   to: string;
   subject: string;
   html: string;
@@ -53,6 +55,20 @@ function createTransporter() {
 }
 
 export async function sendEmail(options: EmailOptions): Promise<EmailSendResult> {
+  // Проверяем, какой провайдер использовать
+  const emailProvider = process.env.EMAIL_PROVIDER?.toLowerCase() || 'smtp';
+  
+  // Используем SendGrid, если указан
+  if (emailProvider === 'sendgrid') {
+    return await sendEmailViaSendGrid(options);
+  }
+  
+  // Используем Resend, если указан
+  if (emailProvider === 'resend') {
+    return await sendEmailViaResend(options);
+  }
+  
+  // По умолчанию используем SMTP (nodemailer)
   try {
     const transporter = createTransporter();
     

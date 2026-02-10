@@ -237,17 +237,45 @@ pm2 save
    OPENROUTER_API_KEY=your-key-here
    ```
 
-### Email (Nodemailer)
-Для Gmail:
+### Email
+
+#### Вариант 1: SendGrid (Рекомендуется) ⭐
+Бесплатно: 100 писем/день
+1. Зарегистрируйтесь на https://sendgrid.com
+2. Создайте API ключ
+3. Добавьте в `.env.local`:
+   ```
+   EMAIL_PROVIDER=sendgrid
+   SENDGRID_API_KEY=SG.xxxxxxxxxxxxx
+   SENDGRID_FROM_EMAIL=noreply@yourdomain.com
+   SENDGRID_FROM_NAME=Туры по Татарстану
+   ```
+
+#### Вариант 2: Resend
+Бесплатно: 3,000 писем/месяц
+1. Зарегистрируйтесь на https://resend.com
+2. Создайте API ключ
+3. Добавьте в `.env.local`:
+   ```
+   EMAIL_PROVIDER=resend
+   RESEND_API_KEY=re_xxxxxxxxxxxxx
+   RESEND_FROM_EMAIL=noreply@yourdomain.com
+   ```
+
+#### Вариант 3: SMTP (Gmail/другой)
 1. Включите "2-Step Verification"
 2. Создайте "App Password"
 3. Добавьте в `.env.local`:
    ```
-   EMAIL_HOST=smtp.gmail.com
-   EMAIL_PORT=587
-   EMAIL_USER=your-email@gmail.com
-   EMAIL_PASSWORD=your-app-password
+   EMAIL_PROVIDER=smtp
+   SMTP_HOST=smtp.gmail.com
+   SMTP_PORT=587
+   SMTP_USER=your-email@gmail.com
+   SMTP_PASSWORD=your-app-password
+   SMTP_FROM=noreply@yourdomain.com
    ```
+
+📖 Подробная инструкция: [docs/email-setup.md](docs/email-setup.md)
 
 ## 🐛 Известные проблемы
 
