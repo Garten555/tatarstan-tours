@@ -15,7 +15,12 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceClient();
 
     // ВАЖНО: Сначала автоматически очищаем истекшие коды
-    await supabase.rpc('auto_cleanup_expired_codes');
+    try {
+      await supabase.rpc('auto_cleanup_expired_codes');
+    } catch (rpcError) {
+      // Игнорируем ошибку, если функция не существует
+      console.warn('RPC auto_cleanup_expired_codes not available:', rpcError);
+    }
 
     // Ищем код в БД
     const { data: resetCode, error: dbError } = await supabase

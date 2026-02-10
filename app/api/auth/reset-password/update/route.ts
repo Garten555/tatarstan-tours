@@ -22,7 +22,14 @@ export async function POST(request: NextRequest) {
     const supabase = createServiceClient();
 
     // Находим пользователя по email
-    const { data: userData } = await supabase.auth.admin.listUsers();
+    const { data: userData, error: listError } = await supabase.auth.admin.listUsers();
+    if (listError) {
+      console.error('Error listing users:', listError);
+      return NextResponse.json(
+        { error: 'Ошибка при поиске пользователя' },
+        { status: 500 }
+      );
+    }
     const user = userData?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase().trim());
 
     if (!user) {
@@ -64,19 +71,29 @@ export async function POST(request: NextRequest) {
     }
 
     // Генерируем magic link для автоматического входа
-    const { data: magicLinkData, error: magicLinkError } = await supabase.auth.admin.generateLink({
-      type: 'magiclink',
-      email: user.email!,
-      options: {
-        redirectTo: `${siteUrl}/profile`,
-      },
-    });
+    let loginLink = null;
+    try {
+      const { data: magicLinkData, error: magicLinkError } = await supabase.auth.admin.generateLink({
+        type: 'magiclink',
+        email: user.email!,
+        options: {
+          redirectTo: `${siteUrl}/profile`,
+        },
+      });
+      
+      if (!magicLinkError && magicLinkData) {
+        loginLink = magicLinkData?.properties?.action_link || null;
+      }
+    } catch (linkError) {
+      console.warn('Error generating magic link:', linkError);
+      // Продолжаем без magic link
+    }
 
     return NextResponse.json(
       { 
         success: true,
         message: 'Пароль успешно обновлён',
-        loginLink: magicLinkData?.properties?.action_link || null
+        loginLink
       },
       { status: 200 }
     );

@@ -25,10 +25,23 @@ export async function POST(request: NextRequest) {
     let user;
     try {
       // Получаем пользователя по email
-      const { data: userList } = await supabase.auth.admin.listUsers();
+      const { data: userList, error: listError } = await supabase.auth.admin.listUsers();
+      if (listError) {
+        console.error('Error listing users:', listError);
+        // Возвращаем успех для безопасности
+        return NextResponse.json(
+          { success: true, message: 'Если email существует, письмо будет отправлено' },
+          { status: 200 }
+        );
+      }
       user = userList?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase().trim());
     } catch (error) {
       console.error('Error checking user:', error);
+      // Возвращаем успех для безопасности
+      return NextResponse.json(
+        { success: true, message: 'Если email существует, письмо будет отправлено' },
+        { status: 200 }
+      );
     }
     
     // Не раскрываем информацию о существовании email
@@ -40,7 +53,12 @@ export async function POST(request: NextRequest) {
     }
 
     // ВАЖНО: Сначала автоматически очищаем истекшие коды
-    await supabase.rpc('auto_cleanup_expired_codes');
+    try {
+      await supabase.rpc('auto_cleanup_expired_codes');
+    } catch (rpcError) {
+      // Игнорируем ошибку, если функция не существует
+      console.warn('RPC auto_cleanup_expired_codes not available:', rpcError);
+    }
 
     // Генерируем 6-значный код
     const code = generateResetCode();
