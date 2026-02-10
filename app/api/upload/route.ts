@@ -17,6 +17,21 @@ const ALLOWED_TYPES = {
 
 export async function POST(request: NextRequest) {
   try {
+    // Ранняя проверка конфигурации S3
+    const requiredS3Vars = ['S3_ENDPOINT', 'S3_ACCESS_KEY', 'S3_SECRET_KEY', 'S3_BUCKET', 'S3_REGION'];
+    const missingVars = requiredS3Vars.filter(varName => !process.env[varName]);
+    
+    if (missingVars.length > 0) {
+      console.error('❌ Отсутствуют переменные окружения S3:', missingVars.join(', '));
+      return NextResponse.json(
+        { 
+          error: `Ошибка конфигурации хранилища файлов. Отсутствуют переменные окружения: ${missingVars.join(', ')}`,
+          details: 'Проверьте настройки S3 на сервере',
+        },
+        { status: 500 }
+      );
+    }
+    
     // Проверяем аутентификацию пользователя
     const supabase = await createClient();
     const serviceClient = await createServiceClient();
@@ -109,7 +124,28 @@ export async function POST(request: NextRequest) {
       : `${folder}/${uniqueFileName}`;
 
     // Загружаем файл в S3
-    const fileUrl = await uploadFileToS3(file, s3Path);
+    let fileUrl: string;
+    try {
+      console.log(`📤 Загрузка файла в S3: ${s3Path} (${(file.size / 1024 / 1024).toFixed(2)} MB)`);
+      fileUrl = await uploadFileToS3(file, s3Path);
+      console.log(`✅ Файл успешно загружен: ${fileUrl}`);
+    } catch (s3Error: any) {
+      console.error('❌ Ошибка загрузки в S3:', s3Error);
+      
+      // Если это ошибка конфигурации, возвращаем понятное сообщение
+      if (s3Error.message?.includes('не задан') || s3Error.message?.includes('S3_')) {
+        return NextResponse.json(
+          { 
+            error: 'Ошибка конфигурации хранилища файлов',
+            details: s3Error.message || 'Проверьте переменные окружения S3 на сервере',
+          },
+          { status: 500 }
+        );
+      }
+      
+      // Пробрасываем ошибку дальше для общей обработки
+      throw s3Error;
+    }
 
     // Если указан tourId и mediaType - сохраняем в tour_media
     if (tourId && mediaType) {
