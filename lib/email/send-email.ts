@@ -57,12 +57,36 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
     console.log(`📧 From: ${smtpFrom}`);
     console.log(`📝 Subject: ${options.subject}`);
 
+    // Улучшенная текстовая версия (удаляем HTML теги и форматируем)
+    const plainText = options.text || options.html
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\n\s*\n\s*\n/g, '\n\n')
+      .trim();
+
     const result = await transporter.sendMail({
       from: smtpFrom,
       to: options.to,
       subject: options.subject,
       html: options.html,
-      text: options.text || options.html.replace(/<[^>]*>/g, ''),
+      text: plainText,
+      headers: {
+        'X-Mailer': 'Tatarstan Tours',
+        'X-Priority': '1',
+        'Importance': 'high',
+        'Precedence': 'bulk',
+        'List-Unsubscribe': '<mailto:support@tatarstan-tours.ru>',
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      },
+      // Улучшаем совместимость с почтовыми серверами
+      date: new Date(),
+      messageId: undefined, // Позволяем nodemailer сгенерировать messageId
     });
 
     console.log(`✅ Email sent successfully to ${options.to}`);
@@ -245,18 +269,31 @@ export function getPasswordResetEmail(userName: string, actionLink: string): str
 export function getPasswordResetCodeEmail(userName: string, code: string): string {
   return `
     <!DOCTYPE html>
-    <html>
+    <html lang="ru">
     <head>
       <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+      <title>Код восстановления пароля - Туры по Татарстану</title>
       <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-        .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
-        .code-box { background: white; padding: 30px; border-radius: 8px; margin: 20px 0; border: 2px solid #10b981; text-align: center; }
-        .code { font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #10b981; font-family: 'Courier New', monospace; }
-        .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 12px; }
-        .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; margin: 20px 0; border-radius: 4px; font-size: 12px; color: #92400e; }
+        body { font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; line-height: 1.6; color: #333333; margin: 0; padding: 0; background-color: #f5f5f5; }
+        .container { max-width: 600px; margin: 20px auto; padding: 0; background-color: #ffffff; }
+        .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: #ffffff; padding: 30px; text-align: center; }
+        .header h1 { margin: 0; font-size: 24px; font-weight: 600; }
+        .content { background: #ffffff; padding: 30px; }
+        .greeting { font-size: 16px; color: #333333; margin-bottom: 20px; }
+        .intro { font-size: 15px; color: #555555; margin-bottom: 25px; }
+        .code-box { background: #f9fafb; padding: 30px; border-radius: 8px; margin: 25px 0; border: 2px solid #10b981; text-align: center; }
+        .code-label { margin: 0 0 15px 0; color: #6b7280; font-size: 14px; font-weight: 500; }
+        .code { font-size: 36px; font-weight: bold; letter-spacing: 10px; color: #10b981; font-family: 'Courier New', 'Courier', monospace; margin: 10px 0; }
+        .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 25px 0; border-radius: 4px; font-size: 13px; color: #92400e; }
+        .warning strong { display: block; margin-bottom: 5px; }
+        .instructions { font-size: 14px; color: #555555; margin: 20px 0; line-height: 1.8; }
+        .instructions ol { margin: 10px 0; padding-left: 20px; }
+        .instructions li { margin: 8px 0; }
+        .security-note { font-size: 12px; color: #6b7280; margin-top: 25px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
+        .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 12px; line-height: 1.6; }
+        .footer p { margin: 5px 0; }
       </style>
     </head>
     <body>
@@ -265,20 +302,35 @@ export function getPasswordResetCodeEmail(userName: string, code: string): strin
           <h1>🔐 Код восстановления пароля</h1>
         </div>
         <div class="content">
-          <p>Здравствуйте, ${userName || 'пользователь'}!</p>
-          <p>Вы запросили сброс пароля. Используйте код ниже для восстановления доступа:</p>
+          <div class="greeting">
+            Здравствуйте, ${userName || 'пользователь'}!
+          </div>
+          <div class="intro">
+            Вы запросили сброс пароля для вашего аккаунта на сайте "Туры по Татарстану". Для завершения процесса восстановления доступа используйте код, указанный ниже.
+          </div>
           <div class="code-box">
-            <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 14px;">Ваш код восстановления:</p>
+            <p class="code-label">Ваш код восстановления:</p>
             <div class="code">${code}</div>
           </div>
           <div class="warning">
-            <strong>⚠️ Важно:</strong> Код действителен в течение 15 минут. Не передавайте его никому!
+            <strong>⚠️ Важная информация:</strong>
+            Код действителен в течение 15 минут с момента получения письма. После истечения срока действия вам потребуется запросить новый код. Никому не передавайте этот код, даже сотрудникам службы поддержки.
           </div>
-          <p style="font-size: 12px; color: #6b7280; margin-top: 20px;">
-            Если вы не запрашивали сброс пароля, просто проигнорируйте это письмо.
-          </p>
+          <div class="instructions">
+            <strong>Как использовать код:</strong>
+            <ol>
+              <li>Вернитесь на страницу восстановления пароля</li>
+              <li>Введите полученный код в соответствующее поле</li>
+              <li>После подтверждения кода задайте новый пароль</li>
+            </ol>
+          </div>
+          <div class="security-note">
+            <strong>Безопасность:</strong> Если вы не запрашивали сброс пароля, просто проигнорируйте это письмо. Ваш аккаунт остается в безопасности. Если вы получаете подобные письма регулярно без вашего запроса, пожалуйста, свяжитесь с нашей службой поддержки.
+          </div>
           <div class="footer">
-            <p>С уважением,<br>Команда туров по Татарстану</p>
+            <p><strong>Туры по Татарстану</strong></p>
+            <p>Это автоматическое письмо. Пожалуйста, не отвечайте на него.</p>
+            <p>Если у вас возникли вопросы, свяжитесь с нами через форму обратной связи на сайте.</p>
           </div>
         </div>
       </div>
