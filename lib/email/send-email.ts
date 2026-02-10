@@ -2,6 +2,7 @@
 import nodemailer from 'nodemailer';
 import { sendEmailViaSendGrid } from './sendgrid';
 import { sendEmailViaResend } from './resend';
+import { sendEmailViaSendPulse } from './sendpulse';
 
 export interface EmailOptions {
   to: string;
@@ -57,6 +58,11 @@ function createTransporter() {
 export async function sendEmail(options: EmailOptions): Promise<EmailSendResult> {
   // Проверяем, какой провайдер использовать
   const emailProvider = process.env.EMAIL_PROVIDER?.toLowerCase() || 'smtp';
+  
+  // Используем SendPulse, если указан (НЕ требует номер телефона!)
+  if (emailProvider === 'sendpulse') {
+    return await sendEmailViaSendPulse(options);
+  }
   
   // Используем SendGrid, если указан
   if (emailProvider === 'sendgrid') {

@@ -239,7 +239,20 @@ pm2 save
 
 ### Email
 
-#### Вариант 1: SendGrid (Рекомендуется) ⭐
+#### Вариант 1: SendPulse (БЕЗ номера телефона!) ⭐⭐⭐
+Бесплатно: 15,000 писем/месяц
+1. Зарегистрируйтесь на https://sendpulse.com (только email!)
+2. Создайте API ключ в Settings → API
+3. Добавьте в `.env.local`:
+   ```
+   EMAIL_PROVIDER=sendpulse
+   SENDPULSE_API_USER_ID=your_user_id
+   SENDPULSE_API_SECRET=your_secret
+   SENDPULSE_FROM_EMAIL=noreply@yourdomain.com
+   SENDPULSE_FROM_NAME=Туры по Татарстану
+   ```
+
+#### Вариант 2: SendGrid (требует телефон)
 Бесплатно: 100 писем/день
 1. Зарегистрируйтесь на https://sendgrid.com
 2. Создайте API ключ
