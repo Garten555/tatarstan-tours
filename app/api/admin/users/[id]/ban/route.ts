@@ -65,7 +65,7 @@ export async function PATCH(
     const durationDays = Number(body?.duration_days || 0);
     const banUntilInput = typeof body?.ban_until === 'string' ? body.ban_until : null;
 
-    let updateData: Record<string, any> = {};
+    let updateData: Record<string, string | boolean | null> = {};
     if (action === 'ban') {
       let banUntil: string | null = null;
       if (!permanent) {
@@ -99,7 +99,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Недопустимое действие' }, { status: 400 });
     }
 
-    const { data: updated, error } = await (serviceClient as any)
+    const { data: updated, error } = await serviceClient
       .from('profiles')
       .update(updateData)
       .eq('id', id)
@@ -119,7 +119,7 @@ export async function PATCH(
       const emailHtml = getBanNotificationEmail(
         userName,
         reason,
-        updateData.ban_until || null
+        (typeof updateData.ban_until === 'string' ? updateData.ban_until : null)
       );
       
       await sendEmail({

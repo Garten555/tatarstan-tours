@@ -2,12 +2,25 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import AuthForm from '@/components/auth/AuthForm';
 
+export const dynamic = 'force-dynamic';
+
 export const metadata = {
   title: 'Вход и Регистрация | Туры по Татарстану',
   description: 'Войдите в свой аккаунт или создайте новый для бронирования туров',
 };
 
-export default async function AuthPage() {
+interface AuthPageProps {
+  searchParams: Promise<{ redirect?: string }>;
+}
+
+export default async function AuthPage({ searchParams }: AuthPageProps) {
+  const params = await searchParams;
+  const redirectParam = params?.redirect;
+  const safeRedirect =
+    redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//')
+      ? redirectParam
+      : '/';
+
   const supabase = await createClient();
   
   // Проверяем, авторизован ли пользователь
@@ -17,7 +30,7 @@ export default async function AuthPage() {
 
   // Если авторизован - редирект на главную страницу
   if (user) {
-    redirect('/');
+    redirect(safeRedirect);
   }
 
   return (

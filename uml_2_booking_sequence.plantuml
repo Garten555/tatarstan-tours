@@ -1,0 +1,56 @@
+@startuml
+title Диаграмма последовательности: бронирование тура
+
+actor "Пользователь" as User
+participant "Frontend\n(app/booking)" as FE
+participant "API\n/api/bookings" as BookingAPI
+participant "API\n/api/user/cards" as CardsAPI
+database "Supabase\n(tours, bookings,\nbooking_attendees, user_cards)" as DB
+participant "Email Service" as Mail
+participant "API\n/api/notifications" as NotifyAPI
+
+User -> FE : Открывает страницу бронирования
+FE -> BookingAPI : GET данные тура + доступные места
+BookingAPI -> DB : SELECT tour/status/current_participants
+DB --> BookingAPI : Данные тура
+BookingAPI --> FE : Данные для формы
+
+User -> FE : Заполняет форму и участников
+FE -> CardsAPI : GET сохраненные карты пользователя
+CardsAPI -> DB : SELECT user_cards by user_id
+DB --> CardsAPI : Список карт
+CardsAPI --> FE : Карты для выбора
+
+User -> FE : Подтверждает бронирование и оплату
+FE -> BookingAPI : POST /api/bookings\n(tour_id, attendees, card_id, amount)
+BookingAPI -> BookingAPI : Проверка сессии, валидация полей
+
+alt Ошибка авторизации или валидации
+  BookingAPI --> FE : 401/400 + текст ошибки
+else Данные валидны
+  BookingAPI -> DB : Проверка мест и статуса тура
+  DB --> BookingAPI : Места доступны / недоступны
+
+  alt Мест нет или тур недоступен
+    BookingAPI --> FE : 409 + "Недостаточно мест"
+  else Бронирование возможно
+    BookingAPI -> DB : INSERT bookings (paid, confirmed)
+    DB --> BookingAPI : booking_id
+    BookingAPI -> DB : INSERT booking_attendees
+    BookingAPI -> DB : UPDATE tours.current_participants
+
+    par Уведомления
+      BookingAPI -> Mail : Отправить письмо-подтверждение
+      Mail --> BookingAPI : Статус отправки
+    else
+      BookingAPI -> NotifyAPI : Создать уведомление в системе
+      NotifyAPI -> DB : INSERT notifications
+      DB --> NotifyAPI : ok
+      NotifyAPI --> BookingAPI : ok
+    end
+
+    BookingAPI --> FE : 200 OK + booking_id + итог
+    FE --> User : Переход на страницу "Успешное бронирование"
+  end
+end
+@enduml

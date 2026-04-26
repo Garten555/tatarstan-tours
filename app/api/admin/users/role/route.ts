@@ -60,9 +60,9 @@ export async function PUT(request: NextRequest) {
     }
 
     // Обновляем роль через service_role (обходим RLS)
-    const { data, error } = await (serviceClient as any)
+    const { data, error } = await serviceClient
       .from('profiles')
-      .update({ role: newRole } as any)
+      .update({ role: newRole })
       .eq('id', userId)
       .select()
       .single();

@@ -40,10 +40,27 @@ export async function PUT(
     // Получаем данные
     const tourData = await request.json();
 
-    // Обновляем тур
-    const { data, error } = await (serviceClient as any)
+    // Берем текущее состояние тура до обновления, чтобы определить перезапуск
+    const { data: currentTour, error: currentTourError } = await serviceClient
       .from('tours')
-      .update(tourData as any)
+      .select('start_date, end_date')
+      .eq('id', id)
+      .single();
+
+    if (currentTourError || !currentTour) {
+      return NextResponse.json(
+        { error: 'Tour not found' },
+        { status: 404 }
+      );
+    }
+
+    // Обновляем тур
+    interface TourUpdateData {
+      [key: string]: unknown;
+    }
+    const { data, error } = await serviceClient
+      .from('tours')
+      .update(tourData as TourUpdateData)
       .eq('id', id)
       .select()
       .single();
@@ -54,6 +71,29 @@ export async function PUT(
         { error: 'Failed to update tour' },
         { status: 500 }
       );
+    }
+
+    // Если тур уже завершился и его "перезапустили" новыми датами,
+    // закрываем старые активные бронирования, чтобы пользователь мог бронировать снова.
+    const now = new Date();
+    const previousEnd = (currentTour as any)?.end_date ? new Date((currentTour as any).end_date) : null;
+    const newStart = tourData?.start_date ? new Date(tourData.start_date) : null;
+    const isRelaunch =
+      !!previousEnd &&
+      previousEnd.getTime() <= now.getTime() &&
+      !!newStart &&
+      newStart.getTime() > previousEnd.getTime();
+
+    if (isRelaunch) {
+      const { error: closeOldBookingsError } = await serviceClient
+        .from('bookings')
+        .update({ status: 'completed' })
+        .eq('tour_id', id)
+        .in('status', ['pending', 'confirmed']);
+
+      if (closeOldBookingsError) {
+        console.error('Error completing old bookings on tour relaunch:', closeOldBookingsError);
+      }
     }
 
     return NextResponse.json({ success: true, data });
@@ -122,7 +162,7 @@ export async function DELETE(
       .eq('tour_id', id);
 
     // Проверяем наличие бронирований и удаляем их все (админ может удалять любые туры)
-    const { data: bookings, error: bookingsError } = await serviceClient
+    const { data: bookings } = await serviceClient
       .from('bookings')
       .select('id, status')
       .eq('tour_id', id);
@@ -160,10 +200,13 @@ export async function DELETE(
     }
 
     // Удаляем файлы из S3
-    const filesToDelete = [];
+    interface TourWithCover {
+      cover_path?: string | null;
+    }
+    const filesToDelete: string[] = [];
 
-    if ((tour as any)?.cover_path) {
-      filesToDelete.push((tour as any).cover_path);
+    if ((tour as TourWithCover)?.cover_path) {
+      filesToDelete.push((tour as TourWithCover).cover_path!);
     }
 
     if (media) {

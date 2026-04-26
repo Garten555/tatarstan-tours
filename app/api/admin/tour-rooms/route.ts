@@ -29,10 +29,14 @@ export async function GET(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
+    interface Profile {
+      role?: string;
+    }
+    const profileRole = (profile as Profile | null)?.role;
     if (
-      (profile as any)?.role !== 'tour_admin' &&
-      (profile as any)?.role !== 'super_admin' &&
-      (profile as any)?.role !== 'support_admin'
+      profileRole !== 'tour_admin' &&
+      profileRole !== 'super_admin' &&
+      profileRole !== 'support_admin'
     ) {
       return NextResponse.json(
         { error: 'Недостаточно прав' },
@@ -70,7 +74,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Оптимизация: получаем все счетчики участников одним запросом
-    const roomIds = (rooms || []).map((r: any) => r.id);
+    interface RoomData {
+      id: string;
+      [key: string]: unknown;
+    }
+    interface ParticipantData {
+      room_id: string;
+    }
+    const roomIds = (rooms || []).map((r: RoomData) => r.id);
     let participantsCounts: Record<string, number> = {};
     
     if (roomIds.length > 0) {
@@ -81,14 +92,14 @@ export async function GET(request: NextRequest) {
         .in('room_id', roomIds);
       
       // Подсчитываем в памяти
-      participantsCounts = (participantsData || []).reduce((acc: Record<string, number>, p: any) => {
+      participantsCounts = (participantsData || []).reduce((acc: Record<string, number>, p: ParticipantData) => {
         acc[p.room_id] = (acc[p.room_id] || 0) + 1;
         return acc;
       }, {});
     }
 
     // Добавляем счетчики к комнатам
-    const roomsWithCounts = (rooms || []).map((room: any) => ({
+    const roomsWithCounts = (rooms || []).map((room: RoomData) => ({
       ...room,
       participants_count: participantsCounts[room.id] || 0,
     }));

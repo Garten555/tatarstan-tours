@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in 2FA enable:', error);
     return NextResponse.json(
       { error: 'Ошибка при включении 2FA' },

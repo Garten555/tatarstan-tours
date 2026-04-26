@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
-import { sendEmail, getEmailVerificationCodeEmail } from '@/lib/email/send-email';
-
-// Генерируем случайный 6-значный код
-function generateVerificationCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
 
 export async function POST(request: NextRequest) {
   try {
@@ -37,55 +31,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ВАЖНО: Сначала автоматически очищаем истекшие коды
-    await supabase.rpc('auto_cleanup_expired_verification_codes');
-
-    // Генерируем 6-значный код
-    const code = generateVerificationCode();
-    const expiresAt = new Date();
-    expiresAt.setMinutes(expiresAt.getMinutes() + 15); // Код действителен 15 минут
-
-    // Сохраняем код в БД
-    // Триггер автоматически удалит старые коды для этого email
-    const { error: dbError } = await supabase
-      .from('email_verification_codes')
-      .insert({
-        email: email.trim().toLowerCase(),
-        code,
-        expires_at: expiresAt.toISOString(),
-        used: false,
-      });
-
-    if (dbError) {
-      console.error('Error saving verification code:', dbError);
-      return NextResponse.json(
-        { error: 'Не удалось сгенерировать код подтверждения' },
-        { status: 500 }
-      );
-    }
-
-    // Получаем имя пользователя для персонализации письма
-    const userName = firstName || email.split('@')[0] || 'пользователь';
-
-    // Отправляем письмо с кодом
-    const emailHtml = getEmailVerificationCodeEmail(userName, code);
-    console.log(`📧 Sending verification code email to ${email.trim()}`);
-    
-    const emailSent = await sendEmail({
-      to: email.trim(),
-      subject: 'Код подтверждения email - Туры по Татарстану',
-      html: emailHtml,
+    // Для отправки кода используем Supabase Auth (письмо пойдет через SMTP, настроенный в Supabase Dashboard)
+    const origin = request.headers.get('origin');
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || origin || 'http://localhost:3000';
+    const { error: otpError } = await supabase.auth.signInWithOtp({
+      email: email.trim().toLowerCase(),
+      options: {
+        shouldCreateUser: false,
+        emailRedirectTo: `${siteUrl}/auth/login`,
+        data: {
+          first_name: firstName || null,
+        },
+      },
     });
 
-    if (!emailSent) {
-      console.error('❌ Failed to send verification code email to', email.trim());
+    if (otpError) {
+      console.error('❌ Failed to send verification code via Supabase Auth:', otpError);
       return NextResponse.json(
         { error: 'Не удалось отправить письмо. Пожалуйста, проверьте настройки email на сервере или попробуйте позже.' },
         { status: 500 }
       );
     }
 
-    console.log(`✅ Verification code email sent successfully to ${email.trim()}`);
+    console.log(`✅ Verification code email sent via Supabase Auth to ${email.trim()}`);
 
     return NextResponse.json(
       { 

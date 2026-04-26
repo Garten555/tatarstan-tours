@@ -123,14 +123,23 @@ export async function POST(request: NextRequest) {
         });
       }
       
+      // Получаем текущий максимальный order_index для этого тура
+      const { data: existingMedia } = await serviceClient
+        .from('tour_media')
+        .select('order_index')
+        .eq('tour_id', tourId)
+        .order('order_index', { ascending: false })
+        .limit(1);
+      
+      const nextOrderIndex = existingMedia && existingMedia.length > 0 
+        ? (existingMedia[0] as any).order_index + 1 
+        : 0;
+
       const { data: mediaData, error: mediaError } = await (serviceClient as any).from('tour_media').insert({
         tour_id: tourId,
         media_type: normalizedMediaType,
         media_url: fileUrl,
-        media_path: s3Path,
-        file_name: file.name,
-        file_size: file.size,
-        mime_type: file.type,
+        order_index: nextOrderIndex,
       }).select();
       
       if (mediaError) {

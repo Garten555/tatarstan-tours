@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error checking 2FA:', error);
     return NextResponse.json(
       { enabled: false },

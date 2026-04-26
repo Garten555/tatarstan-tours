@@ -41,7 +41,14 @@ export async function uploadFileToS3(
     await s3Client.send(command);
 
     // Возвращаем публичный URL файла
+    // Для Timeweb Cloud Storage с forcePathStyle: true формат: https://endpoint/bucket/path
     const publicUrl = `${S3_CONFIG.publicUrl}/${S3_CONFIG.bucket}/${path}`;
+    console.log('[S3 Upload] File uploaded successfully:', {
+      bucket: S3_CONFIG.bucket,
+      path,
+      publicUrl,
+      endpoint: S3_CONFIG.endpoint,
+    });
     return publicUrl;
   } catch (error) {
     console.error('Ошибка загрузки файла в S3:', error);

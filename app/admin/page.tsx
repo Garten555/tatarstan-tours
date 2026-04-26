@@ -1,8 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server';
 import { createClient } from '@/lib/supabase/server';
 import DashboardStats from '@/components/admin/DashboardStats';
-import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
 import { redirect } from 'next/navigation';
 
 export const metadata = {
@@ -71,7 +69,46 @@ export default async function AdminDashboard() {
     pendingReviews: pendingReviews || 0,
   };
 
-  const recentBookingsTyped = (recentBookings ?? []) as any[];
+  interface RecentBooking {
+    id: string;
+    created_at: string;
+    status: string;
+    total_price: number;
+    tour?: { title: string } | null;
+    user?: { first_name: string; last_name: string; email: string } | null;
+  }
+
+  interface BookingData {
+    id: unknown;
+    created_at: unknown;
+    status: unknown;
+    total_price: unknown;
+    tour?: { title: unknown } | { title: unknown }[] | null;
+    user?: { first_name: unknown; last_name: unknown; email: unknown } | { first_name: unknown; last_name: unknown; email: unknown }[] | null;
+  }
+
+  const recentBookingsTyped: RecentBooking[] = (recentBookings ?? []).map((booking: BookingData) => {
+    const tour = Array.isArray(booking.tour) && booking.tour.length > 0
+      ? booking.tour[0]
+      : (booking.tour && !Array.isArray(booking.tour) ? booking.tour : null);
+    
+    const user = Array.isArray(booking.user) && booking.user.length > 0
+      ? booking.user[0]
+      : (booking.user && !Array.isArray(booking.user) ? booking.user : null);
+
+    return {
+      id: String(booking.id),
+      created_at: String(booking.created_at),
+      status: String(booking.status),
+      total_price: Number(booking.total_price),
+      tour: tour ? { title: String(tour.title) } : null,
+      user: user ? {
+        first_name: String(user.first_name),
+        last_name: String(user.last_name),
+        email: String(user.email),
+      } : null,
+    };
+  });
 
   return (
     <div className="space-y-4 sm:space-y-6 md:space-y-8">
@@ -79,7 +116,7 @@ export default async function AdminDashboard() {
       <div>
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">Панель управления</h1>
         <p className="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">
-          Обзор платформы "Туры по Татарстану"
+          Обзор платформы &quot;Туры по Татарстану&quot;
         </p>
       </div>
 
@@ -117,10 +154,10 @@ export default async function AdminDashboard() {
                 {recentBookingsTyped.map((booking) => (
                   <tr key={booking.id} className="hover:bg-gray-50">
                     <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm font-medium text-gray-900 max-w-[150px] sm:max-w-none truncate sm:whitespace-nowrap">
-                      {(booking.tour as any)?.title || 'N/A'}
+                      {booking.tour?.title || 'N/A'}
                     </td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-500 hidden sm:table-cell whitespace-nowrap">
-                      {(booking.user as any)?.first_name} {(booking.user as any)?.last_name}
+                      {booking.user?.first_name} {booking.user?.last_name}
                     </td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 inline-flex text-[10px] sm:text-xs leading-4 sm:leading-5 font-semibold rounded-full ${

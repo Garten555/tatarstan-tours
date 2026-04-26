@@ -44,9 +44,16 @@ export async function POST(request: NextRequest) {
     console.log('✅ Final tour data to insert:', JSON.stringify(tourData, null, 2));
 
     // Создаём тур через service_role
-    const { data, error } = await (serviceClient as any)
+    interface TourInsertData {
+      [key: string]: unknown;
+    }
+    interface CreatedTour {
+      id: string;
+      [key: string]: unknown;
+    }
+    const { data, error } = await serviceClient
       .from('tours')
-      .insert(tourData as any)
+      .insert(tourData as TourInsertData)
       .select()
       .single();
 
@@ -59,7 +66,7 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    console.log('✅ Tour created successfully:', (data as any)?.id);
+    console.log('✅ Tour created successfully:', (data as CreatedTour)?.id);
 
     return NextResponse.json({ success: true, data });
   } catch (error) {
@@ -106,7 +113,15 @@ export async function PUT(request: NextRequest) {
             }
 
     // Удаляем поля, которые не нужно обновлять
-    const { id, created_at, created_by, gallery_photos, video_urls, ...updateData } = tourData;
+    interface TourData {
+      id?: string;
+      created_at?: string;
+      created_by?: string;
+      gallery_photos?: unknown;
+      video_urls?: unknown;
+      [key: string]: unknown;
+    }
+    const { id, created_at, created_by, gallery_photos, video_urls, ...updateData } = tourData as TourData;
 
     if (!id) {
       return NextResponse.json({ error: 'Tour ID required' }, { status: 400 });
@@ -116,9 +131,12 @@ export async function PUT(request: NextRequest) {
               console.log('✅ Data to update:', JSON.stringify(updateData, null, 2));
             }
 
-    const { data, error } = await (serviceClient as any)
+    interface TourUpdateData {
+      [key: string]: unknown;
+    }
+    const { data, error } = await serviceClient
       .from('tours')
-      .update(updateData as any)
+      .update(updateData as TourUpdateData)
       .eq('id', id)
       .select()
       .single();

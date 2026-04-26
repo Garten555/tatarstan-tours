@@ -1,0 +1,251 @@
+@startuml
+title Диаграмма классов: туристическая веб-платформа
+skinparam classAttributeIconSize 0
+hide empty methods
+
+package "Пользователи и доступ" {
+  class User {
+    +id: UUID
+    +email: string
+    +username: string
+    +passwordHash: string
+    +role: UserRole
+    +isBanned: boolean
+    +createdAt: datetime
+  }
+
+  class UserProfile {
+    +userId: UUID
+    +displayName: string
+    +avatarUrl: string
+    +bio: text
+    +privacyMode: PrivacyMode
+  }
+
+  class FriendRequest {
+    +id: UUID
+    +fromUserId: UUID
+    +toUserId: UUID
+    +status: FriendStatus
+    +createdAt: datetime
+  }
+
+  class UserCard {
+    +id: UUID
+    +userId: UUID
+    +maskedNumber: string
+    +brand: string
+    +expiresAt: date
+  }
+
+  enum UserRole {
+    guest
+    user
+    admin
+  }
+
+  enum PrivacyMode {
+    public
+    friends_only
+    private
+  }
+}
+
+package "Туры и бронирования" {
+  class Tour {
+    +id: UUID
+    +title: string
+    +cityId: UUID
+    +price: decimal
+    +maxParticipants: int
+    +currentParticipants: int
+    +status: TourStatus
+  }
+
+  class City {
+    +id: UUID
+    +name: string
+    +country: string
+    +isFeatured: boolean
+  }
+
+  class Booking {
+    +id: UUID
+    +userId: UUID
+    +tourId: UUID
+    +status: BookingStatus
+    +paymentStatus: PaymentStatus
+    +totalAmount: decimal
+    +createdAt: datetime
+  }
+
+  class BookingAttendee {
+    +id: UUID
+    +bookingId: UUID
+    +fullName: string
+    +birthDate: date
+    +passportNo: string
+  }
+
+  class Traveler {
+    +id: UUID
+    +userId: UUID
+    +fullName: string
+    +birthDate: date
+    +documentNo: string
+  }
+
+  enum TourStatus {
+    draft
+    active
+    completed
+    archived
+  }
+
+  enum BookingStatus {
+    pending
+    confirmed
+    cancelled
+  }
+
+  enum PaymentStatus {
+    unpaid
+    paid
+    refunded
+  }
+}
+
+package "Контент и соцфункции" {
+  class Review {
+    +id: UUID
+    +authorId: UUID
+    +tourId: UUID
+    +rating: int
+    +content: text
+    +createdAt: datetime
+  }
+
+  class ReviewComment {
+    +id: UUID
+    +reviewId: UUID
+    +authorId: UUID
+    +content: text
+  }
+
+  class BlogPost {
+    +id: UUID
+    +authorId: UUID
+    +title: string
+    +slug: string
+    +content: text
+    +publishedAt: datetime
+  }
+
+  class BlogComment {
+    +id: UUID
+    +postId: UUID
+    +authorId: UUID
+    +content: text
+  }
+
+  class DiaryEntry {
+    +id: UUID
+    +authorId: UUID
+    +title: string
+    +content: text
+    +tripDate: date
+  }
+}
+
+package "Чаты, поддержка, уведомления" {
+  class TourRoom {
+    +id: UUID
+    +tourId: UUID
+    +createdBy: UUID
+    +isActive: boolean
+  }
+
+  class Message {
+    +id: UUID
+    +roomId: UUID
+    +senderId: UUID
+    +content: text
+    +mediaUrl: string
+    +createdAt: datetime
+  }
+
+  class SupportSession {
+    +id: UUID
+    +userId: UUID
+    +status: SessionStatus
+    +startedAt: datetime
+    +closedAt: datetime
+  }
+
+  class Notification {
+    +id: UUID
+    +userId: UUID
+    +type: string
+    +message: string
+    +isRead: boolean
+    +createdAt: datetime
+  }
+
+  enum SessionStatus {
+    open
+    closed
+  }
+}
+
+package "Паспорт путешествий" {
+  class Achievement {
+    +id: UUID
+    +title: string
+    +description: string
+    +iconUrl: string
+  }
+
+  class UserAchievement {
+    +id: UUID
+    +userId: UUID
+    +achievementId: UUID
+    +awardedByAdminId: UUID
+    +awardedAt: datetime
+  }
+
+  class PassportLocation {
+    +id: UUID
+    +userId: UUID
+    +cityId: UUID
+    +visitedAt: date
+  }
+}
+
+User "1" -- "1" UserProfile
+User "1" -- "0..*" UserCard
+User "1" -- "0..*" Traveler
+User "1" -- "0..*" Booking
+User "1" -- "0..*" Review
+User "1" -- "0..*" BlogPost
+User "1" -- "0..*" DiaryEntry
+User "1" -- "0..*" Notification
+User "1" -- "0..*" SupportSession
+User "1" -- "0..*" FriendRequest : sends
+User "1" -- "0..*" FriendRequest : receives
+
+City "1" -- "0..*" Tour
+Tour "1" -- "0..*" Booking
+Booking "1" -- "1..*" BookingAttendee
+Tour "1" -- "0..*" Review
+Tour "1" -- "0..1" TourRoom
+TourRoom "1" -- "0..*" Message
+SupportSession "1" -- "0..*" Message
+
+Review "1" -- "0..*" ReviewComment
+BlogPost "1" -- "0..*" BlogComment
+
+User "1" -- "0..*" UserAchievement
+Achievement "1" -- "0..*" UserAchievement
+User "1" -- "0..*" PassportLocation
+City "1" -- "0..*" PassportLocation
+@enduml

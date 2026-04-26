@@ -4,7 +4,7 @@ import speakeasy from 'speakeasy';
 
 export async function POST(request: NextRequest) {
   try {
-    const { code, password } = await request.json();
+    const { code } = await request.json();
 
     if (!code || !code.trim()) {
       return NextResponse.json(
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in 2FA disable:', error);
     return NextResponse.json(
       { error: 'Ошибка при отключении 2FA' },

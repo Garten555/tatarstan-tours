@@ -41,7 +41,7 @@ export async function PATCH(
     const action = body?.action || 'approve';
     const reportReason = typeof body?.reason === 'string' ? body.reason.trim() : null;
 
-    let updateData: Record<string, any> = {};
+    let updateData: Record<string, string | boolean | null> = {};
     if (action === 'approve') {
       updateData = {
         is_approved: true,
@@ -67,7 +67,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Недопустимое действие' }, { status: 400 });
     }
 
-    const { data: review, error } = await (serviceClient as any)
+    const { data: review, error } = await serviceClient
       .from('reviews')
       .update(updateData)
       .eq('id', reviewId)

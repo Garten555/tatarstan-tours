@@ -309,37 +309,137 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
     handleFieldChange('yandex_map_url', parsedUrl);
   };
 
-  // Handle cover image upload
-  const handleCoverImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle cover image upload - сразу загружаем на S3
+  const handleCoverImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        setErrors(prev => ({ ...prev, cover_image: 'Файл слишком большой (максимум 10 МБ)' }));
-        return;
+    if (!file) return;
+    
+    if (file.size > 10 * 1024 * 1024) {
+      setErrors(prev => ({ ...prev, cover_image: 'Файл слишком большой (максимум 10 МБ)' }));
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setLoadingStatus('Загрузка обложки...');
+      
+      const formDataUpload = new FormData();
+      formDataUpload.append('file', file);
+      formDataUpload.append('folder', 'tours/covers');
+
+      const uploadResponse = await fetch('/api/upload', {
+        method: 'POST',
+        body: formDataUpload,
+      });
+
+      if (!uploadResponse.ok) {
+        const uploadError = await uploadResponse.json();
+        throw new Error(uploadError.error || 'Не удалось загрузить обложку');
       }
+      
+      const uploadData = await uploadResponse.json();
+      if (!uploadData.url) {
+        throw new Error('Не получен URL загруженной обложки');
+      }
+      
       setCoverImageFile(file);
-      setCoverImage(URL.createObjectURL(file));
+      setCoverImage(uploadData.url);
       setErrors(prev => ({ ...prev, cover_image: undefined }));
+    } catch (error: any) {
+      setErrors(prev => ({ ...prev, cover_image: error.message || 'Ошибка загрузки обложки' }));
+    } finally {
+      setLoading(false);
+      setLoadingStatus('');
     }
   };
 
   // Handle gallery photos upload
-  const handleGalleryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleGalleryChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length > 0) {
+    if (files.length === 0) return;
+    
+    try {
+      setLoading(true);
+      setLoadingStatus(`Загрузка ${files.length} фото...`);
+      
+      const uploadPromises = files.map(async (file) => {
+        const formDataUpload = new FormData();
+        formDataUpload.append('file', file);
+        formDataUpload.append('folder', 'tours/gallery');
+        
+        // Если редактируем тур, добавляем tourId для сохранения в БД
+        if (mode === 'edit' && initialData?.id) {
+          formDataUpload.append('tourId', initialData.id);
+          formDataUpload.append('mediaType', 'photo');
+        }
+
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formDataUpload,
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || `Ошибка загрузки: ${file.name}`);
+        }
+
+        const data = await response.json();
+        return data.url;
+      });
+
+      const uploadedUrls = await Promise.all(uploadPromises);
+      setGalleryPreviews(prev => [...prev, ...uploadedUrls]);
       setGalleryFiles(prev => [...prev, ...files]);
-      const previews = files.map(file => URL.createObjectURL(file));
-      setGalleryPreviews(prev => [...prev, ...previews]);
+    } catch (error: any) {
+      alert(error.message || 'Ошибка загрузки фото');
+    } finally {
+      setLoading(false);
+      setLoadingStatus('');
     }
   };
 
   // Handle video upload
-  const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVideoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length > 0) {
+    if (files.length === 0) return;
+    
+    try {
+      setLoading(true);
+      setLoadingStatus(`Загрузка ${files.length} видео...`);
+      
+      const uploadPromises = files.map(async (file) => {
+        const formDataUpload = new FormData();
+        formDataUpload.append('file', file);
+        formDataUpload.append('folder', 'tours/videos');
+        
+        // Если редактируем тур, добавляем tourId для сохранения в БД
+        if (mode === 'edit' && initialData?.id) {
+          formDataUpload.append('tourId', initialData.id);
+          formDataUpload.append('mediaType', 'video');
+        }
+
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formDataUpload,
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || `Ошибка загрузки: ${file.name}`);
+        }
+
+        const data = await response.json();
+        return data.url;
+      });
+
+      const uploadedUrls = await Promise.all(uploadPromises);
+      setVideoPreviews(prev => [...prev, ...uploadedUrls]);
       setVideoFiles(prev => [...prev, ...files]);
-      const previews = files.map(file => URL.createObjectURL(file));
-      setVideoPreviews(prev => [...prev, ...previews]);
+    } catch (error: any) {
+      alert(error.message || 'Ошибка загрузки видео');
+    } finally {
+      setLoading(false);
+      setLoadingStatus('');
     }
   };
 
@@ -391,32 +491,9 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
     setLoadingStatus('Подготовка данных...');
 
     try {
-      // Upload cover image (ТОЛЬКО если выбран новый файл)
-      let coverImageUrl = (formData as any).cover_image || coverImage;
-      if (coverImageFile) {
-        setLoadingStatus('Загрузка обложки...');
-        const formDataUpload = new FormData();
-        formDataUpload.append('file', coverImageFile);
-        formDataUpload.append('folder', 'tours/covers');
-
-        const uploadResponse = await fetch('/api/upload', {
-          method: 'POST',
-          body: formDataUpload,
-        });
-
-        if (!uploadResponse.ok) {
-          const uploadError = await uploadResponse.json();
-          throw new Error(uploadError.error || 'Не удалось загрузить обложку');
-        }
-        
-        const uploadData = await uploadResponse.json();
-        if (!uploadData.url) {
-          throw new Error('Не получен URL загруженной обложки');
-        }
-        coverImageUrl = uploadData.url;
-      } else if (mode === 'edit' && coverImage) {
-        coverImageUrl = coverImage;
-      } else if (mode === 'create' && !coverImageUrl) {
+      // Cover image уже загружен на S3 при выборе файла
+      let coverImageUrl = coverImage;
+      if (!coverImageUrl && mode === 'create') {
         throw new Error('Обложка тура обязательна');
       }
 
@@ -459,59 +536,63 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
       const result = await response.json();
       const tourId = mode === 'create' ? result.data.id : initialData.id;
 
-      // Upload gallery photos and videos ПАРАЛЛЕЛЬНО (быстрее!)
-      const uploadPromises: Promise<any>[] = [];
-      const totalFiles = galleryFiles.length + videoFiles.length;
-
-      if (galleryFiles.length > 0) {
-        setLoadingStatus(`Загрузка ${galleryFiles.length} фото...`);
-        galleryFiles.forEach((file) => {
-          const formDataUpload = new FormData();
-          formDataUpload.append('file', file);
-          formDataUpload.append('folder', 'tours/gallery');
-          formDataUpload.append('tourId', tourId);
-          formDataUpload.append('mediaType', 'photo');
-
-          uploadPromises.push(
-            fetch('/api/upload', {
+      // Сохраняем медиа в БД (фото и видео уже загружены на S3 при выборе файлов)
+      if (galleryPreviews.length > 0 || videoPreviews.length > 0) {
+        setLoadingStatus('Сохранение медиа в БД...');
+        
+        const mediaPromises: Promise<any>[] = [];
+        
+        // Находим новые фото (которые есть в galleryPreviews но нет в existingMedia)
+        const existingPhotoUrls = existingMedia
+          .filter((m: any) => m.media_type === 'image' || m.media_type === 'photo')
+          .map((m: any) => m.media_url);
+        
+        const newPhotoUrls = galleryPreviews.filter(url => !existingPhotoUrls.includes(url));
+        
+        newPhotoUrls.forEach((url, index) => {
+          mediaPromises.push(
+            fetch('/api/admin/tours/media', {
               method: 'POST',
-              body: formDataUpload,
-            }).then(res => {
-              if (!res.ok) throw new Error(`Ошибка загрузки фото: ${file.name}`);
-              return res;
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tour_id: tourId,
+                media_type: 'image',
+                media_url: url,
+                order_index: existingPhotoUrls.length + index,
+              }),
             })
           );
         });
-      }
-
-      if (videoFiles.length > 0) {
-        setLoadingStatus(`Загрузка ${videoFiles.length} видео...`);
-        videoFiles.forEach((file) => {
-          const formDataUpload = new FormData();
-          formDataUpload.append('file', file);
-          formDataUpload.append('folder', 'tours/videos');
-          formDataUpload.append('tourId', tourId);
-          formDataUpload.append('mediaType', 'video');
-
-          uploadPromises.push(
-            fetch('/api/upload', {
+        
+        // Находим новые видео
+        const existingVideoUrls = existingMedia
+          .filter((m: any) => m.media_type === 'video')
+          .map((m: any) => m.media_url);
+        
+        const newVideoUrls = videoPreviews.filter(url => !existingVideoUrls.includes(url));
+        
+        newVideoUrls.forEach((url, index) => {
+          mediaPromises.push(
+            fetch('/api/admin/tours/media', {
               method: 'POST',
-              body: formDataUpload,
-            }).then(res => {
-              if (!res.ok) throw new Error(`Ошибка загрузки видео: ${file.name}`);
-              return res;
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                tour_id: tourId,
+                media_type: 'video',
+                media_url: url,
+                order_index: existingVideoUrls.length + index,
+              }),
             })
           );
         });
-      }
-
-      // Ждем завершения всех загрузок параллельно
-      if (uploadPromises.length > 0) {
-        setLoadingStatus(`Загрузка ${totalFiles} файлов...`);
-        try {
-          await Promise.all(uploadPromises);
-        } catch (error) {
-          throw new Error('Не удалось загрузить медиафайлы');
+        
+        if (mediaPromises.length > 0) {
+          try {
+            await Promise.all(mediaPromises);
+          } catch (error) {
+            console.error('Ошибка сохранения медиа в БД:', error);
+            // Не прерываем процесс, медиа уже загружены на S3
+          }
         }
       }
       
@@ -929,21 +1010,31 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
           </label>
           <div className="space-y-4">
             {coverImage && (
-              <div className="relative w-full h-64 rounded-xl overflow-hidden border-2 border-gray-200">
-                {coverImage.startsWith('blob:') ? (
-                  <img
-                    src={coverImage}
-                    alt="Cover preview"
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <Image
-                    src={coverImage}
-                    alt="Cover preview"
-                    fill
-                    className="object-cover"
-                  />
-                )}
+              <div className="relative w-full h-64 rounded-xl overflow-hidden border-2 border-gray-200 group">
+                <Image
+                  src={coverImage}
+                  alt="Cover preview"
+                  fill
+                  className="object-cover"
+                  unoptimized={coverImage.includes('s3.twcstorage.ru') || coverImage.includes('twcstorage.ru')}
+                  onError={(e) => {
+                    console.error('Ошибка загрузки обложки:', coverImage);
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCoverImage(null);
+                    setCoverImageFile(null);
+                    setErrors(prev => ({ ...prev, cover_image: undefined }));
+                  }}
+                  className="absolute top-2 right-2 bg-red-600 text-white p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-red-700 z-10"
+                  title="Удалить обложку"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             )}
             <label className="flex items-center justify-center gap-2 w-full px-4 py-4 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-emerald-500 hover:bg-emerald-50 transition-all">
@@ -978,11 +1069,15 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
                       width={200}
                       height={200}
                       className="w-full h-32 object-cover rounded-xl border-2 border-gray-200"
+                      unoptimized={preview.includes('s3.twcstorage.ru') || preview.includes('twcstorage.ru')}
+                      onError={(e) => {
+                        console.error('Ошибка загрузки изображения:', preview);
+                      }}
                     />
                     <button
                       type="button"
                       onClick={() => removeGalleryPhoto(index)}
-                      className="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-red-700"
+                      className="absolute top-2 right-2 bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg hover:bg-red-700 z-10"
                     >
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1026,11 +1121,12 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
                       controls
                       playsInline
                       preload="metadata"
+                      src={preview}
                     >
-                      <source src={preview} type={videoFiles[index]?.type || 'video/mp4'} />
+                      Ваш браузер не поддерживает видео.
                     </video>
                     <span className="flex-1 text-sm text-gray-600 font-medium">
-                      {videoFiles[index]?.name}
+                      {videoFiles[index]?.name || `Видео ${index + 1}`}
                     </span>
                     <button
                       type="button"
@@ -1190,13 +1286,13 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
         >
           {loading ? (
             <>
-              <Loader2 className="w-5 h-5 animate-spin" />
-              {loadingStatus || 'Сохранение...'}
+              <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#ffffff' }} />
+              <span style={{ color: '#ffffff' }}>{loadingStatus || 'Сохранение...'}</span>
             </>
           ) : (
             <>
-              <Save className="w-5 h-5" />
-              {mode === 'create' ? 'Создать тур' : 'Сохранить изменения'}
+              <Save className="w-5 h-5" style={{ color: '#ffffff' }} />
+              <span style={{ color: '#ffffff' }}>{mode === 'create' ? 'Создать тур' : 'Сохранить изменения'}</span>
             </>
           )}
         </button>

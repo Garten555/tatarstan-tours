@@ -28,6 +28,7 @@ export default function UserGallery({ media, userId, isOwner, username, showView
   const [viewerIndex, setViewerIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [localMedia, setLocalMedia] = useState(media);
+  const [activeTab, setActiveTab] = useState<'photos' | 'videos'>('photos');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -84,20 +85,20 @@ export default function UserGallery({ media, userId, isOwner, username, showView
           throw new Error(data.error || 'Ошибка загрузки');
         }
 
-              // Сохраняем в user_gallery
-              const { data: galleryItem, error } = await supabase
-                .from('user_gallery')
-                .insert({
-                  user_id: userId,
-                  media_type: isVideo ? 'video' : 'image',
-                  media_url: data.url,
-                  media_path: data.path,
-                  file_name: file.name,
-                  file_size: file.size,
-                  mime_type: file.type,
-                } as any)
-                .select()
-                .single();
+        // Сохраняем в user_gallery
+        const { data: galleryItem, error } = await supabase
+          .from('user_gallery')
+          .insert({
+            user_id: userId,
+            media_type: isVideo ? 'video' : 'image',
+            media_url: data.url,
+            media_path: data.path,
+            file_name: file.name,
+            file_size: file.size,
+            mime_type: file.type,
+          } as any)
+          .select()
+          .single();
 
         if (error) throw error;
         return galleryItem;
@@ -142,7 +143,7 @@ export default function UserGallery({ media, userId, isOwner, username, showView
       <div className="space-y-6">
         {/* Кнопка загрузки для владельца */}
         {isOwner && (
-          <div className="mb-6">
+          <div className="mb-4">
             <input
               ref={fileInputRef}
               type="file"
@@ -156,168 +157,226 @@ export default function UserGallery({ media, userId, isOwner, username, showView
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-2 px-5 py-3 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 rounded-lg font-bold transition-all shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ color: '#ffffff' }}
             >
               {uploading ? (
                 <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Загрузка...</span>
+                  <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#ffffff' }} />
+                  <span style={{ color: '#ffffff' }}>Загрузка...</span>
                 </>
               ) : (
                 <>
-                  <Upload className="w-5 h-5" />
-                  <span>Загрузить фото/видео</span>
+                  <Upload className="w-5 h-5" style={{ color: '#ffffff' }} />
+                  <span style={{ color: '#ffffff' }}>Загрузить фото/видео</span>
                 </>
               )}
             </button>
           </div>
         )}
-        {/* Фотографии */}
-        <div className="mb-8 md:mb-12">
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <div className="px-3 py-1.5 bg-purple-100/50 border border-purple-200/50 rounded-xl">
-                <span className="text-sm font-bold text-purple-700">Фотографии</span>
+
+        {/* Табы навигации */}
+        <div className="border-b border-gray-200">
+          <div className="flex gap-1">
+            <button
+              onClick={() => setActiveTab('photos')}
+              className={`relative px-4 py-3 text-center font-semibold text-sm transition-all rounded-t-lg ${
+                activeTab === 'photos'
+                  ? 'bg-emerald-50 text-emerald-700 border-b-2 border-emerald-600'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <ImageIcon className={`w-4 h-4 ${activeTab === 'photos' ? 'text-emerald-600' : 'text-gray-500'}`} />
+                <span>Фотографии</span>
+                {images.length > 0 && (
+                  <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${
+                    activeTab === 'photos'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {images.length}
+                  </span>
+                )}
               </div>
-              <h3 className="text-2xl md:text-3xl lg:text-4xl font-black text-gray-900 flex items-center gap-3">
-                <ImageIcon className="w-6 h-6 md:w-7 md:h-7 text-purple-600" />
-                Фотографии
-              </h3>
-              <span className="text-lg md:text-xl text-gray-600 font-medium">({images.length})</span>
-            </div>
-            {showViewAll && username && images.length > 0 && (
-              <Link
-                href={`/users/${username}/gallery`}
-                className="flex items-center gap-2 text-emerald-600 hover:text-emerald-700 font-medium text-base"
-              >
-                Смотреть все
-                <ExternalLink className="w-5 h-5" />
-              </Link>
-            )}
+            </button>
+            <button
+              onClick={() => setActiveTab('videos')}
+              className={`relative px-4 py-3 text-center font-semibold text-sm transition-all rounded-t-lg ${
+                activeTab === 'videos'
+                  ? 'bg-emerald-50 text-emerald-700 border-b-2 border-emerald-600'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Video className={`w-4 h-4 ${activeTab === 'videos' ? 'text-emerald-600' : 'text-gray-500'}`} />
+                <span>Видео</span>
+                {videos.length > 0 && (
+                  <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${
+                    activeTab === 'videos'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-gray-200 text-gray-700'
+                  }`}>
+                    {videos.length}
+                  </span>
+                )}
+              </div>
+            </button>
           </div>
-          {images.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-              {images.map((image, index) => (
-                <div
-                  key={image.id}
-                  className="group relative aspect-square rounded-xl overflow-hidden cursor-pointer shadow-md hover:shadow-xl transition-all duration-300"
-                >
-                  <button
-                    type="button"
-                    onClick={() => openViewer(index)}
-                    className="w-full h-full"
-                    aria-label={`Открыть фото ${index + 1}`}
-                  >
-                          <Image
-                            src={image.media_url}
-                            alt={`Фото ${index + 1}`}
-                            fill
-                            className="object-cover group-hover:scale-110 transition-transform duration-500"
-                            sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                            loading="lazy"
-                          />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity text-white text-sm font-medium bg-black/50 px-4 py-2 rounded-lg">
-                        Просмотр
-                      </div>
-                    </div>
-                  </button>
-                  {isOwner && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(image.id);
-                      }}
-                      className="absolute top-2 right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                      aria-label="Удалить"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-300">
-              <ImageIcon className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-              <p className="text-xl font-bold mb-2 text-gray-700">Пока нет фотографий</p>
-              <p className="text-base text-gray-600">
-                {isOwner ? 'Загрузите свои фото, чтобы поделиться ими!' : 'У пользователя пока нет фотографий'}
-              </p>
-            </div>
-          )}
         </div>
 
-        {/* Видео */}
-        <div className="mb-8 md:mb-12">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="px-3 py-1.5 bg-emerald-100/50 border border-emerald-200/50 rounded-xl">
-              <span className="text-sm font-bold text-emerald-700">Видео</span>
-            </div>
-            <h3 className="text-2xl md:text-3xl lg:text-4xl font-black text-gray-900 flex items-center gap-3">
-              <Video className="w-6 h-6 md:w-7 md:h-7 text-emerald-600" />
-              Видео
-            </h3>
-            <span className="text-lg md:text-xl text-gray-600 font-medium">({videos.length})</span>
-          </div>
-          {videos.length > 0 ? (
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-              {videos.map((video) => (
-                <div
-                  key={video.id}
-                  className="group relative aspect-square rounded-xl overflow-hidden cursor-pointer shadow-md hover:shadow-xl transition-all duration-300"
-                >
-                  <a
-                    href={video.media_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full h-full block"
-                    aria-label="Открыть видео"
-                  >
-                    {video.thumbnail_url ? (
-                      <Image
-                        src={video.thumbnail_url}
-                        alt="Превью видео"
-                        fill
-                        className="object-cover group-hover:scale-110 transition-transform duration-500"
-                        sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                        <Play className="w-12 h-12 text-white" />
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                      <div className="w-16 h-16 rounded-full bg-white/90 flex items-center justify-center group-hover:scale-110 transition-transform">
-                        <Play className="w-8 h-8 text-emerald-600 ml-1" fill="currentColor" />
-                      </div>
-                    </div>
-                  </a>
-                  {isOwner && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        handleDelete(video.id);
-                      }}
-                      className="absolute top-2 right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
-                      aria-label="Удалить"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
+        {/* Контент табов */}
+        <div className="py-4">
+          {/* Фотографии */}
+          {activeTab === 'photos' && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xl font-black text-gray-900">
+                    Фотографии ({images.length})
+                  </h3>
                 </div>
-              ))}
+                {showViewAll && username && images.length > 0 && (
+                  <Link
+                    href={`/users/${username}/gallery`}
+                    className="flex items-center gap-2 text-emerald-600 hover:text-emerald-700 font-semibold text-sm"
+                  >
+                    Смотреть все
+                    <ExternalLink className="w-4 h-4" />
+                  </Link>
+                )}
+              </div>
+              {images.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {images.map((image, index) => (
+                    <div
+                      key={image.id}
+                      className="group relative aspect-square rounded-lg overflow-hidden cursor-pointer bg-gray-100 hover:shadow-lg transition-all duration-200"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => openViewer(index)}
+                        className="w-full h-full"
+                        aria-label={`Открыть фото ${index + 1}`}
+                      >
+                        <Image
+                          src={image.media_url}
+                          alt={`Фото ${index + 1}`}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                          sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
+                          loading="lazy"
+                          unoptimized={image.media_url?.includes('s3.twcstorage.ru')}
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300"></div>
+                      </button>
+                      {isOwner && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDelete(image.id);
+                          }}
+                          className="absolute top-2 right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg"
+                          aria-label="Удалить"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                  <ImageIcon className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                  <p className="text-lg font-black mb-2 text-gray-700">Пока нет фотографий</p>
+                  <p className="text-gray-600">
+                    {isOwner ? 'Загрузите свои фото, чтобы поделиться ими!' : 'У пользователя пока нет фотографий'}
+                  </p>
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="text-center py-12 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-300">
-              <Video className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-              <p className="text-xl font-bold mb-2 text-gray-700">Пока нет видео</p>
-              <p className="text-base text-gray-600">
-                {isOwner ? 'Загрузите свои видео, чтобы поделиться ими!' : 'У пользователя пока нет видео'}
-              </p>
+          )}
+
+          {/* Видео */}
+          {activeTab === 'videos' && (
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-xl font-black text-gray-900">
+                    Видео ({videos.length})
+                  </h3>
+                </div>
+                {showViewAll && username && videos.length > 0 && (
+                  <Link
+                    href={`/users/${username}/gallery`}
+                    className="flex items-center gap-2 text-emerald-600 hover:text-emerald-700 font-semibold text-sm"
+                  >
+                    Смотреть все
+                    <ExternalLink className="w-4 h-4" />
+                  </Link>
+                )}
+              </div>
+              {videos.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {videos.map((video) => (
+                    <div
+                      key={video.id}
+                      className="group relative aspect-square rounded-lg overflow-hidden cursor-pointer bg-gray-100 hover:shadow-lg transition-all duration-200"
+                    >
+                      <a
+                        href={video.media_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full h-full block"
+                        aria-label="Открыть видео"
+                      >
+                        {video.thumbnail_url ? (
+                          <Image
+                            src={video.thumbnail_url}
+                            alt="Превью видео"
+                            fill
+                            className="object-cover group-hover:scale-105 transition-transform duration-300"
+                            sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
+                            unoptimized={video.thumbnail_url?.includes('s3.twcstorage.ru')}
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                            <Play className="w-12 h-12 text-white" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/40 transition-colors">
+                          <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg">
+                            <Play className="w-7 h-7 text-emerald-600 ml-1" fill="currentColor" />
+                          </div>
+                        </div>
+                      </a>
+                      {isOwner && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            handleDelete(video.id);
+                          }}
+                          className="absolute top-2 right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-lg"
+                          aria-label="Удалить"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                  <Video className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                  <p className="text-lg font-black mb-2 text-gray-700">Пока нет видео</p>
+                  <p className="text-gray-600">
+                    {isOwner ? 'Загрузите свои видео, чтобы поделиться ими!' : 'У пользователя пока нет видео'}
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -336,4 +395,3 @@ export default function UserGallery({ media, userId, isOwner, username, showView
     </>
   );
 }
-

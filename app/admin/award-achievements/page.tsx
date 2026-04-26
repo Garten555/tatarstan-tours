@@ -34,7 +34,7 @@ export default async function AwardAchievementsPage() {
   }
 
   // Загружаем комнаты где пользователь является гидом
-  const { data: roomsData, error } = await serviceClient
+  const { data: roomsData } = await serviceClient
     .from('tour_rooms')
     .select(`
       id,
@@ -53,13 +53,54 @@ export default async function AwardAchievementsPage() {
     .order('created_at', { ascending: false });
 
   // Преобразуем данные для соответствия типу Room
-  const rooms = (roomsData || []).map((room: any) => ({
-    id: room.id,
-    tour_id: room.tour_id,
-    is_active: room.is_active,
-    created_at: room.created_at,
-    tour: Array.isArray(room.tour) && room.tour.length > 0 ? room.tour[0] : (room.tour || null),
-  }));
+  interface RoomData {
+    id: unknown;
+    tour_id: unknown;
+    is_active: unknown;
+    created_at: unknown;
+    tour?: {
+      id: unknown;
+      title: unknown;
+      start_date: unknown;
+      end_date: unknown;
+      city?: { name: unknown } | { name: unknown }[] | null;
+    } | {
+      id: unknown;
+      title: unknown;
+      start_date: unknown;
+      end_date: unknown;
+      city?: { name: unknown } | { name: unknown }[] | null;
+    }[] | null;
+  }
+  const rooms = (roomsData || [])
+    .map((room: RoomData) => {
+      const tour = Array.isArray(room.tour) && room.tour.length > 0 
+        ? room.tour[0] 
+        : (room.tour && !Array.isArray(room.tour) ? room.tour : null);
+      
+      if (!tour) return null;
+      
+      const city = tour.city 
+        ? (Array.isArray(tour.city) && tour.city.length > 0 
+            ? { name: String(tour.city[0].name) }
+            : (!Array.isArray(tour.city) ? { name: String(tour.city.name) } : undefined))
+        : undefined;
+
+      return {
+        id: String(room.id),
+        tour_id: String(room.tour_id),
+        is_active: Boolean(room.is_active),
+        created_at: String(room.created_at),
+        tour: {
+          id: String(tour.id),
+          title: String(tour.title),
+          start_date: String(tour.start_date),
+          end_date: tour.end_date ? String(tour.end_date) : null,
+          city,
+        },
+      };
+    })
+    .filter((room): room is NonNullable<typeof room> => room !== null);
 
   return (
     <div>
@@ -80,7 +121,7 @@ export default async function AwardAchievementsPage() {
       </div>
 
       {/* Список туров с участниками */}
-      <AwardAchievementsList rooms={rooms || []} />
+      <AwardAchievementsList rooms={rooms} />
     </div>
   );
 }

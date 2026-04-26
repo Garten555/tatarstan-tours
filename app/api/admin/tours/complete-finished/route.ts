@@ -54,10 +54,11 @@ export async function POST(request: NextRequest) {
       completed_count: data || 0,
       message: `Завершено туров: ${data || 0}`,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Ошибка завершения туров:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Внутренняя ошибка сервера';
     return NextResponse.json(
-      { error: error.message || 'Внутренняя ошибка сервера' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

@@ -47,28 +47,54 @@ export default async function GuideDashboard() {
     .order('created_at', { ascending: false });
 
   // Подсчитываем статистику
+  interface RoomData {
+    id: unknown;
+    created_at: unknown;
+    tour?: {
+      id: unknown;
+      title: unknown;
+      start_date: unknown;
+      end_date: unknown;
+      max_participants: unknown;
+    } | {
+      id: unknown;
+      title: unknown;
+      start_date: unknown;
+      end_date: unknown;
+      max_participants: unknown;
+    }[] | null;
+  }
+  const getTour = (room: RoomData) => {
+    if (!room.tour) return null;
+    return Array.isArray(room.tour) && room.tour.length > 0 
+      ? room.tour[0] 
+      : (!Array.isArray(room.tour) ? room.tour : null);
+  };
   const now = new Date();
-  const activeRooms = (rooms || []).filter((room: any) => {
-    const startDate = room.tour?.start_date ? new Date(room.tour.start_date) : null;
-    const endDate = room.tour?.end_date ? new Date(room.tour.end_date) : null;
+  const activeRooms = (rooms || []).filter((room: RoomData) => {
+    const tour = getTour(room);
+    const startDate = tour?.start_date ? new Date(String(tour.start_date)) : null;
+    const endDate = tour?.end_date ? new Date(String(tour.end_date)) : null;
     if (!startDate) return false;
     return startDate <= now && (!endDate || endDate >= now);
   });
 
-  const upcomingRooms = (rooms || []).filter((room: any) => {
-    const startDate = room.tour?.start_date ? new Date(room.tour.start_date) : null;
+  const upcomingRooms = (rooms || []).filter((room: RoomData) => {
+    const tour = getTour(room);
+    const startDate = tour?.start_date ? new Date(String(tour.start_date)) : null;
     if (!startDate) return false;
     return startDate > now;
   });
 
-  const completedRooms = (rooms || []).filter((room: any) => {
-    const endDate = room.tour?.end_date ? new Date(room.tour.end_date) : null;
+  const completedRooms = (rooms || []).filter((room: RoomData) => {
+    const tour = getTour(room);
+    const endDate = tour?.end_date ? new Date(String(tour.end_date)) : null;
     if (!endDate) return false;
     return endDate < now;
   });
 
   // Получаем количество участников
-  const roomIds = (rooms || []).map((r: any) => r.id);
+  const roomIds = (rooms || []).map((r: RoomData) => String(r.id));
   let totalParticipants = 0;
   if (roomIds.length > 0) {
     const { count } = await supabase

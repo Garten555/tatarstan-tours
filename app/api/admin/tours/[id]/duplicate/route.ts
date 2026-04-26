@@ -88,14 +88,22 @@ export async function POST(
       .select('*')
       .eq('tour_id', id);
 
-    const tour = originalTour as any;
-    const media = (originalMedia || []) as any[];
+    interface TourData {
+      start_date: string;
+      end_date: string | null;
+      [key: string]: unknown;
+    }
+    interface MediaData {
+      [key: string]: unknown;
+    }
+    const tour = originalTour as TourData;
+    const media = (originalMedia || []) as MediaData[];
 
     const tourStartDate = new Date(tour.start_date);
     const tourEndDate = tour.end_date ? new Date(tour.end_date) : new Date(tour.start_date);
     const tourDuration = tourEndDate.getTime() - tourStartDate.getTime();
 
-    let rangesToCreate: Array<{ start: Date; end: Date }> = [];
+    const rangesToCreate: Array<{ start: Date; end: Date }> = [];
 
     if (Array.isArray(dates) && dates.length > 0) {
       for (const range of dates) {
@@ -132,7 +140,11 @@ export async function POST(
       }
     }
 
-    const createdTours: any[] = [];
+    interface CreatedTour {
+      id: string;
+      [key: string]: unknown;
+    }
+    const createdTours: CreatedTour[] = [];
 
     for (const [index, range] of rangesToCreate.entries()) {
       const newStartDate = range.start;
@@ -163,7 +175,7 @@ export async function POST(
         created_by: user.id,
       };
 
-      const { data: newTour, error: createError } = await (serviceClient as any)
+      const { data: newTour, error: createError } = await serviceClient
         .from('tours')
         .insert(newTourData)
         .select()

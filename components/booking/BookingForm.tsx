@@ -156,7 +156,7 @@ export default function BookingForm({ tour, user, savedCards }: BookingFormProps
         if (response.ok && Array.isArray(data.bookings)) {
           const hasBooking = data.bookings.some(
             (booking: any) =>
-              booking.tour_id === tour.id && booking.status !== 'cancelled'
+              booking.tour_id === tour.id && ['pending', 'confirmed'].includes(booking.status)
           );
           setHasExistingBooking(hasBooking);
         }
@@ -222,6 +222,14 @@ export default function BookingForm({ tour, user, savedCards }: BookingFormProps
         next = next.map((item) =>
           item.source === 'self'
             ? { full_name: '', email: null, phone: null, source: 'manual' as const, traveler_id: null }
+            : item
+        );
+      } else {
+        // Когда профиль загружается позже, синхронизируем уже выбранного "Я"
+        // чтобы автоматически подтянулись ФИО/почта/телефон из профиля.
+        next = next.map((item) =>
+          item.source === 'self'
+            ? buildSelfAttendee()
             : item
         );
       }

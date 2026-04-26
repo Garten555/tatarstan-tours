@@ -22,7 +22,10 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect('/auth/login?redirect=/booking' + (tourId ? `?tour=${tourId}` : ''));
+    const bookingPath = tourId
+      ? `/booking?tour=${encodeURIComponent(tourId)}`
+      : '/booking';
+    redirect(`/auth?redirect=${encodeURIComponent(bookingPath)}`);
   }
 
   if (!tourId) {

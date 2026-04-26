@@ -114,7 +114,7 @@ export async function PATCH(
     }
 
     // Обновляем бронирование
-    const { data: booking, error } = await (serviceClient as any)
+    const { data: booking, error } = await serviceClient
       .from('bookings')
       .update(updateData)
       .eq('id', id)

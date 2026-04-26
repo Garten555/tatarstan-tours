@@ -49,7 +49,7 @@ export async function DELETE(
     }
 
     // Удаляем все сообщения сессии
-    const { error: messagesError } = await (serviceClient as any)
+    const { error: messagesError } = await serviceClient
       .from('chat_messages')
       .delete()
       .eq('session_id', sessionId);
@@ -63,7 +63,7 @@ export async function DELETE(
     }
 
     // Удаляем саму сессию
-    const { error: sessionError } = await (serviceClient as any)
+    const { error: sessionError } = await serviceClient
       .from('support_sessions')
       .delete()
       .eq('session_id', sessionId);

@@ -63,11 +63,37 @@ export async function GET(_request: NextRequest) {
     }
 
     // Получаем последние сообщения для каждой сессии
-    const sessionIds = (supportSessions || []).map((s: any) => s.session_id);
-    let lastMessagesMap = new Map<string, any>();
+    interface SupportSession {
+      session_id: string;
+      user_id: string | null;
+      status: string;
+      closed_at: string | null;
+      closed_by: string | null;
+      closed_reason: string | null;
+      created_at: string;
+    }
+    interface LastMessage {
+      last_message: string;
+      last_message_at: string;
+      is_support: boolean;
+    }
+    interface Message {
+      session_id: string;
+      message: string;
+      created_at: string;
+      is_support: boolean;
+    }
+    interface Profile {
+      id: string;
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+    }
+    const sessionIds = (supportSessions || []).map((s: SupportSession) => s.session_id);
+    const lastMessagesMap = new Map<string, LastMessage>();
 
     if (sessionIds.length > 0) {
-      const { data: messages } = await (serviceClient as any)
+      const { data: messages } = await serviceClient
         .from('chat_messages')
         .select('session_id, message, created_at, is_support')
         .eq('is_ai', false)
@@ -75,7 +101,7 @@ export async function GET(_request: NextRequest) {
         .order('created_at', { ascending: false });
 
       // Группируем по session_id и берем последнее сообщение
-      (messages || []).forEach((msg: any) => {
+      (messages || []).forEach((msg: Message) => {
         if (!lastMessagesMap.has(msg.session_id)) {
           lastMessagesMap.set(msg.session_id, {
             last_message: msg.message,
@@ -87,8 +113,19 @@ export async function GET(_request: NextRequest) {
     }
 
     // Объединяем данные
-    const sessions = (supportSessions || []).map((session: any) => {
-      const lastMsg = lastMessagesMap.get(session.session_id) || {};
+    interface SessionWithMessage {
+      session_id: string;
+      user_id: string | null;
+      status: string;
+      closed_at: string | null;
+      closed_by: string | null;
+      closed_reason: string | null;
+      last_message: string;
+      last_message_at: string;
+      is_support: boolean;
+    }
+    const sessions = (supportSessions || []).map((session: SupportSession): SessionWithMessage => {
+      const lastMsg = lastMessagesMap.get(session.session_id) || { last_message: '', last_message_at: session.created_at, is_support: false };
       return {
         session_id: session.session_id,
         user_id: session.user_id,
@@ -102,7 +139,7 @@ export async function GET(_request: NextRequest) {
       };
     });
     const userIds = sessions
-      .map((s: any) => s.user_id)
+      .map((s: SessionWithMessage) => s.user_id)
       .filter(Boolean) as string[];
 
     const profilesMap = new Map<string, string>();
@@ -112,13 +149,13 @@ export async function GET(_request: NextRequest) {
         .select('id, first_name, last_name, email')
         .in('id', userIds);
 
-      (profiles || []).forEach((p: any) => {
+      (profiles || []).forEach((p: Profile) => {
         const name = [p.first_name, p.last_name].filter(Boolean).join(' ');
         profilesMap.set(p.id, name || p.email || p.id);
       });
     }
 
-    const result = sessions.map((session: any) => ({
+    const result = sessions.map((session: SessionWithMessage) => ({
       ...session,
       user_label: session.user_id ? profilesMap.get(session.user_id) || session.user_id : 'Аноним',
     }));

@@ -1,5 +1,7 @@
 // Утилита для отправки email уведомлений
 import nodemailer from 'nodemailer';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 
 interface EmailOptions {
   to: string;
@@ -9,11 +11,14 @@ interface EmailOptions {
 }
 
 // Создаем transporter для отправки email
-function createTransporter() {
+function createTransporter(hostOverride?: string, tlsServerName?: string) {
   const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com';
   const smtpPort = parseInt(process.env.SMTP_PORT || process.env.EMAIL_PORT || '587');
   const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
-  const smtpPassword = process.env.SMTP_PASSWORD || process.env.EMAIL_PASSWORD;
+  const smtpPassword =
+    process.env.SMTP_PASSWORD ||
+    process.env.SMTP_PASS ||
+    process.env.EMAIL_PASSWORD;
   const smtpFrom = process.env.SMTP_FROM || process.env.EMAIL_FROM || smtpUser;
 
   if (!smtpUser || !smtpPassword) {
@@ -25,10 +30,11 @@ function createTransporter() {
     return null;
   }
 
-  console.log(`📧 Creating SMTP transporter: ${smtpHost}:${smtpPort} (user: ${smtpUser})`);
+  const effectiveHost = hostOverride || smtpHost;
+  console.log(`📧 Creating SMTP transporter: ${effectiveHost}:${smtpPort} (user: ${smtpUser})`);
 
   return nodemailer.createTransport({
-    host: smtpHost,
+    host: effectiveHost,
     port: smtpPort,
     secure: smtpPort === 465, // true for 465, false for other ports
     auth: {
@@ -39,20 +45,46 @@ function createTransporter() {
     greetingTimeout: 5000, // 5 секунд на приветствие
     socketTimeout: 10000, // 10 секунд на операции
     debug: process.env.NODE_ENV === 'development', // Включаем debug в dev режиме
+    tls: {
+      minVersion: 'TLSv1.2',
+      ...(tlsServerName ? { servername: tlsServerName } : {}),
+    },
   });
+}
+
+async function resolveSmtpHost(): Promise<{ host: string; tlsServerName?: string }> {
+  const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com';
+  if (isIP(smtpHost)) {
+    return { host: smtpHost };
+  }
+
+  try {
+    // Используем системный резолвер ОС и фиксируем IPv4,
+    // чтобы обходить нестабильный DNS-резолв внутри nodemailer.
+    const resolved = await lookup(smtpHost, { family: 4 });
+    console.log(`🌐 SMTP host resolved: ${smtpHost} -> ${resolved.address}`);
+    return { host: resolved.address, tlsServerName: smtpHost };
+  } catch (error) {
+    console.warn(`⚠️ SMTP DNS lookup failed for ${smtpHost}, using host directly`);
+    return { host: smtpHost };
+  }
 }
 
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
   try {
-    const transporter = createTransporter();
+    const resolvedHost = await resolveSmtpHost();
+    const transporter = createTransporter(resolvedHost.host, resolvedHost.tlsServerName);
     
     if (!transporter) {
       console.error('❌ Email transporter not available. Cannot send email.');
       return false;
     }
 
-    const smtpFrom = process.env.SMTP_FROM || process.env.EMAIL_FROM || process.env.SMTP_USER || process.env.EMAIL_USER;
-
+    const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+    const smtpFrom =
+      process.env.SMTP_FROM ||
+      process.env.EMAIL_FROM ||
+      smtpUser;
     console.log(`📤 Attempting to send email to ${options.to}...`);
     console.log(`📧 From: ${smtpFrom}`);
     console.log(`📝 Subject: ${options.subject}`);
@@ -89,7 +121,30 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
     if (process.env.NODE_ENV === 'development') {
       console.error('   Full error:', JSON.stringify(error, null, 2));
     }
-    
+
+    // Fallback: некоторые SMTP-серверы отклоняют кастомный FROM.
+    // Пробуем повторно отправить с адресом авторизации, если он отличается.
+    try {
+      const resolvedHost = await resolveSmtpHost();
+      const retryTransporter = createTransporter(resolvedHost.host, resolvedHost.tlsServerName);
+      const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+      const fallbackFrom = smtpUser;
+      if (retryTransporter && fallbackFrom) {
+        const retryResult = await retryTransporter.sendMail({
+          from: fallbackFrom,
+          to: options.to,
+          subject: options.subject,
+          html: options.html,
+          text: options.text || options.html.replace(/<[^>]*>/g, ''),
+        });
+        console.log(`✅ Email sent on retry to ${options.to}`);
+        console.log(`📬 Retry message ID: ${retryResult.messageId}`);
+        return true;
+      }
+    } catch (retryError) {
+      console.error('❌ Retry email attempt failed:', retryError);
+    }
+
     return false;
   }
 }

@@ -43,17 +43,26 @@ interface TourRoom {
 }
 
 export default function TourRoomsPage() {
-  const router = useRouter();
   const supabase = createClient();
   const [rooms, setRooms] = useState<TourRoom[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [assigningGuide, setAssigningGuide] = useState(false);
-  const [users, setUsers] = useState<any[]>([]);
+  interface User {
+    id: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+  }
+  interface Tour {
+    id: string;
+    title: string;
+  }
+  const [users, setUsers] = useState<User[]>([]);
   const [showUserSelect, setShowUserSelect] = useState(false);
   const [deletingRoom, setDeletingRoom] = useState<string | null>(null);
-  const [tours, setTours] = useState<any[]>([]);
+  const [tours, setTours] = useState<Tour[]>([]);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [creatingRoom, setCreatingRoom] = useState(false);
   const [selectedTourId, setSelectedTourId] = useState<string | null>(null);
@@ -295,7 +304,7 @@ export default function TourRoomsPage() {
                     <div className="flex items-center gap-3 mb-3">
                       <Link
                         href={`/tours/${room.tour.id}`}
-                        className="text-xl md:text-2xl font-black text-gray-900 hover:text-emerald-600 transition-colors"
+                        className="tour-room-title-link text-xl md:text-2xl font-black text-gray-900 hover:text-emerald-600 transition-colors"
                       >
                         {room.tour.title}
                       </Link>

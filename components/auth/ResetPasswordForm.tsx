@@ -111,7 +111,7 @@ export default function ResetPasswordForm() {
         throw new Error(data.error || 'Не удалось отправить письмо');
       }
       
-      setMessage('Код восстановления отправлен на ваш email. Проверьте почту.');
+      setMessage(data.message || 'Код восстановления отправлен на ваш email. Проверьте почту.');
       setStep('code');
     } catch (error: any) {
       if (error.name === 'AbortError') {

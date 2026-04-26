@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { User, Mail, Phone, Calendar, Shield, Upload, Loader2, CreditCard, Trash2, Star, Edit2, Eye, Settings, CheckCircle2, BookOpen, Ban, CheckCircle, X } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import UserBookings from './UserBookings';
@@ -111,9 +112,15 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
       if (contentType && contentType.includes('application/json')) {
         data = await response.json();
         // Обновляем аватар в состоянии
-        if (data) {
-          setAvatarUrl(data.url);
-          setUploadSuccess(true);
+        if (data && data.url) {
+          // Проверяем, что URL валидный
+          const url = data.url;
+          if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+            setAvatarUrl(url);
+            setUploadSuccess(true);
+          } else {
+            throw new Error('Получен некорректный URL аватара');
+          }
         }
       } else {
         throw new Error('Неверный формат ответа');
@@ -157,13 +164,23 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
 
   // Обновляем аватар при изменении profile
   useEffect(() => {
+    let url: string | null = null;
+    
     if (isViewMode) {
       // В режиме просмотра используем только profile
-      setAvatarUrl(profile?.avatar_url || null);
+      url = profile?.avatar_url || null;
     } else {
       // В своем профиле используем profile или user_metadata
-      setAvatarUrl(profile?.avatar_url || user.user_metadata?.avatar_url || null);
+      url = profile?.avatar_url || user.user_metadata?.avatar_url || null;
     }
+    
+    // Проверяем, что URL валидный (начинается с http:// или https://)
+    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+      console.warn('Некорректный URL аватара:', url);
+      url = null;
+    }
+    
+    setAvatarUrl(url);
   }, [isViewMode, profile?.avatar_url, user.user_metadata?.avatar_url]);
 
   // Загрузка сохраненных карт, статистики и отзывов параллельно (оптимизация производительности)
@@ -569,15 +586,25 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
               {avatarUrl ? (
                 <button
                   onClick={handleAvatarView}
-                  className="relative block cursor-pointer hover:scale-105 transition-transform duration-200"
+                  className="relative block cursor-pointer hover:scale-105 transition-transform duration-200 w-32 h-32 md:w-40 md:h-40"
                   title="Просмотреть фото"
                 >
-                  <img
-                    src={avatarUrl}
-                    alt="Avatar"
-                    className="w-32 h-32 md:w-40 md:h-40 rounded-2xl object-cover border-4 border-emerald-300 shadow-xl"
-                  />
-                  <div className="absolute inset-0 rounded-2xl bg-black/0 group-hover:bg-black/20 transition-colors duration-200 flex items-center justify-center">
+                  <div className="relative w-full h-full rounded-2xl overflow-hidden border-4 border-emerald-300 shadow-xl">
+                    <Image
+                      src={avatarUrl}
+                      alt="Avatar"
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 128px, 160px"
+                      unoptimized={avatarUrl?.includes('s3.twcstorage.ru')}
+                      onError={() => {
+                        // Если изображение не загрузилось, сбрасываем avatarUrl чтобы показать placeholder
+                        console.error('Ошибка загрузки аватара:', avatarUrl);
+                        setAvatarUrl(null);
+                      }}
+                    />
+                  </div>
+                  <div className="absolute inset-0 rounded-2xl bg-black/0 group-hover:bg-black/20 transition-colors duration-200 flex items-center justify-center pointer-events-none">
                     <Eye className="w-8 h-8 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </button>

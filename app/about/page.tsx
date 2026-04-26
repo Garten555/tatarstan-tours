@@ -1,7 +1,6 @@
 import { Metadata } from 'next';
 import { ArrowLeft, MapPin, Users, Award, Heart, Shield, Clock, Star } from 'lucide-react';
 import Link from 'next/link';
-import Image from 'next/image';
 
 export const metadata: Metadata = {
   title: 'О нас | Татарстан тур',

@@ -21,7 +21,11 @@ export async function GET(request: NextRequest) {
       .eq('id', user.id)
       .single();
     
-    if ((profile as any)?.role !== 'tour_admin' && (profile as any)?.role !== 'super_admin') {
+    interface Profile {
+      role?: string;
+    }
+    const profileRole = (profile as Profile | null)?.role;
+    if (profileRole !== 'tour_admin' && profileRole !== 'super_admin') {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

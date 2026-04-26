@@ -14,7 +14,7 @@ function generateBackupCodes(count: number = 8): string[] {
   return codes;
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     const backupCodes = generateBackupCodes(8);
 
     // Сохраняем секрет в БД (пока не включено)
-    const { data: mfaData, error: mfaError } = await supabase
+    const { error: mfaError } = await supabase
       .from('user_mfa')
       .upsert({
         user_id: user.id,
@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
       },
       { status: 200 }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in 2FA setup:', error);
     return NextResponse.json(
       { error: 'Ошибка при настройке 2FA' },

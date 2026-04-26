@@ -1,0 +1,102 @@
+@startuml
+title ERD диаграмма базы данных туристической платформы
+
+hide methods
+hide stereotypes
+skinparam linetype ortho
+skinparam classAttributeIconSize 0
+
+entity "profiles" as profiles {
+  * id : uuid <<PK>>
+  --
+  email : text
+  username : text
+  role : text
+  is_banned : boolean
+  ban_until : timestamptz
+  created_at : timestamptz
+}
+
+entity "cities" as cities {
+  * id : uuid <<PK>>
+  --
+  name : text
+  country : text
+  is_featured : boolean
+}
+
+entity "tours" as tours {
+  * id : uuid <<PK>>
+  --
+  title : text
+  slug : text
+  city_id : uuid <<FK>>
+  price_per_person : numeric
+  max_participants : int
+  current_participants : int
+  status : text
+  created_at : timestamptz
+}
+
+entity "bookings" as bookings {
+  * id : uuid <<PK>>
+  --
+  user_id : uuid <<FK>>
+  tour_id : uuid <<FK>>
+  status : text
+  payment_status : text
+  total_price : numeric
+  created_at : timestamptz
+}
+
+entity "booking_attendees" as booking_attendees {
+  * id : uuid <<PK>>
+  --
+  booking_id : uuid <<FK>>
+  full_name : text
+  birth_date : date
+  passport_number : text
+}
+
+entity "support_sessions" as support_sessions {
+  * id : uuid <<PK>>
+  --
+  user_id : uuid <<FK, nullable>>
+  guest_name : text
+  guest_email : text
+  status : text
+  created_at : timestamptz
+  closed_at : timestamptz
+}
+
+entity "chat_messages" as chat_messages {
+  * id : uuid <<PK>>
+  --
+  session_id : uuid <<FK>>
+  sender_id : uuid <<FK, nullable>>
+  sender_type : text
+  message : text
+  read_at : timestamptz
+  created_at : timestamptz
+}
+
+entity "notifications" as notifications {
+  * id : uuid <<PK>>
+  --
+  user_id : uuid <<FK>>
+  message : text
+  type : text
+  is_read : boolean
+  created_at : timestamptz
+}
+
+cities ||--o{ tours : "id = city_id"
+profiles ||--o{ bookings : "id = user_id"
+tours ||--o{ bookings : "id = tour_id"
+bookings ||--o{ booking_attendees : "id = booking_id"
+profiles ||--o{ support_sessions : "id = user_id"
+support_sessions ||--o{ chat_messages : "id = session_id"
+profiles ||--o{ chat_messages : "id = sender_id"
+profiles ||--o{ notifications : "id = user_id"
+
+@enduml

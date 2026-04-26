@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Архивируем закрытые сессии старше 7 дней
-    const { error: archiveError } = await (serviceClient as any)
+    const { error: archiveError } = await serviceClient
       .rpc('archive_old_closed_sessions');
 
     if (archiveError) {
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Удаляем архивные сессии старше 30 дней
-    const { error: deleteError } = await (serviceClient as any)
+    const { error: deleteError } = await serviceClient
       .rpc('delete_old_archived_sessions');
 
     if (deleteError) {

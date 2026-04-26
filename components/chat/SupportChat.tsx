@@ -388,19 +388,39 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
   };
 
   const clearChat = async () => {
-    if (mode !== 'ai') return;
-    if (!confirm('Вы уверены, что хотите очистить историю чата с ИИ?')) return;
+    if (mode === 'ai') {
+      if (!confirm('Вы уверены, что хотите очистить историю чата с ИИ?')) return;
 
-    try {
-      const response = await fetch('/api/support/ai', {
-        method: 'DELETE',
-      });
+      try {
+        const response = await fetch('/api/support/ai', {
+          method: 'DELETE',
+        });
 
-      if (response.ok) {
-        setMessages([]);
+        if (response.ok) {
+          setMessages([]);
+        }
+      } catch (error) {
+        console.error('Ошибка очистки чата:', error);
       }
-    } catch (error) {
-      console.error('Ошибка очистки чата:', error);
+    } else if (mode === 'support') {
+      if (!confirm('Вы уверены, что хотите очистить чат с поддержкой? Сессия будет автоматически закрыта, и вопрос будет считаться решенным.')) return;
+
+      try {
+        const response = await fetch('/api/support/clear', {
+          method: 'POST',
+        });
+
+        if (response.ok) {
+          setMessages([]);
+          setSessionStatus('closed');
+        } else {
+          const data = await response.json().catch(() => ({}));
+          alert(data.error || 'Не удалось очистить чат');
+        }
+      } catch (error) {
+        console.error('Ошибка очистки чата:', error);
+        alert('Не удалось очистить чат');
+      }
     }
   };
 
@@ -445,64 +465,64 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       data-support-chat
     >
       {/* Заголовок */}
-      <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-white flex-shrink-0">
+      <div className="px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 md:py-4 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-white flex-shrink-0">
         <div className="flex items-center justify-between mb-1 sm:mb-1.5">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-            <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${mode === 'ai' ? 'bg-blue-500' : 'bg-emerald-500'} animate-pulse flex-shrink-0`} />
-            <h2 className="text-base sm:text-lg font-bold text-gray-900 truncate">
+            <div className={`w-2 h-2 sm:w-2.5 sm:h-2.5 md:w-3 md:h-3 rounded-full ${mode === 'ai' ? 'bg-blue-500' : 'bg-emerald-500'} animate-pulse flex-shrink-0`} />
+            <h2 className="text-base sm:text-lg md:text-xl font-bold text-gray-900 truncate">
               {mode === 'ai' ? 'ИИ помощник' : 'Чат поддержки'}
             </h2>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-            {/* Кнопка очистки для ИИ */}
-            {mode === 'ai' && messages.length > 0 && (
+          <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 flex-shrink-0">
+            {/* Кнопка очистки для ИИ и поддержки */}
+            {messages.length > 0 && (mode === 'ai' || (mode === 'support' && sessionStatus === 'active')) && (
               <button
                 onClick={clearChat}
-                className="p-1 sm:p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                title="Очистить чат"
+                className="p-1.5 sm:p-2 md:p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                title={mode === 'support' ? 'Очистить чат и закрыть сессию' : 'Очистить чат'}
               >
-                <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <Trash2 className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </button>
             )}
             {/* Кнопка закрытия - только для виджета */}
             {variant === 'widget' && onClose && (
               <button
                 onClick={onClose}
-                className="p-1 sm:p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                className="p-1.5 sm:p-2 md:p-2.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                 title="Закрыть чат"
                 aria-label="Закрыть чат"
               >
-                <X className="w-4 h-4 sm:w-4 sm:h-4" />
+                <X className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
               </button>
             )}
             {/* Переключатель режима */}
-            <div className="flex items-center gap-0.5 sm:gap-1 bg-gray-100 rounded-lg p-0.5">
+            <div className="flex items-center gap-0.5 sm:gap-1 md:gap-1.5 bg-gray-100 rounded-lg p-0.5 sm:p-1">
               <button
                 onClick={() => setMode('support')}
-                className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-md text-[10px] sm:text-xs font-medium transition-all ${
+                className={`flex items-center gap-1 sm:gap-1.5 md:gap-2 px-2 sm:px-2.5 md:px-3 py-1 sm:py-1.5 md:py-2 rounded-md text-xs sm:text-sm md:text-base font-medium transition-all ${
                   mode === 'support'
                     ? 'bg-white text-emerald-600 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <MessageCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5" />
                 <span className="hidden min-[375px]:inline">Поддержка</span>
               </button>
               <button
                 onClick={() => setMode('ai')}
-                className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-md text-[10px] sm:text-xs font-medium transition-all ${
+                className={`flex items-center gap-1 sm:gap-1.5 md:gap-2 px-2 sm:px-2.5 md:px-3 py-1 sm:py-1.5 md:py-2 rounded-md text-xs sm:text-sm md:text-base font-medium transition-all ${
                   mode === 'ai'
                     ? 'bg-white text-blue-600 shadow-sm'
                     : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <Bot className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5" />
                 <span className="hidden min-[375px]:inline">ИИ</span>
               </button>
             </div>
           </div>
         </div>
-        <p className="text-[10px] sm:text-xs text-gray-700 font-medium ml-4 sm:ml-5">
+        <p className="text-xs sm:text-sm md:text-base text-gray-700 font-medium ml-4 sm:ml-5 md:ml-6">
           {mode === 'ai' 
             ? 'Задайте вопрос ИИ о турах' 
             : 'Напишите нам, и мы поможем'}
@@ -510,17 +530,17 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       </div>
 
       {/* Сообщения */}
-      <div className="flex-1 overflow-y-auto chat-scroll bg-gray-50 p-2 sm:p-3 space-y-2 sm:space-y-2.5 min-h-0">
+      <div className="flex-1 overflow-y-auto chat-scroll bg-gray-50 p-2 sm:p-3 md:p-4 space-y-2 sm:space-y-2.5 md:space-y-3 min-h-0">
         {loading ? (
           <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin text-emerald-600" />
+            <Loader2 className="w-6 h-6 sm:w-7 sm:h-7 md:w-8 md:h-8 animate-spin text-emerald-600" />
           </div>
         ) : messages.length === 0 ? (
           <div className="flex items-center justify-center h-full">
-            <div className="text-center px-4">
-              <MessageSquare className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2 sm:mb-3" />
-              <p className="text-sm sm:text-base font-semibold text-gray-900">Начните общение</p>
-              <p className="text-[10px] sm:text-xs text-gray-700 font-medium mt-1 sm:mt-1.5">
+            <div className="text-center px-4 sm:px-6">
+              <MessageSquare className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 text-gray-300 mx-auto mb-3 sm:mb-4" />
+              <p className="text-base sm:text-lg md:text-xl font-semibold text-gray-900">Начните общение</p>
+              <p className="text-xs sm:text-sm md:text-base text-gray-700 font-medium mt-2 sm:mt-2.5">
                 Задайте вопрос, и мы ответим вам
               </p>
             </div>
@@ -533,7 +553,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
                 className={`flex ${msg.is_support ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[85%] sm:max-w-[80%] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-lg ${
+                  className={`max-w-[85%] sm:max-w-[80%] md:max-w-[75%] px-3 sm:px-4 md:px-5 py-2 sm:py-2.5 md:py-3 rounded-lg ${
                     msg.is_support
                       ? mode === 'ai' 
                         ? 'bg-blue-500 text-white' 
@@ -541,8 +561,8 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
                       : 'bg-white border border-gray-200 text-gray-900 shadow-sm'
                   }`}
                 >
-                  <div className="text-xs sm:text-sm font-medium leading-relaxed whitespace-pre-wrap break-words">{msg.message}</div>
-                  <div className={`text-[9px] sm:text-[10px] mt-1 sm:mt-1.5 font-medium ${msg.is_support ? mode === 'ai' ? 'text-blue-100' : 'text-emerald-100' : 'text-gray-500'}`}>
+                  <div className="text-sm sm:text-base md:text-lg font-medium leading-relaxed whitespace-pre-wrap break-words">{msg.message}</div>
+                  <div className={`text-xs sm:text-sm md:text-base mt-1.5 sm:mt-2 md:mt-2.5 font-medium ${msg.is_support ? mode === 'ai' ? 'text-blue-100' : 'text-emerald-100' : 'text-gray-500'}`}>
                     {new Date(msg.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 </div>
@@ -555,15 +575,15 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
 
       {/* Уведомление о закрытии/удалении сессии */}
       {mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted') && (
-        <div className={`p-3 sm:p-4 border-t border-gray-200 flex-shrink-0 ${
+        <div className={`p-3 sm:p-4 md:p-5 border-t border-gray-200 flex-shrink-0 ${
           sessionStatus === 'deleted' ? 'bg-red-50 border-red-200' : 'bg-yellow-50 border-yellow-200'
         }`}>
-          <div className="flex flex-col gap-2 sm:gap-3">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className={`w-2 h-2 rounded-full ${
+          <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
+            <div className="flex items-center gap-2 sm:gap-3 md:gap-4">
+              <div className={`w-2.5 h-2.5 sm:w-3 sm:h-3 md:w-4 md:h-4 rounded-full flex-shrink-0 ${
                 sessionStatus === 'deleted' ? 'bg-red-500' : 'bg-yellow-500'
               }`} />
-              <p className={`text-xs sm:text-sm font-bold ${
+              <p className={`text-sm sm:text-base md:text-lg font-bold ${
                 sessionStatus === 'deleted' ? 'text-red-800' : 'text-yellow-800'
               }`}>
                 {sessionStatus === 'deleted' 
@@ -573,7 +593,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
             </div>
             <button
               onClick={startNewSession}
-              className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs sm:text-sm font-bold transition-all duration-200 shadow-md hover:shadow-lg"
+              className="w-full sm:w-auto px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg sm:rounded-xl text-sm sm:text-base md:text-lg font-bold transition-all duration-200 shadow-md hover:shadow-lg"
             >
               Начать новую сессию
             </button>
@@ -582,42 +602,44 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       )}
 
       {/* Поле ввода */}
-      <div className="p-2.5 sm:p-3 border-t border-gray-200 bg-white flex-shrink-0 safe-area-inset-bottom">
+      <div className="p-3 sm:p-4 md:p-5 border-t border-gray-200 bg-gradient-to-b from-white to-gray-50 flex-shrink-0 safe-area-inset-bottom">
         {!isAuthenticated ? (
-          <div className="text-center py-3 px-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-sm text-yellow-800 font-semibold">
-              Для отправки сообщений необходимо <a href="/auth/login" className="text-emerald-600 hover:underline">войти в аккаунт</a>
+          <div className="text-center py-3 sm:py-4 px-4 sm:px-5 bg-yellow-50 border-2 border-yellow-200 rounded-xl">
+            <p className="text-sm sm:text-base md:text-lg text-yellow-800 font-semibold">
+              Для отправки сообщений необходимо <a href="/auth/login" className="text-emerald-600 hover:underline font-bold">войти в аккаунт</a>
             </p>
           </div>
         ) : (
-          <div className="flex gap-1.5 sm:gap-2 items-end">
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  sendMessage();
+          <div className="flex gap-2 sm:gap-3 md:gap-4 items-end">
+            <div className="flex-1 relative">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                placeholder={
+                  mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted')
+                    ? 'Сессия закрыта'
+                    : 'Напишите сообщение...'
                 }
-              }}
-              placeholder={
-                mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted')
-                  ? 'Сессия закрыта'
-                  : 'Напишите сообщение...'
-              }
-              rows={1}
-              disabled={
-                !isAuthenticated ||
-                (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
-              }
-              className={`flex-1 px-2.5 sm:px-3 py-2 sm:py-2.5 border border-gray-300 rounded-lg text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-all resize-none overflow-hidden min-h-[44px] sm:min-h-[40px] max-h-[120px] sm:max-h-[120px] ${
-                !isAuthenticated || (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
-                  ? 'bg-gray-100 cursor-not-allowed'
-                  : 'bg-white'
-              }`}
-              style={{ fontSize: '16px' }} // Предотвращает зум на iOS
-            />
+                rows={1}
+                disabled={
+                  !isAuthenticated ||
+                  (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
+                }
+                className={`w-full px-4 sm:px-5 md:px-6 py-3 sm:py-3.5 md:py-4 pr-12 sm:pr-14 md:pr-16 border-2 rounded-xl sm:rounded-2xl text-sm sm:text-base md:text-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all resize-none overflow-hidden min-h-[52px] sm:min-h-[56px] md:min-h-[60px] max-h-[120px] sm:max-h-[140px] md:max-h-[160px] shadow-sm ${
+                  !isAuthenticated || (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
+                    ? 'bg-gray-100 border-gray-300 cursor-not-allowed text-gray-600 placeholder:text-gray-500'
+                    : 'bg-white border-gray-300 hover:border-emerald-400 text-gray-900 placeholder:text-gray-500'
+                }`}
+                style={{ fontSize: 'clamp(14px, 1rem, 18px)', color: (!isAuthenticated || (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))) ? '#4b5563' : '#111827' }} // Адаптивный размер шрифта с clamp
+              />
+            </div>
             <button
               onClick={sendMessage}
               disabled={
@@ -626,16 +648,16 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
                 !input.trim() || 
                 (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
               }
-              className={`flex-shrink-0 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-lg !text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 sm:gap-1.5 font-medium text-xs sm:text-sm transition-all shadow-md hover:shadow-lg ${
+              className={`flex-shrink-0 px-4 sm:px-5 md:px-6 py-3 sm:py-3.5 md:py-4 rounded-xl sm:rounded-2xl text-white disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 sm:gap-2.5 md:gap-3 font-bold text-sm sm:text-base md:text-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95 disabled:transform-none ${
                 mode === 'ai' 
-                  ? 'bg-blue-500 hover:bg-blue-600' 
-                  : 'bg-emerald-500 hover:bg-emerald-600'
+                  ? 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700' 
+                  : 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700'
               }`}
             >
               {sending ? (
-                <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
+                <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 animate-spin" />
               ) : (
-                <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <Send className="w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7" />
               )}
               <span className="hidden sm:inline">Отправить</span>
             </button>

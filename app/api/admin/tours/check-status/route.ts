@@ -56,13 +56,17 @@ export async function GET(request: NextRequest) {
     }
 
     // Обновляем статусы
+    interface Tour {
+      id: string;
+      [key: string]: unknown;
+    }
     if (toursToComplete && toursToComplete.length > 0) {
-      const tourIds = toursToComplete.map((t: any) => t.id);
+      const tourIds = toursToComplete.map((t: Tour) => t.id);
       
       // Используем RPC для обновления статуса (так как это ENUM)
       const { data: updated, error: updateError } = await serviceClient
         .from('tours')
-        .update({ status: 'completed' as any })
+        .update({ status: 'completed' })
         .in('id', tourIds)
         .select('id, title, status');
 
@@ -89,10 +93,11 @@ export async function GET(request: NextRequest) {
       updated: 0,
       message: 'Нет туров для завершения',
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Ошибка проверки статусов туров:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Внутренняя ошибка сервера';
     return NextResponse.json(
-      { error: error.message || 'Внутренняя ошибка сервера' },
+      { error: errorMessage },
       { status: 500 }
     );
   }

@@ -100,11 +100,17 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
           loadRooms();
         }
         if (data.bookings) {
-          const normalized = data.bookings.map((booking: any) => ({
-            ...booking,
-            review: Array.isArray(booking.review) ? booking.review[0] || null : booking.review || null,
-            tour: Array.isArray(booking.tour) ? booking.tour[0] || null : booking.tour || null,
-          }));
+          const normalized = data.bookings.map((booking: any) => {
+            const tour = Array.isArray(booking.tour) ? booking.tour[0] || null : booking.tour || null;
+            return {
+              ...booking,
+              review: Array.isArray(booking.review) ? booking.review[0] || null : booking.review || null,
+              tour: tour ? {
+                ...tour,
+                cover_image: tour.cover_image || null,
+              } : null,
+            };
+          });
           setBookings(normalized);
         }
       } catch (error) {
@@ -229,31 +235,49 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
       </h2>
 
       <div className="space-y-4">
-        {bookings.map((booking) => (
-          <div
-            key={booking.id}
-            className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
-          >
-            <div className="flex flex-col md:flex-row gap-6">
-              {/* Изображение тура */}
-              <div className="relative w-full md:w-48 h-48 rounded-lg overflow-hidden flex-shrink-0">
-                <Image
-                  src={booking.tour.cover_image}
-                  alt={booking.tour.title}
-                  fill
-                  className="object-cover"
-                />
-              </div>
+        {bookings.map((booking) => {
+          if (!booking.tour) {
+            return null; // Пропускаем бронирования без тура
+          }
+          
+          return (
+            <div
+              key={booking.id}
+              className="border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
+            >
+              <div className="flex flex-col md:flex-row gap-6">
+                {/* Изображение тура */}
+                <div className="relative w-full md:w-48 h-48 rounded-lg overflow-hidden flex-shrink-0 bg-gray-200">
+                  {booking.tour?.cover_image ? (
+                    <Image
+                      src={booking.tour.cover_image}
+                      alt={booking.tour.title || 'Тур'}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 768px) 100vw, 192px"
+                      unoptimized={booking.tour.cover_image?.includes('s3.twcstorage.ru')}
+                      onError={(e) => {
+                        // Если изображение не загрузилось, скрываем его
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-emerald-100 to-emerald-200">
+                      <BookOpen className="w-12 h-12 text-emerald-600 opacity-50" />
+                    </div>
+                  )}
+                </div>
 
-              {/* Информация */}
-              <div className="flex-1 space-y-4">
-                <div>
-                  <Link
-                    href={`/tours/${booking.tour.slug}`}
-                    className="text-xl font-semibold text-gray-900 hover:text-emerald-600 transition-colors"
-                  >
-                    {booking.tour.title}
-                  </Link>
+                {/* Информация */}
+                <div className="flex-1 space-y-4">
+                  <div>
+                    <Link
+                      href={`/tours/${booking.tour.slug}`}
+                      className="text-xl font-semibold text-gray-900 hover:text-emerald-600 transition-colors"
+                    >
+                      {booking.tour.title}
+                    </Link>
                   {booking.tour.city && (
                     <div className="flex items-center gap-2 text-gray-600 mt-1">
                       <MapPin className="w-4 h-4" />
@@ -341,7 +365,8 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
               </div>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {reviewBooking && (

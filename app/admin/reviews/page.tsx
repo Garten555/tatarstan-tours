@@ -36,7 +36,7 @@ export default async function ReviewsPage() {
   }
 
   // Загружаем отзывы
-  const { data: reviews, error } = await serviceClient
+  const { data: reviews } = await serviceClient
     .from('reviews')
     .select(`
       id,
@@ -64,7 +64,21 @@ export default async function ReviewsPage() {
     .order('created_at', { ascending: false });
 
   // Преобразуем данные для компонента
-  const reviewsData = (reviews || []).map((review: any) => {
+  interface ReviewData {
+    id: string;
+    user_id: string;
+    tour_id: string;
+    rating: number;
+    text: string;
+    is_approved: boolean;
+    is_published: boolean;
+    is_reported: boolean;
+    created_at: string;
+    user?: { first_name: string; last_name: string; email: string } | { first_name: string; last_name: string; email: string }[] | null;
+    tour?: { title: string } | { title: string }[] | null;
+    review_media?: { media_type: string; media_url: string }[] | null;
+  }
+  const reviewsData = (reviews || []).map((review: ReviewData) => {
     const userData = Array.isArray(review.user) ? review.user[0] : review.user;
     const tourData = Array.isArray(review.tour) ? review.tour[0] : review.tour;
     
@@ -81,8 +95,8 @@ export default async function ReviewsPage() {
       user_name: userData ? `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || userData.email || 'Пользователь' : 'Пользователь',
       user_email: userData?.email || '',
       tour_title: tourData?.title || 'Тур удален',
-      media: (review.review_media || []).map((m: any) => ({
-        media_type: m.media_type,
+      media: (review.review_media || []).map((m) => ({
+        media_type: (m.media_type === 'image' || m.media_type === 'video' ? m.media_type : 'image') as 'image' | 'video',
         media_url: m.media_url,
       })),
     };

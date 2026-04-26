@@ -14,43 +14,20 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
+        getAll() {
+          return request.cookies.getAll();
         },
-        set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          });
+        setAll(cookiesToSet) {
           response = NextResponse.next({
             request: {
               headers: request.headers,
             },
           });
-          response.cookies.set({
-            name,
-            value,
-            ...options,
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value);
+            response.cookies.set(name, value, options);
           });
-        },
-        remove(name: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          });
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          });
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          });
-        },
+        }
       },
     }
   );
@@ -65,7 +42,7 @@ export async function middleware(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith('/admin')) {
     if (authError || !user) {
       // Перенаправление на логин
-      const redirectUrl = new URL('/login', request.url);
+      const redirectUrl = new URL('/auth', request.url);
       redirectUrl.searchParams.set('redirect', request.nextUrl.pathname);
       return NextResponse.redirect(redirectUrl);
     }
@@ -101,7 +78,7 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/my-bookings')
   ) {
     if (authError || !user) {
-      const redirectUrl = new URL('/login', request.url);
+      const redirectUrl = new URL('/auth', request.url);
       redirectUrl.searchParams.set('redirect', request.nextUrl.pathname);
       return NextResponse.redirect(redirectUrl);
     }
@@ -165,7 +142,7 @@ export async function middleware(request: NextRequest) {
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   response.headers.set(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:;"
+    "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https: wss: wss://*.supabase.co wss://ws-eu.pusher.com wss://ws.pusher.com;"
   );
 
   return response;

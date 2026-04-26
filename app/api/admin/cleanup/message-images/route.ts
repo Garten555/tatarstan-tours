@@ -26,7 +26,10 @@ export async function POST(request: NextRequest) {
         .eq('id', user.id)
         .single();
       
-      if (!profile || !['super_admin', 'tour_admin'].includes((profile as any).role)) {
+      interface Profile {
+        role?: string;
+      }
+      if (!profile || !['super_admin', 'tour_admin'].includes((profile as Profile).role || '')) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }
@@ -72,9 +75,24 @@ export async function POST(request: NextRequest) {
     const filesToDelete: string[] = [];
 
     // Фильтруем сообщения из закончившихся туров
+    interface MessageData {
+      id: string;
+      image_url: string | null;
+      image_path: string | null;
+      room_id: string;
+      room?: {
+        tour?: {
+          id: string;
+          end_date: string | null;
+        } | {
+          id: string;
+          end_date: string | null;
+        }[] | null;
+      } | null;
+    }
     for (const message of messages) {
-      const msg = message as any;
-      const tour = msg?.room?.tour;
+      const msg = message as MessageData;
+      const tour = Array.isArray(msg?.room?.tour) ? msg.room.tour[0] : msg?.room?.tour;
       if (tour && tour.end_date) {
         const tourEndDate = new Date(tour.end_date);
         if (tourEndDate < now && msg.image_path) {
@@ -96,8 +114,8 @@ export async function POST(request: NextRequest) {
 
     // Очищаем image_url и image_path в БД для удаленных файлов
     if (filesToDelete.length > 0) {
-      const messageIds = (messages as any[]).filter((m: any) => filesToDelete.includes(m.image_path || '')).map((m: any) => m.id);
-      const { error: updateError } = await (serviceClient as any)
+      const messageIds = (messages as MessageData[]).filter((m) => filesToDelete.includes(m.image_path || '')).map((m) => m.id);
+      const { error: updateError } = await serviceClient
         .from('tour_room_messages')
         .update({
           image_url: null,

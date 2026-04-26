@@ -1217,6 +1217,15 @@ button[class*="bg-emerald"][class*="text-white"] {
   color: inherit !important;
 }
 
+/* Заголовок тура в админской карточке должен быть черным, не синим */
+.tour-room-title-link {
+  color: rgb(17 24 39) !important; /* gray-900 */
+}
+
+.tour-room-title-link:hover {
+  color: rgb(5 150 105) !important; /* emerald-600 */
+}
+
 /* Ссылки в футере используют правильные цвета */
 .footer-link {
   color: inherit !important; /* Наследуем цвет от классов компонента */

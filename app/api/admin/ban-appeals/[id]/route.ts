@@ -43,7 +43,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Недопустимый статус' }, { status: 400 });
     }
 
-    const updateData: Record<string, any> = {
+    const updateData: Record<string, string | null> = {
       status,
       reviewed_by: user.id,
       reviewed_at: new Date().toISOString(),

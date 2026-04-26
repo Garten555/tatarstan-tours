@@ -106,11 +106,18 @@ export default async function ReviewDetailPage({
     user_name: userData ? `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || userData.email || 'Пользователь' : 'Пользователь',
     user_email: userData?.email || null,
     tour_title: tourData?.title || null,
-    media: (review.review_media || []).map((m: any) => ({
-      media_type: m.media_type,
+    media: (review.review_media || []).map((m: { media_type: string; media_url: string }) => ({
+      media_type: (m.media_type === 'image' || m.media_type === 'video' ? m.media_type : 'image') as 'image' | 'video',
       media_url: m.media_url,
     })),
-    comments: (review.review_comments || []).map((c: any) => {
+    comments: (review.review_comments || []).map((c: {
+      id: string;
+      message: string;
+      created_at: string;
+      is_reported: boolean;
+      report_reason: string | null;
+      user?: { id: string; first_name: string; last_name: string; email: string; avatar_url: string | null; is_banned: boolean } | { id: string; first_name: string; last_name: string; email: string; avatar_url: string | null; is_banned: boolean }[] | null;
+    }) => {
       const commentUser = Array.isArray(c.user) ? c.user[0] : c.user;
       return {
         id: c.id,

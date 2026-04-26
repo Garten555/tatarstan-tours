@@ -1,0 +1,132 @@
+@startuml
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+skinparam linetype ortho
+
+actor "Гость" as Guest
+actor "Зарегистрированный\nпользователь" as User
+actor "Администратор" as Admin
+
+User --|> Guest
+Admin --|> User
+
+rectangle "Туристическая веб-платформа" {
+  package "Публичные функции (Гость)" {
+    usecase "Просмотр контента" as UCG_PUBLIC
+    usecase "Авторизация" as UCG_AUTH
+  }
+
+  package "Функции пользователя" {
+    usecase "Бронирования и оплата" as UCU_BOOKING
+    usecase "Профиль и безопасность" as UCU_PROFILE
+    usecase "Социальные функции и контент" as UCU_SOCIAL
+    usecase "Чаты и поддержка" as UCU_CHAT
+  }
+
+  package "Функции администратора" {
+    usecase "Управление турами и комнатами" as UCA_TOURS
+    usecase "Управление пользователями\nи модерация" as UCA_MODERATION
+    usecase "Выдача достижений\nпользователям" as UCA_ACHIEVEMENTS
+    usecase "Support и техоперации" as UCA_SUPPORT
+    usecase "Отчеты и системные настройки" as UCA_SYSTEM
+  }
+}
+
+Guest --> UCG_PUBLIC
+Guest --> UCG_AUTH
+
+User --> UCU_BOOKING
+User --> UCU_PROFILE
+User --> UCU_SOCIAL
+User --> UCU_CHAT
+
+Admin --> UCA_TOURS
+Admin --> UCA_MODERATION
+Admin --> UCA_ACHIEVEMENTS
+Admin --> UCA_SUPPORT
+Admin --> UCA_SYSTEM
+
+note right of UCG_PUBLIC
+  - Просмотр туров и карточек тура
+  - Поиск и фильтрация туров
+  - Просмотр блога и дневников
+  - Просмотр публичных профилей
+  - Просмотр отзывов
+  - About / FAQ / Contacts / Privacy / Terms
+  - Проверка статуса техработ
+end note
+
+note right of UCG_AUTH
+  - Регистрация
+  - Вход в систему
+  - Подтверждение email
+  - Восстановление / сброс пароля
+end note
+
+note right of UCU_BOOKING
+  - Бронирование тура
+  - Мои бронирования (просмотр/отмена)
+  - Управление картами оплаты
+  - Управление travelers
+end note
+
+note right of UCU_PROFILE
+  - Управление профилем
+  - Настройка приватности
+  - Загрузка/удаление аватара и медиа
+  - 2FA: setup / enable / disable / status
+  - Уведомления
+end note
+
+note right of UCU_SOCIAL
+  - Личные сообщения
+  - Друзья (заявки/статус)
+  - Поиск пользователей
+  - Подача апелляции бана
+  - Follow и рекомендации
+  - Посты блога (CRUD), комментарии, лайки, жалобы
+  - Дневники (CRUD), лайки
+  - Паспорт путешествий: достижения и локации
+  - Отзывы, реакции, комментарии, жалобы
+end note
+
+note right of UCU_CHAT
+  - Групповые чаты туров (tour rooms)
+  - Медиа/изображения в чатах
+  - Жалобы на сообщения
+  - Чат с поддержкой и AI-support
+end note
+
+note right of UCA_TOURS
+  - Туры: CRUD, duplicate, filter, status, media
+  - Бронирования: админ-управление
+  - Tour rooms и комнаты гида
+  - Управление городами
+end note
+
+note right of UCA_MODERATION
+  - Пользователи: list / role / ban
+  - Обработка апелляций бана
+  - Модерация отзывов и комментариев
+  - Модерация чатов и жалоб
+  - Выдача достижений
+end note
+
+note right of UCA_SUPPORT
+  - Support-сессии и сообщения
+  - Очистка сообщений/изображений
+  - Закрытие и cleanup сессий
+end note
+
+note right of UCA_SYSTEM
+  - Дашборды администратора
+  - Maintenance mode on/off
+  - Служебные проверки и отчеты
+end note
+
+note bottom
+  Все функции "Пользователя" требуют авторизации.
+  Все функции "Администратора" требуют авторизации и роли admin.
+end note
+@enduml

@@ -130,7 +130,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error in 2FA verify:', error);
     return NextResponse.json(
       { error: 'Ошибка при проверке кода' },

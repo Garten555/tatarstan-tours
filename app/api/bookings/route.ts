@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       .select('id, status')
       .eq('tour_id', tour_id)
       .eq('user_id', user.id)
-      .neq('status', 'cancelled')
+      .in('status', ['pending', 'confirmed'])
       .limit(1);
 
     if (existingBookingsError) {

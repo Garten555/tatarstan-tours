@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,6 +11,7 @@ import TwoFactorVerify from './TwoFactorVerify';
 
 export default function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
 
   type LoginStep = 'email' | 'password' | '2fa';
@@ -28,6 +29,8 @@ export default function LoginForm() {
     email: '',
     password: '',
   });
+
+  const redirectPath = searchParams.get('redirect') || '/';
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -135,8 +138,8 @@ export default function LoginForm() {
           });
         }
 
-        // Успешный вход - редирект на главную страницу
-        router.push('/');
+        // Успешный вход - редирект на запрошенную страницу
+        router.push(redirectPath);
         router.refresh();
       }
     } catch (err) {

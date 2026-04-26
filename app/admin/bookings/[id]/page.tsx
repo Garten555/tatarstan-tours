@@ -76,10 +76,20 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
     .eq('booking_id', id)
     .order('created_at', { ascending: true });
 
+  interface BookingWithRelations {
+    id: string;
+    created_at: string;
+    status: string;
+    total_price: number;
+    user?: { id: string; first_name: string; last_name: string; email: string; phone: string | null } | null;
+    tour?: { id: string; title: string; slug: string; start_date: string; end_date: string | null; price_per_person: number; max_participants: number; current_participants: number; city?: { name: string } | null } | null;
+    [key: string]: unknown;
+  }
+
   return (
     <div className="space-y-6">
       <BookingDetails 
-        booking={booking as any}
+        booking={booking as BookingWithRelations}
         attendees={attendees || []}
       />
     </div>
