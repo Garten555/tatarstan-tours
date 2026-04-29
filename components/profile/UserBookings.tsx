@@ -169,6 +169,20 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
     return labels[status] || status;
   };
 
+  // Определяем завершение тура по фактической дате окончания,
+  // чтобы метка не зависела только от синхронизации статуса в БД.
+  const isTourCompleted = (booking: Booking) => {
+    if (booking.tour?.status === 'completed') {
+      return true;
+    }
+    // Если end_date нет, считаем датой завершения start_date
+    // (для однодневных туров без отдельной даты окончания).
+    const completionDate = booking.tour?.end_date || booking.tour?.start_date;
+    if (!completionDate) return false;
+    const endDate = new Date(completionDate);
+    return !Number.isNaN(endDate.getTime()) && endDate.getTime() <= Date.now();
+  };
+
   // Получение иконки статуса
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -239,6 +253,11 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
           if (!booking.tour) {
             return null; // Пропускаем бронирования без тура
           }
+
+          const completedByDate = isTourCompleted(booking);
+          const effectiveStatus = completedByDate && booking.status === 'confirmed'
+            ? 'completed'
+            : booking.status;
           
           return (
             <div
@@ -289,7 +308,10 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div className="flex items-center gap-2 text-gray-600">
                     <Calendar className="w-4 h-4" />
-                    <span>{formatDate(booking.tour.start_date)}</span>
+                    <span>
+                      {formatDate(booking.tour.start_date)}
+                      {booking.tour.end_date ? ` — ${formatDate(booking.tour.end_date)}` : ''}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2 text-gray-600">
                     <Users className="w-4 h-4" />
@@ -302,12 +324,21 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${booking.tour?.status === 'completed' ? 'bg-gray-100 text-gray-700' : getStatusColor(booking.status)}`}>
-                      {booking.tour?.status === 'completed' ? <CheckCircle2 className="w-3 h-3" /> : getStatusIcon(booking.status)}
-                      {getStatusLabel(booking.status, booking.tour?.status)}
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${completedByDate ? 'bg-gray-100 text-gray-700' : getStatusColor(effectiveStatus)}`}>
+                      {completedByDate ? <CheckCircle2 className="w-3 h-3" /> : getStatusIcon(effectiveStatus)}
+                      {getStatusLabel(effectiveStatus, completedByDate ? 'completed' : booking.tour?.status)}
                     </span>
                   </div>
                 </div>
+
+                {completedByDate && (
+                  <div className="text-sm font-medium text-gray-700">
+                    Завершён:{' '}
+                    <span className="font-semibold text-gray-900">
+                      {formatDate(booking.tour.end_date || booking.tour.start_date)}
+                    </span>
+                  </div>
+                )}
 
 
                 {/* Действия */}
@@ -318,7 +349,7 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
                   >
                     Подробнее о туре
                   </Link>
-                  {booking.status === 'confirmed' && roomIds[booking.tour_id] && (
+                  {['confirmed', 'completed'].includes(effectiveStatus) && roomIds[booking.tour_id] && (
                     <Link
                       href={`/tour-rooms/${roomIds[booking.tour_id]}`}
                       className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
@@ -327,7 +358,7 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
                       Комната тура
                     </Link>
                   )}
-                  {['completed', 'cancelled'].includes(booking.status) && !booking.review?.id && (
+                  {['completed', 'cancelled'].includes(effectiveStatus) && !booking.review?.id && (
                     <button
                       onClick={() => setReviewBooking(booking)}
                       className="px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
@@ -342,7 +373,7 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
                       Отзыв отправлен
                     </span>
                   )}
-                  {booking.status !== 'cancelled' && (
+                  {effectiveStatus !== 'cancelled' && (
                     <button
                       onClick={() => handleDownloadTicket(booking)}
                       disabled={generatingPDF === booking.id}

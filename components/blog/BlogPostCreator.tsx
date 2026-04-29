@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { BookOpen, Loader2, Image as ImageIcon, Video, MapPin, X, Plus, Upload, Check } from 'lucide-react';
+import { BookOpen, Loader2, Image as ImageIcon, Video, MapPin, X, Plus, Check, MoreHorizontal } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Image from 'next/image';
 import PromptDialog from '@/components/ui/PromptDialog';
@@ -10,15 +10,20 @@ import PromptDialog from '@/components/ui/PromptDialog';
 interface BlogPostCreatorProps {
   userId: string;
   completedTours?: any[];
+  /** Подтверждённые, ещё не прошедшие брони — отдельный шаблон текста */
+  upcomingTours?: any[];
 }
 
-export default function BlogPostCreator({ userId, completedTours = [] }: BlogPostCreatorProps) {
+export default function BlogPostCreator({ userId, completedTours = [], upcomingTours = [] }: BlogPostCreatorProps) {
+  const MAX_COVER_SIZE = 5 * 1024 * 1024;
+  const ALLOWED_COVER_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [selectedTourId, setSelectedTourId] = useState<string>('');
+  /** id бронирования (не tour_id), чтобы различать повторные поездки в один тур */
+  const [selectedBookingId, setSelectedBookingId] = useState<string>('');
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [mediaFiles, setMediaFiles] = useState<Array<{ file: File; preview: string; type: 'image' | 'video'; url?: string }>>([]);
@@ -27,6 +32,7 @@ export default function BlogPostCreator({ userId, completedTours = [] }: BlogPos
   const [newLocationTag, setNewLocationTag] = useState('');
   const [mapUrl, setMapUrl] = useState('');
   const [showMapDialog, setShowMapDialog] = useState(false);
+  const [showToolsMenu, setShowToolsMenu] = useState(false);
   const [cities, setCities] = useState<Array<{ id: string; name: string }>>([]);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
   
@@ -34,26 +40,68 @@ export default function BlogPostCreator({ userId, completedTours = [] }: BlogPos
   const mediaInputRef = useRef<HTMLInputElement>(null);
   const locationInputRef = useRef<HTMLInputElement>(null);
   const cityDropdownRef = useRef<HTMLDivElement>(null);
+  const toolsMenuRef = useRef<HTMLDivElement>(null);
 
-  // Автозаполнение из тура
-  const handleTourSelect = (tourId: string) => {
-    const tour = completedTours.find((t: any) => t.tour?.id === tourId);
-    if (tour && tour.tour) {
-      setSelectedTourId(tourId);
+  const findBooking = (bookingId: string) =>
+    completedTours.find((b: any) => b.id === bookingId) ||
+    upcomingTours.find((b: any) => b.id === bookingId);
+
+  const formatTourDate = (booking: any) => {
+    const tour = booking.tour;
+    if (!tour) return '';
+    const isUpcoming = booking.status === 'confirmed';
+    const raw = isUpcoming
+      ? (tour.start_date || tour.end_date)
+      : (tour.end_date || tour.start_date);
+    if (!raw) return '';
+    try {
+      return new Date(raw).toLocaleDateString('ru-RU', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      });
+    } catch {
+      return '';
+    }
+  };
+
+  // Автозаполнение по брони: завершённая — отчёт; подтверждённая — планы
+  const handleTourSelect = (bookingId: string) => {
+    if (!bookingId) {
+      setSelectedBookingId('');
+      return;
+    }
+    const booking = findBooking(bookingId);
+    if (booking?.tour) {
+      setSelectedBookingId(bookingId);
+      const { tour } = booking;
+      const isUpcoming = booking.status === 'confirmed';
       if (!title) {
-        setTitle(`Мое путешествие: ${tour.tour.title}`);
+        setTitle(
+          isUpcoming ? `Скоро: ${tour.title}` : `Моё путешествие: ${tour.title}`
+        );
       }
-      if (tour.tour.city?.name && !locationTags.includes(tour.tour.city.name)) {
-        setLocationTags([...locationTags, tour.tour.city.name]);
+      if (tour.city?.name && !locationTags.includes(tour.city.name)) {
+        setLocationTags([...locationTags, tour.city.name]);
       }
-      if (tour.tour.cover_image && !coverImageUrl) {
-        setCoverImageUrl(tour.tour.cover_image);
+      if (tour.cover_image && !coverImageUrl) {
+        setCoverImageUrl(tour.cover_image);
       }
-      if (tour.tour.yandex_map_url && !mapUrl) {
-        setMapUrl(tour.tour.yandex_map_url);
+      if (tour.yandex_map_url && !mapUrl) {
+        setMapUrl(tour.yandex_map_url);
       }
       if (!content) {
-        setContent(`Недавно я посетил(а) удивительный тур "${tour.tour.title}". Хочу поделиться своими впечатлениями!\n\n`);
+        const when = formatTourDate(booking);
+        const dateHint = when ? ` (${when})` : '';
+        if (isUpcoming) {
+          setContent(
+            `Скоро еду на тур «${tour.title}»${dateHint}. Делюсь планами и ожиданиями.\n\n`
+          );
+        } else {
+          setContent(
+            `Недавно я съездил(а) на тур «${tour.title}»${dateHint}. Хочу поделиться впечатлениями.\n\n`
+          );
+        }
       }
     }
   };
@@ -62,7 +110,17 @@ export default function BlogPostCreator({ userId, completedTours = [] }: BlogPos
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Для шапки дневника нужно выбрать изображение');
+      return;
+    }
+
+    if (!ALLOWED_COVER_TYPES.includes(file.type)) {
+      toast.error('Поддерживаются только JPG, PNG и WEBP');
+      return;
+    }
+
+    if (file.size > MAX_COVER_SIZE) {
       toast.error('Размер файла не должен превышать 5 МБ');
       return;
     }
@@ -104,6 +162,13 @@ export default function BlogPostCreator({ userId, completedTours = [] }: BlogPos
       const newMediaFiles: Array<{ file: File; preview: string; type: 'image' | 'video'; url?: string }> = [];
       
       for (const file of files) {
+        const isImage = file.type.startsWith('image/');
+        const isVideo = file.type.startsWith('video/');
+        if (!isImage && !isVideo) {
+          toast.error(`Формат ${file.name} не поддерживается`);
+          continue;
+        }
+
         const maxSize = file.type.startsWith('video/') ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
         if (file.size > maxSize) {
           toast.error(`Файл ${file.name} слишком большой`);
@@ -194,6 +259,18 @@ export default function BlogPostCreator({ userId, completedTours = [] }: BlogPos
         !locationInputRef.current.contains(event.target as Node)
       ) {
         setShowCityDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Закрытие меню "..." при клике вне
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (toolsMenuRef.current && !toolsMenuRef.current.contains(event.target as Node)) {
+        setShowToolsMenu(false);
       }
     };
 
@@ -317,7 +394,11 @@ export default function BlogPostCreator({ userId, completedTours = [] }: BlogPos
           status: 'published',
           visibility: 'public',
           location_tags: locationTags,
-          tour_id: selectedTourId || null,
+          tour_id: (() => {
+            if (!selectedBookingId) return null;
+            const b = findBooking(selectedBookingId);
+            return b?.tour?.id ?? null;
+          })(),
         }),
       });
 
@@ -338,7 +419,7 @@ export default function BlogPostCreator({ userId, completedTours = [] }: BlogPos
       setLocationTags([]);
       setMapUrl('');
       setShowForm(false);
-      setSelectedTourId('');
+      setSelectedBookingId('');
       
       // Отправляем событие для обновления списка постов
       window.dispatchEvent(new CustomEvent('blog:post-created', { detail: { post: data.post } }));
@@ -353,41 +434,71 @@ export default function BlogPostCreator({ userId, completedTours = [] }: BlogPos
     return (
       <div 
         onClick={() => setShowForm(true)}
-        className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm cursor-pointer hover:border-gray-300 transition-colors"
+        className="bg-gradient-to-br from-white via-emerald-50/40 to-teal-50/30 rounded-2xl border border-emerald-100 p-5 shadow-sm cursor-pointer hover:shadow-md hover:border-emerald-200 transition-all duration-300"
       >
-        <div className="flex items-center gap-3 text-gray-500">
-          <div className="flex-shrink-0">
+        <div className="flex items-center gap-3 text-gray-600">
+          <div className="flex-shrink-0 w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center">
             <BookOpen className="w-5 h-5" />
           </div>
-          <span className="text-base">Что у вас нового?</span>
+          <div>
+            <div className="text-base font-semibold text-gray-900">Добавить запись в туристический дневник</div>
+            <div className="text-sm text-gray-600">Фото, карта, впечатления и маршрут в одном посте</div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6 shadow-sm">
+    <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Выбор тура для автозаполнения */}
-        {completedTours.length > 0 && (
+        {(completedTours.length > 0 || upcomingTours.length > 0) && (
           <div>
-            <label className="block text-lg font-semibold text-gray-700 mb-2">
-              Выберите тур для автозаполнения (необязательно)
+            <label className="block text-lg font-semibold text-gray-700 mb-1">
+              Тур для автозаполнения (необязательно)
             </label>
+            <p className="text-sm text-gray-500 mb-2">
+              Состоявшиеся — шаблон отчёта; предстоящие — планы и ожидания
+            </p>
             <select
-              value={selectedTourId}
+              value={selectedBookingId}
               onChange={(e) => handleTourSelect(e.target.value)}
               className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-500 text-lg bg-white"
             >
               <option value="">Не выбирать тур</option>
-              {completedTours.map((booking: any) => {
-                if (!booking.tour) return null;
-                return (
-                  <option key={booking.tour.id} value={booking.tour.id}>
-                    {booking.tour.title} {booking.tour.city?.name ? `(${booking.tour.city.name})` : ''}
-                  </option>
-                );
-              })}
+              {completedTours.length > 0 && (
+                <optgroup label="Состоявшиеся поездки">
+                  {completedTours.map((booking: any) => {
+                    if (!booking.tour) return null;
+                    const dateStr = formatTourDate(booking);
+                    const datePart = dateStr ? ` — ${dateStr}` : '';
+                    return (
+                      <option key={booking.id} value={booking.id}>
+                        {booking.tour.title}
+                        {booking.tour.city?.name ? ` (${booking.tour.city.name})` : ''}
+                        {datePart}
+                      </option>
+                    );
+                  })}
+                </optgroup>
+              )}
+              {upcomingTours.length > 0 && (
+                <optgroup label="Предстоящие">
+                  {upcomingTours.map((booking: any) => {
+                    if (!booking.tour) return null;
+                    const dateStr = formatTourDate(booking);
+                    const datePart = dateStr ? ` — ${dateStr}` : '';
+                    return (
+                      <option key={booking.id} value={booking.id}>
+                        {booking.tour.title}
+                        {booking.tour.city?.name ? ` (${booking.tour.city.name})` : ''}
+                        {datePart}
+                      </option>
+                    );
+                  })}
+                </optgroup>
+              )}
             </select>
           </div>
         )}
@@ -411,7 +522,7 @@ export default function BlogPostCreator({ userId, completedTours = [] }: BlogPos
           className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:border-emerald-500 resize-none text-lg"
         />
 
-        {/* Обложка - компактная */}
+        {/* Шапка записи */}
         {coverImageUrl && (
           <div className="relative rounded-lg overflow-hidden">
             <Image
@@ -515,43 +626,92 @@ export default function BlogPostCreator({ userId, completedTours = [] }: BlogPos
         )}
 
         {/* Панель инструментов */}
-        <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-          <div className="flex items-center gap-1">
-            {/* Загрузка обложки */}
-            <label className="p-2 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors" title="Добавить обложку">
-              <ImageIcon className="w-5 h-5 text-gray-600" />
-              <input
-                ref={coverInputRef}
-                type="file"
-                className="hidden"
-                accept="image/*"
-                onChange={handleCoverUpload}
-                disabled={uploadingCover}
-              />
-            </label>
-            {/* Загрузка медиа/видео */}
-            <label className="p-2 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors" title="Добавить фото/видео">
-              <Video className="w-5 h-5 text-gray-600" />
-              <input
-                ref={mediaInputRef}
-                type="file"
-                className="hidden"
-                accept="image/*,video/*"
-                multiple
-                onChange={handleMediaSelect}
-                disabled={uploadingMedia}
-              />
-            </label>
-            {/* Добавление карты */}
-            <button
-              type="button"
-              onClick={() => setShowMapDialog(true)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              title="Добавить карту"
-            >
-              <MapPin className="w-5 h-5 text-gray-600" />
-            </button>
-            {/* Добавление локации с автодополнением */}
+        <div className="flex flex-col gap-3 pt-2 border-t border-gray-200">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              {mediaFiles.length > 0 && (
+                <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-700 font-medium">
+                  Медиа: {mediaFiles.length}
+                </span>
+              )}
+              {coverImageUrl && (
+                <span className="px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 font-medium">
+                  Шапка добавлена
+                </span>
+              )}
+            </div>
+
+            <div className="relative" ref={toolsMenuRef}>
+              <button
+                type="button"
+                onClick={() => setShowToolsMenu((prev) => !prev)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Дополнительные действия"
+              >
+                <MoreHorizontal className="w-5 h-5 text-gray-700" />
+              </button>
+
+              {showToolsMenu && (
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-30 py-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowToolsMenu(false);
+                      mediaInputRef.current?.click();
+                    }}
+                    className="w-full px-3 py-2.5 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-800"
+                  >
+                    <Video className="w-4 h-4" />
+                    Добавить фото/видео
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowToolsMenu(false);
+                      coverInputRef.current?.click();
+                    }}
+                    className="w-full px-3 py-2.5 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-800"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                    Добавить шапку записи
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowToolsMenu(false);
+                      setShowMapDialog(true);
+                    }}
+                    className="w-full px-3 py-2.5 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-gray-800"
+                  >
+                    <MapPin className="w-4 h-4" />
+                    Добавить карту
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Скрытые инпуты для меню действий */}
+          <input
+            ref={coverInputRef}
+            type="file"
+            className="hidden"
+            accept="image/*"
+            onChange={handleCoverUpload}
+            disabled={uploadingCover}
+          />
+          <input
+            ref={mediaInputRef}
+            type="file"
+            className="hidden"
+            accept="image/*,video/*"
+            multiple
+            onChange={handleMediaSelect}
+            disabled={uploadingMedia}
+          />
+
+          {/* Добавление локации с автодополнением */}
+          <div className="flex items-center justify-between gap-3">
             <div className="relative flex items-center gap-1">
               <div className="relative">
                 <input
@@ -605,21 +765,22 @@ export default function BlogPostCreator({ userId, completedTours = [] }: BlogPos
                 <Plus className="w-4 h-4 text-emerald-600" />
               </button>
             </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Публикация...</span>
+                </>
+              ) : (
+                'Опубликовать'
+              )}
+            </button>
           </div>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-4 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Публикация...</span>
-              </>
-            ) : (
-              'Опубликовать'
-            )}
-          </button>
         </div>
         {(uploadingCover || uploadingMedia) && (
           <div className="flex items-center gap-2 text-xs text-gray-500">

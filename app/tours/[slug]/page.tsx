@@ -51,7 +51,15 @@ export default async function TourPage({ params }: TourPageProps) {
   // В БД media_type: 'image' | 'video' — совместимость со старым 'photo'
   const mediaTyped = ((media || []) as any[]);
   const photos = mediaTyped.filter((m) => m.media_type === 'image' || m.media_type === 'photo');
-  const videos = mediaTyped.filter((m) => m.media_type === 'video');
+  const videosRaw = mediaTyped.filter((m) => m.media_type === 'video');
+  /** Убираем дубликаты по URL (раньше загрузка + сохранение формы создавали двойные строки) */
+  const seenVideoUrls = new Set<string>();
+  const videos = videosRaw.filter((v: { media_url?: string }) => {
+    const u = v.media_url;
+    if (!u || seenVideoUrls.has(u)) return false;
+    seenVideoUrls.add(u);
+    return true;
+  });
 
   const availableSpots = t.max_participants - (t.current_participants || 0);
   const isFullyBooked = availableSpots <= 0;

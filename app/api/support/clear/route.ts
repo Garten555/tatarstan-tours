@@ -28,12 +28,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Находим активную сессию пользователя
+    // Активная сессия ищется по user_id; session_id в БД — это user.id или `${user.id}-${timestamp}`
     const { data: session, error: sessionError } = await serviceClient
       .from('support_sessions')
       .select('session_id, status')
-      .eq('session_id', user.id)
+      .eq('user_id', user.id)
       .eq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (sessionError) {
@@ -44,16 +46,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Если активной сессии нет, просто возвращаем успех
     if (!session) {
       return NextResponse.json({ success: true, message: 'Нет активной сессии для очистки' });
     }
 
-    // Удаляем все сообщения сессии
+    const chatSessionId = session.session_id;
+
     const { error: messagesError } = await serviceClient
       .from('chat_messages')
       .delete()
-      .eq('session_id', user.id);
+      .eq('session_id', chatSessionId);
 
     if (messagesError) {
       console.error('Ошибка удаления сообщений:', messagesError);
@@ -63,7 +65,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Закрываем сессию (автоматически завершаем вопрос)
     const { error: closeError } = await serviceClient
       .from('support_sessions')
       .update({
@@ -73,7 +74,7 @@ export async function POST(request: NextRequest) {
         closed_reason: 'Пользователь очистил чат',
         updated_at: new Date().toISOString(),
       })
-      .eq('session_id', user.id)
+      .eq('session_id', chatSessionId)
       .eq('status', 'active');
 
     if (closeError) {
@@ -84,21 +85,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Отправляем уведомление через Pusher
+    // Канал клиента — always support-chat-${user.id}; второй канал — для админки по session_id
     try {
-      await pusher.trigger(
-        `support-chat-${user.id}`,
-        'session-deleted',
-        { 
-          clearMessages: true,
-          sessionId: user.id
-        }
-      );
-      await pusher.trigger(
-        `support-chat-${user.id}`,
-        'messages-cleared',
-        { sessionId: user.id }
-      );
+      await pusher.trigger(`support-chat-${user.id}`, 'session-closed', {
+        session: { status: 'closed', session_id: chatSessionId },
+      });
+      await pusher.trigger(`support-chat-${user.id}`, 'messages-cleared', { sessionId: chatSessionId });
+      await pusher.trigger(`support-chat-${chatSessionId}`, 'session-closed', {
+        session: { status: 'closed', session_id: chatSessionId },
+      });
+      await pusher.trigger(`support-chat-${chatSessionId}`, 'messages-cleared', { sessionId: chatSessionId });
     } catch (pusherError) {
       console.error('Ошибка Pusher при очистке чата:', pusherError);
       // Не прерываем выполнение, чат уже очищен

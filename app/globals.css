@@ -255,6 +255,18 @@ html {
   position: relative;
   width: 100%;
   max-width: 100%;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow:
+    0 10px 15px -3px rgb(0 0 0 / 0.08),
+    0 4px 6px -4px rgb(0 0 0 / 0.06);
+}
+
+/* Корневой .plyr должен заполнять контейнер с aspect-ratio — иначе абсолютные контролы оказываются с нулевой высотой */
+.plyr-container > .plyr.plyr--video {
+  height: 100%;
+  width: 100%;
+  min-height: 0;
 }
 
 .plyr {
@@ -273,9 +285,9 @@ html {
   border-radius: 0.75rem;
 }
 
-.plyr__controls {
+/* Не задавать position здесь: у .plyr--video .plyr__controls в plyr.css уже position:absolute снизу */
+.plyr--video .plyr__controls {
   border-radius: 0 0 0.75rem 0.75rem;
-  position: relative;
   z-index: 10;
 }
 
@@ -288,27 +300,54 @@ html {
   z-index: 20;
 }
 
-/* Кастомные цвета для Plyr */
-.plyr--video .plyr__control.plyr__tab-focus,
-.plyr--video .plyr__control:hover,
-.plyr--video .plyr__control[aria-expanded="true"] {
-  background: rgb(16 185 129); /* emerald-500 */
+/*
+ * Preflight: color у кнопок тянется на body → тёмные иконки. Дефолт Plyr — белые SVG на полосе.
+ * Выпадающее меню отдельно: штатный --plyr-menu-color.
+ * Сами иконки (svg/fill) ниже не меняем — только фиксы видимости.
+ */
+.plyr.plyr--video .plyr__controls {
+  color: #fff !important;
 }
 
-.plyr--video .plyr__progress__played {
-  background: rgb(16 185 129); /* emerald-500 */
+.plyr.plyr--video .plyr__controls button.plyr__control {
+  color: #fff !important;
 }
 
-.plyr--video .plyr__volume__progress {
-  background: rgb(16 185 129); /* emerald-500 */
+.plyr.plyr--video .plyr__controls button.plyr__control svg {
+  fill: #fff !important;
 }
 
-.plyr__control--overlaid {
-  background: rgba(16, 185, 129, 0.9); /* emerald-500 with opacity */
+.plyr.plyr--video .plyr__menu__container button.plyr__control,
+.plyr.plyr--video .plyr__menu__container .plyr__control {
+  color: var(--plyr-menu-color, #4a5464) !important;
 }
 
-.plyr__control--overlaid:hover {
-  background: rgba(5, 150, 105, 0.95); /* emerald-600 */
+.plyr.plyr--video .plyr__menu__container button.plyr__control svg,
+.plyr.plyr--video .plyr__menu__container .plyr__control svg {
+  fill: currentColor !important;
+}
+
+.plyr.plyr--video .plyr__control--overlaid {
+  color: #fff !important;
+}
+
+.plyr.plyr--video .plyr__control--overlaid svg {
+  fill: #fff !important;
+}
+
+.plyr.plyr--video .plyr__time,
+.plyr.plyr--video .plyr__controls .plyr__time {
+  color: #fff !important;
+}
+
+/*
+ * Темизация под тур-сайт (карточки, emerald-акценты как в админке/кнопках):
+ * полоса прогресса, ховеры кнопок, фокус — через переменные Plyr. Иконки не переопределяем.
+ */
+.plyr.plyr--video {
+  --plyr-color-main: #10b981;
+  --plyr-focus-visible-color: #10b981;
+  --plyr-video-controls-background: linear-gradient(transparent, rgb(17 24 39 / 0.88));
 }
 
 /* Blog preview content - правильный перенос длинных строк */
@@ -1191,7 +1230,7 @@ html {
 
 /* Улучшение видимости ссылок */
 /* Исключаем навигацию в хедере, меню пользователя и футер из глобального правила */
-a:not(.text-white):not(.text-emerald-600):not(.text-blue-600):not(.header-user-dropdown-item):not(.header-user-dropdown-item-emerald):not(.header-user-dropdown-item-admin):not(.header-user-dropdown-item-danger):not(.header-nav-link):not(.footer-link):not(.footer-social-link):not(.about-back-link):not(.header-auth-button),
+a:not(.text-white):not(.text-emerald-600):not(.text-blue-600):not(.text-gray-900):not(.text-gray-800):not(.text-gray-700):not(.header-user-dropdown-item):not(.header-user-dropdown-item-emerald):not(.header-user-dropdown-item-admin):not(.header-user-dropdown-item-danger):not(.header-nav-link):not(.footer-link):not(.footer-social-link):not(.about-back-link):not(.header-auth-button),
 button:not(.text-white):not([class*="text-white"]) {
   color: rgb(37 99 235) !important; /* Более яркий синий */
 }

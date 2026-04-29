@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { publishUserNotification } from '@/lib/pusher/user-notification';
 
 export async function GET() {
   try {
@@ -70,6 +71,8 @@ export async function POST(request: NextRequest) {
     if (error || !notification) {
       return NextResponse.json({ error: 'Не удалось сохранить уведомление' }, { status: 500 });
     }
+
+    await publishUserNotification(user.id, notification);
 
     return NextResponse.json({ success: true, notification });
   } catch (error) {

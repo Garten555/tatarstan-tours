@@ -26,6 +26,8 @@ interface BlogEditorProps {
 }
 
 export default function BlogEditor({ post, tourId, bookingId }: BlogEditorProps) {
+  const MAX_COVER_SIZE = 5 * 1024 * 1024;
+  const ALLOWED_COVER_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -119,7 +121,17 @@ export default function BlogEditor({ post, tourId, bookingId }: BlogEditorProps)
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Для шапки записи выберите изображение');
+      return;
+    }
+
+    if (!ALLOWED_COVER_TYPES.includes(file.type)) {
+      toast.error('Поддерживаются только JPG, PNG и WEBP');
+      return;
+    }
+
+    if (file.size > MAX_COVER_SIZE) {
       toast.error('Размер файла не должен превышать 5 МБ');
       return;
     }

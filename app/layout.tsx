@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { SITE_VERSION } from "@/lib/site-version";
 import "./globals.css";
 import ConditionalLayout from "@/components/layout/ConditionalLayout";
 import RealtimeNotifications from "@/components/notifications/RealtimeNotifications";
@@ -76,6 +77,9 @@ export const metadata: Metadata = {
       "max-image-preview": "large",
       "max-snippet": -1,
     },
+  },
+  other: {
+    "app-version": SITE_VERSION,
   },
   icons: {
     icon: "/logo.svg",

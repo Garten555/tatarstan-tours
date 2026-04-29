@@ -1,6 +1,7 @@
 // API для управления друзьями
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { publishUserNotification } from '@/lib/pusher/user-notification';
 
 // GET /api/users/friends - Получить список друзей
 export async function GET(request: NextRequest) {
@@ -298,17 +299,21 @@ export async function POST(request: NextRequest) {
           ? `${currentUserProfile.first_name} ${currentUserProfile.last_name}`
           : currentUserProfile?.username || 'Пользователь';
 
-        const { error: notificationError } = await serviceClient
+        const { data: friendNotif, error: notificationError } = await serviceClient
           .from('notifications')
           .insert({
             user_id: requesterId,
             title: 'Запрос на дружбу принят',
             body: `${currentUserName} принял(а) ваш запрос на дружбу`,
             type: 'friendship',
-          });
-        
+          })
+          .select('id, user_id, title, body, type, created_at')
+          .single();
+
         if (notificationError) {
           console.error('Ошибка создания уведомления о дружбе:', notificationError);
+        } else if (friendNotif) {
+          await publishUserNotification(requesterId, friendNotif);
         }
       }
 

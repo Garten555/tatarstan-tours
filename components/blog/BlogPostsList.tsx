@@ -9,6 +9,7 @@ interface BlogPostsListProps {
   initialPosts: any[];
   userId: string;
   completedTours?: any[];
+  upcomingTours?: any[];
   isOwner?: boolean;
   isAdminView?: boolean; // Для просмотра админом
 }
@@ -17,6 +18,7 @@ export default function BlogPostsList({
   initialPosts, 
   userId, 
   completedTours = [],
+  upcomingTours = [],
   isOwner = false,
   isAdminView = false
 }: BlogPostsListProps) {
@@ -68,6 +70,7 @@ export default function BlogPostsList({
           <BlogPostCreator 
             userId={userId}
             completedTours={completedTours}
+            upcomingTours={upcomingTours}
           />
         </div>
       )}

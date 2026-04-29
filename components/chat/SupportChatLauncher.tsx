@@ -59,7 +59,10 @@ export default function SupportChatLauncher() {
   return (
     <>
       {open && (
-        <div className="fixed inset-0 sm:inset-auto sm:bottom-4 sm:right-4 z-50" data-support-chat>
+        <div
+          className="fixed inset-0 z-50 sm:inset-auto sm:bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] sm:right-[max(0.75rem,env(safe-area-inset-right,0px))]"
+          data-support-chat
+        >
           <div className="relative w-full h-full sm:w-auto sm:h-auto">
             <SupportChat variant="widget" onClose={() => setOpen(false)} />
           </div>
@@ -70,7 +73,7 @@ export default function SupportChatLauncher() {
         <button
           data-support-chat-button
           onClick={() => setOpen(true)}
-          className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-50 w-14 h-14 sm:w-14 sm:h-14 rounded-full bg-emerald-600 text-white shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition-all cursor-pointer safe-area-inset-bottom"
+          className="fixed z-50 w-14 h-14 rounded-full bg-emerald-600 text-white shadow-lg flex items-center justify-center hover:bg-emerald-700 active:scale-95 transition-all cursor-pointer safe-area-inset-bottom bottom-[max(1rem,env(safe-area-inset-bottom,0px))] right-[max(1rem,env(safe-area-inset-right,0px))] sm:bottom-[max(1.25rem,env(safe-area-inset-bottom,0px))] sm:right-[max(1.25rem,env(safe-area-inset-right,0px))]"
           aria-label="Чат поддержки и ИИ"
         >
           <MessageCircle className="w-6 h-6 sm:w-6 sm:h-6" />

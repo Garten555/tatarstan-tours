@@ -1,15 +1,7 @@
 // API для работы с комнатами туров
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
-import Pusher from 'pusher';
-
-const pusher = new Pusher({
-  appId: process.env.PUSHER_APP_ID!,
-  key: process.env.NEXT_PUBLIC_PUSHER_KEY!,
-  secret: process.env.PUSHER_SECRET!,
-  cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'eu',
-  useTLS: true,
-});
+import { publishUserNotification } from '@/lib/pusher/user-notification';
 
 // GET /api/tour-rooms?tour_id={tour_id}
 // Получить комнату для тура (создает если нет)
@@ -257,17 +249,7 @@ export async function PATCH(request: NextRequest) {
           
           if (!notificationError && notification) {
             console.log(`Уведомление отправлено старому гиду ${currentRoom.guide_id} о снятии с тура ${tourTitle}`);
-            
-            // Отправляем через Pusher для real-time обновления
-            try {
-              await pusher.trigger(
-                `notifications-${currentRoom.guide_id}`,
-                'new-notification',
-                { notification }
-              );
-            } catch (pusherError) {
-              console.error('Ошибка отправки через Pusher:', pusherError);
-            }
+            await publishUserNotification(currentRoom.guide_id, notification);
           }
         } catch (notificationError) {
           console.error('Ошибка отправки уведомления старому гиду:', notificationError);
@@ -290,17 +272,7 @@ export async function PATCH(request: NextRequest) {
           
           if (!notificationError && notification) {
             console.log(`Уведомление отправлено новому гиду ${guide_id} о назначении на тур ${tourTitle}`);
-            
-            // Отправляем через Pusher для real-time обновления
-            try {
-              await pusher.trigger(
-                `notifications-${guide_id}`,
-                'new-notification',
-                { notification }
-              );
-            } catch (pusherError) {
-              console.error('Ошибка отправки через Pusher:', pusherError);
-            }
+            await publishUserNotification(guide_id, notification);
           }
         } catch (notificationError) {
           console.error('Ошибка отправки уведомления новому гиду:', notificationError);

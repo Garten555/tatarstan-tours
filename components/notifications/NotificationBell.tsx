@@ -1,7 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Bell } from 'lucide-react';
+import Pusher from 'pusher-js';
+import { supabase } from '@/lib/supabase/client';
 
 type Notification = {
   id: string;
@@ -17,13 +19,12 @@ export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const loadNotifications = async () => {
+  const loadNotifications = useCallback(async () => {
     try {
       const response = await fetch('/api/notifications');
       const data = await response.json();
       if (data.success) {
         setNotifications(data.notifications || []);
-        // Считаем непрочитанные (можно добавить поле is_read в будущем)
         setUnreadCount(data.notifications?.length || 0);
       }
     } catch (error) {
@@ -31,21 +32,77 @@ export default function NotificationBell() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  const pusherRef = useRef<Pusher | null>(null);
+  const channelRef = useRef<ReturnType<Pusher['subscribe']> | null>(null);
 
   useEffect(() => {
     loadNotifications();
 
-    // Слушаем события обновления уведомлений
     const handleUpdate = () => {
       loadNotifications();
     };
     window.addEventListener('notifications:update', handleUpdate);
 
+    const teardownPusher = () => {
+      try {
+        if (channelRef.current) {
+          channelRef.current.unbind_all();
+          channelRef.current.unsubscribe();
+          channelRef.current = null;
+        }
+        if (pusherRef.current) {
+          pusherRef.current.disconnect();
+          pusherRef.current = null;
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    const subscribePusher = async () => {
+      teardownPusher();
+
+      const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
+      const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
+      if (!key || !cluster) {
+        return;
+      }
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const pusher = new Pusher(key, {
+        cluster,
+        enabledTransports: ['ws', 'wss'],
+      });
+      pusherRef.current = pusher;
+
+      const channel = pusher.subscribe(`notifications-${user.id}`);
+      channelRef.current = channel;
+
+      channel.bind('new-notification', () => {
+        loadNotifications();
+      });
+    };
+
+    subscribePusher();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      subscribePusher();
+    });
+
     return () => {
       window.removeEventListener('notifications:update', handleUpdate);
+      subscription.unsubscribe();
+      teardownPusher();
     };
-  }, []);
+  }, [loadNotifications]);
 
   return (
     <div className="relative">

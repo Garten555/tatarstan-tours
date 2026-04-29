@@ -1,6 +1,7 @@
 // API для постов блога
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { publishUserNotification } from '@/lib/pusher/user-notification';
 
 // GET /api/blog/posts - Получить список постов
 export async function GET(request: NextRequest) {
@@ -371,12 +372,17 @@ export async function POST(request: NextRequest) {
             type: 'blog_post',
           }));
 
-          const { error: notificationsError } = await serviceClient
+          const { data: insertedNotifs, error: notificationsError } = await serviceClient
             .from('notifications')
-            .insert(notifications);
-          
+            .insert(notifications)
+            .select('id, user_id, title, body, type, created_at');
+
           if (notificationsError) {
             console.error('Ошибка создания уведомлений о новом посте:', notificationsError);
+          } else if (insertedNotifs?.length) {
+            for (const row of insertedNotifs) {
+              await publishUserNotification(row.user_id, row);
+            }
           }
         }
       } catch (error) {

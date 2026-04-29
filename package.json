@@ -1,6 +1,6 @@
 {
   "name": "turrrr",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
@@ -17,6 +17,7 @@
     "@tiptap/extension-image": "^3.9.0",
     "@tiptap/extension-link": "^3.9.0",
     "@tiptap/extension-placeholder": "^3.9.0",
+    "@tiptap/extension-text-style": "^3.22.5",
     "@tiptap/react": "^3.9.0",
     "@tiptap/starter-kit": "^3.9.0",
     "date-fns": "^4.1.0",
@@ -29,11 +30,11 @@
     "plyr": "^3.8.3",
     "pusher": "^5.2.0",
     "pusher-js": "^8.4.0",
+    "qrcode": "^1.5.3",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "react-hot-toast": "^2.6.0",
     "speakeasy": "^2.0.0",
-    "qrcode": "^1.5.3",
     "zustand": "^5.0.8"
   },
   "devDependencies": {

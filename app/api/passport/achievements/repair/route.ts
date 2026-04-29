@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { publishAchievementEarned } from '@/lib/pusher/user-notification';
 
 export async function POST(_request: NextRequest) {
   try {
@@ -125,7 +126,7 @@ export async function POST(_request: NextRequest) {
 
       if (existing) return 0;
 
-      const { error: insertError } = await serviceClient
+      const { data: inserted, error: insertError } = await serviceClient
         .from('achievements')
         .insert({
           user_id: user.id,
@@ -134,11 +135,17 @@ export async function POST(_request: NextRequest) {
           badge_description: badge.badge_description,
           tour_id: tourId,
           verification_data: verificationData || null,
-        });
+        })
+        .select('id, badge_name, badge_type, badge_description')
+        .single();
 
       if (insertError) {
         console.error('Ошибка создания достижения:', insertError);
         return 0;
+      }
+
+      if (inserted) {
+        await publishAchievementEarned(user.id, inserted);
       }
 
       return 1;

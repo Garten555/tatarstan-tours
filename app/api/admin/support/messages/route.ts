@@ -148,11 +148,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Отправляем через Pusher
     try {
       await pusher.trigger(`support-chat-${sessionId}`, 'new-message', {
         message: newMessage,
       });
+      const { data: sess } = await serviceClient
+        .from('support_sessions')
+        .select('user_id')
+        .eq('session_id', sessionId)
+        .maybeSingle();
+      const uid = sess?.user_id as string | undefined;
+      if (uid && uid !== sessionId) {
+        await pusher.trigger(`support-chat-${uid}`, 'new-message', {
+          message: newMessage,
+        });
+      }
     } catch (pusherError) {
       console.error('Ошибка Pusher:', pusherError);
       // Не прерываем выполнение, сообщение уже сохранено

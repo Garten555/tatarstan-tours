@@ -1,37 +1,7 @@
 // Страница публичного профиля пользователя
 import { notFound } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
-import Image from 'next/image';
-import Link from 'next/link';
-import { 
-  MapPin, 
-  Calendar, 
-  BookOpen, 
-  Award, 
-  Star, 
-  Users, 
-  UserPlus,
-  UserMinus,
-  Globe,
-  Lock,
-  Compass,
-  ExternalLink,
-  Shield,
-  CheckCircle2,
-  ImageIcon
-} from 'lucide-react';
-import { escapeHtml } from '@/lib/utils/sanitize';
-import { FollowButton } from '@/components/profile/FollowButton';
-import { FriendButton } from '@/components/profile/FriendButton';
-import { MessageButton } from '@/components/profile/MessageButton';
-import { ExportMapButton } from '@/components/passport/ExportMapButton';
-import AchievementsRefreshButton from '@/components/passport/AchievementsRefreshButton';
-import AchievementCard from '@/components/passport/AchievementCard';
-import BlogPostsList from '@/components/blog/BlogPostsList';
-import UserGallery from '@/components/passport/UserGallery';
-import BanUserButton from '@/components/admin/BanUserButton';
-import PublicPassportSection from '@/components/passport/PublicPassportSection';
-import ProfileHeader from '@/components/profile/ProfileHeader';
+import PublicProfileLayout from '@/components/profile/PublicProfileLayout';
 
 interface PublicProfilePageProps {
   params: Promise<{ username: string }>;
@@ -146,6 +116,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
     username: string | null;
     bio: string | null;
     avatar_url: string | null;
+    profile_cover_url?: string | null;
     public_profile_enabled: boolean;
     status_level: number;
     reputation_score: number;
@@ -159,6 +130,21 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
 
   // Определяем, является ли пользователь админом
   const isAdmin = Boolean(profileData.role && ['tour_admin', 'support_admin', 'super_admin'].includes(profileData.role));
+
+  // Загружаем URL шапки профиля из site_settings
+  const { data: coverSetting } = await serviceClient
+    .from('site_settings')
+    .select('value_json')
+    .eq('key', `profile_cover:${profileData.id}`)
+    .maybeSingle();
+
+  const profileCoverUrl =
+    coverSetting?.value_json &&
+    typeof coverSetting.value_json === 'object' &&
+    'url' in coverSetting.value_json &&
+    typeof coverSetting.value_json.url === 'string'
+      ? coverSetting.value_json.url
+      : null;
   
   const getRoleLabel = (role: string) => {
     const roles: Record<string, string> = {
@@ -514,6 +500,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
   // Все туры (подтвержденные и завершенные) для блога
   const allToursForBlog = (toursWithLocationsResult?.data || []).filter((b: any) => b.tour);
   const completedTours = allToursForBlog.filter((b: any) => b.status === 'completed');
+  const upcomingTours = allToursForBlog.filter((b: any) => b.status === 'confirmed');
   
   // Галерея пользователя
   const allUserMedia = (Array.isArray(userGalleryResult?.data) ? userGalleryResult.data : []).map((media: any) => ({
@@ -623,168 +610,31 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
                    (profileData.banned_at !== null && profileData.banned_at !== undefined);
 
   return (
-    <div className="min-h-screen bg-gray-100 pt-[4.5rem] lg:pt-[5rem]">
-      <div className="w-full">
-        {/* Шапка профиля с обложкой */}
-        <div id="profile" className="scroll-mt-20">
-          <ProfileHeader
-            profileData={profileData}
-            stats={stats}
-            statusLevel={statusLevel}
-            isBanned={isBanned}
-            isAdmin={isAdmin}
-            isCurrentUserAdmin={isCurrentUserAdmin}
-            currentUser={currentUser}
-            cleanUsername={cleanUsername}
-            privacySettings={privacySettings}
-            areFriends={areFriends}
-                        isFollowing={isFollowing}
-            friendsList={friendsList}
-            followersList={followersList}
-            followingList={followingList}
-            roleLabel={isAdmin ? getRoleLabel(profileData.role) : undefined}
-          />
-        </div>
-
-        {/* Быстрые действия (только для владельца) */}
-        {!isBanned && currentUser && currentUser.id === profileData.id && (
-          <div className="bg-white border-b border-gray-200 shadow-sm">
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <div className="flex items-center gap-3 mb-4">
-                <span className="text-sm font-bold text-gray-700">Быстрые действия</span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Link
-                href="/tours"
-                  className="flex items-center gap-3 p-4 bg-white rounded-lg border border-gray-200 hover:border-emerald-300 hover:shadow-md transition-all duration-200 group"
-              >
-                  <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg text-white group-hover:scale-105 transition-transform">
-                  <Compass className="w-5 h-5" />
-                </div>
-                <div>
-                    <div className="font-bold text-base text-gray-900">Найти туры</div>
-                  <div className="text-sm text-gray-600">Откройте новые места</div>
-                </div>
-              </Link>
-              <Link
-                href="/profile/settings"
-                  className="flex items-center gap-3 p-4 bg-white rounded-lg border border-gray-200 hover:border-purple-300 hover:shadow-md transition-all duration-200 group"
-              >
-                  <div className="p-2 bg-gradient-to-br from-purple-500 to-pink-600 rounded-lg text-white group-hover:scale-105 transition-transform">
-                  <Globe className="w-5 h-5" />
-                </div>
-                <div>
-                    <div className="font-bold text-base text-gray-900">Настройки</div>
-                  <div className="text-sm text-gray-600">Управляйте профилем</div>
-                </div>
-              </Link>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Блог путешествий */}
-        {!isBanned && (
-          <div className="bg-white border-b border-gray-200 shadow-sm">
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-              <div className="mb-4">
-                <h2 className="text-2xl md:text-3xl font-black text-gray-900 mb-2 flex items-center gap-3">
-                  <BookOpen className="w-6 h-6 md:w-7 md:h-7 text-emerald-600" />
-                  Блог путешествий
-            </h2>
-                <p className="text-gray-600">Ваши истории и впечатления</p>
-              </div>
-            
-            <BlogPostsList 
-              initialPosts={recentBlogPosts}
-              userId={profileData.id}
-              completedTours={allToursForBlog}
-              isOwner={currentUser?.id === profileData.id}
-              isAdminView={Boolean(isCurrentUserAdmin && currentUser && currentUser.id !== profileData.id)}
-            />
-            </div>
-          </div>
-        )}
-
-        {/* Галерея пользователя */}
-        {!isBanned && (
-          <div className="bg-white border-b border-gray-200 shadow-sm">
-            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-              <div className="flex items-center justify-between mb-4">
-                <div>
-                  <h2 className="text-2xl md:text-3xl font-black text-gray-900 mb-2 flex items-center gap-3">
-                    <ImageIcon className="w-6 h-6 md:w-7 md:h-7 text-emerald-600" />
-                    Мои фото и видео
-                  </h2>
-                  <p className="text-gray-600">
-                    Галерея ваших путешествий
-                  </p>
-              </div>
-                {allUserMedia.length > 0 && (
-            <Link 
-              href={`/users/${profileData.username || profileData.id}/gallery`}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-emerald-600 hover:text-emerald-700 font-semibold text-sm border border-emerald-200 hover:border-emerald-300 rounded-lg transition-colors"
-            >
-                    <span>Все медиа</span>
-                    <ExternalLink className="w-4 h-4" />
-            </Link>
-                )}
-              </div>
-            <UserGallery 
-                media={allUserMedia.slice(0, 12)} 
-              userId={profileData.id}
-              isOwner={currentUser?.id === profileData.id}
-              username={profileData.username || profileData.id}
-              showViewAll={true}
-            />
-            </div>
-          </div>
-        )}
-
-        {/* Туристический паспорт */}
-        <div id="passport" className="scroll-mt-20">
-          {(isBanned || profileData.is_banned) ? (
-            <div className="bg-white border-b border-gray-100 p-4 md:p-6 lg:p-8">
-            <div className="text-center py-20 bg-gradient-to-br from-red-50 to-red-100 rounded-2xl border-4 border-red-400 shadow-2xl">
-              <div className="mb-8">
-                <Lock className="w-32 h-32 mx-auto text-red-600" />
-              </div>
-              <h2 className="text-4xl md:text-5xl lg:text-6xl font-black text-red-900 mb-6">
-                🚫 Аккаунт заблокирован
-              </h2>
-              <p className="text-2xl md:text-3xl font-black text-red-800 max-w-3xl mx-auto mb-8 leading-relaxed">
-                Этот аккаунт был заблокирован администрацией.
-              </p>
-              <p className="text-xl md:text-2xl font-bold text-red-700 max-w-2xl mx-auto mb-8">
-                Информация о туристическом паспорте недоступна.
-              </p>
-              {profileData.ban_reason && (
-                <div className="mt-8 p-6 bg-white rounded-xl border-4 border-red-400 max-w-2xl mx-auto shadow-lg">
-                  <p className="text-xl md:text-2xl font-black text-red-900 mb-3">Причина блокировки:</p>
-                  <p className="text-lg md:text-xl font-bold text-red-800 leading-relaxed">{escapeHtml(profileData.ban_reason)}</p>
-                </div>
-              )}
-              {profileData.banned_at && (
-                <div className="mt-6 text-lg md:text-xl font-bold text-red-700">
-                  Дата блокировки: {new Date(profileData.banned_at).toLocaleString('ru-RU')}
-                </div>
-              )}
-            </div>
-                </div>
-              ) : (
-            <PublicPassportSection
-              achievements={recentAchievements}
-              completedTours={completedTours}
-              locations={locations}
-              reputationScore={profileData.reputation_score || 0}
-              achievementStyles={ACHIEVEMENT_STYLES}
-              isOwner={currentUser?.id === profileData.id}
-              username={profileData.username}
-            />
-          )}
-                      </div>
-      </div>
-    </div>
+    <PublicProfileLayout
+      profileData={profileData}
+      profileCoverUrl={profileCoverUrl}
+      stats={stats}
+      statusLevel={statusLevel}
+      isBanned={isBanned}
+      isAdmin={isAdmin}
+      isCurrentUserAdmin={isCurrentUserAdmin}
+      currentUser={currentUser}
+      cleanUsername={cleanUsername}
+      privacySettings={privacySettings}
+      areFriends={areFriends}
+      isFollowing={isFollowing}
+      friendsList={friendsList}
+      followersList={followersList}
+      followingList={followingList}
+      roleLabel={isAdmin ? getRoleLabel(profileData.role) : undefined}
+      recentBlogPosts={recentBlogPosts}
+      allUserMedia={allUserMedia}
+      recentAchievements={recentAchievements}
+      completedTours={completedTours}
+      upcomingTours={upcomingTours}
+      locations={locations}
+      achievementStyles={ACHIEVEMENT_STYLES}
+    />
   );
 }
 

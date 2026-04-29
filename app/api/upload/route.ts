@@ -1,7 +1,7 @@
 // API для загрузки файлов в S3
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadFileToS3, generateUniqueFileName } from '@/lib/s3/upload';
-import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server';
 
 // Максимальный размер файла
 const MAX_FILE_SIZE = {
@@ -19,8 +19,7 @@ export async function POST(request: NextRequest) {
   try {
     // Проверяем аутентификацию пользователя
     const supabase = await createClient();
-    const serviceClient = await createServiceClient();
-    
+
     const {
       data: { user },
       error: authError,
@@ -57,9 +56,6 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
-    const tourId = formData.get('tourId') as string | null;
-    const mediaType = formData.get('mediaType') as string | null; // photo, video
-
     // Валидация
     if (!file) {
       return NextResponse.json(
@@ -111,45 +107,8 @@ export async function POST(request: NextRequest) {
     // Загружаем файл в S3
     const fileUrl = await uploadFileToS3(file, s3Path);
 
-    // Если указан tourId и mediaType - сохраняем в tour_media
-    if (tourId && mediaType) {
-      // Нормализуем значение mediaType под enum в БД
-      const normalizedMediaType = mediaType === 'photo' ? 'image' : mediaType;
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('💾 Сохранение медиа в БД:', {
-          tour_id: tourId,
-          media_type: normalizedMediaType,
-          file_name: file.name,
-        });
-      }
-      
-      // Получаем текущий максимальный order_index для этого тура
-      const { data: existingMedia } = await serviceClient
-        .from('tour_media')
-        .select('order_index')
-        .eq('tour_id', tourId)
-        .order('order_index', { ascending: false })
-        .limit(1);
-      
-      const nextOrderIndex = existingMedia && existingMedia.length > 0 
-        ? (existingMedia[0] as any).order_index + 1 
-        : 0;
-
-      const { data: mediaData, error: mediaError } = await (serviceClient as any).from('tour_media').insert({
-        tour_id: tourId,
-        media_type: normalizedMediaType,
-        media_url: fileUrl,
-        order_index: nextOrderIndex,
-      }).select();
-      
-      if (mediaError) {
-        console.error('❌ Ошибка сохранения медиа в БД:', mediaError);
-      } else if (process.env.NODE_ENV !== 'production') {
-        console.log('✅ Медиа сохранено в БД:', mediaData);
-      }
-    } else {
-      console.log('⚠️ Пропуск сохранения в БД (нет tourId или mediaType)');
-    }
+    // Не вставляем в tour_media здесь: при редактировании тура форма повторно вызывает
+    // POST /api/admin/tours/media при сохранении → дубликаты строк. Запись в БД только через сохранение тура.
 
     // Возвращаем URL загруженного файла
     return NextResponse.json({

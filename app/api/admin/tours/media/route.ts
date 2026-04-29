@@ -43,6 +43,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { data: existingSameUrl } = await serviceClient
+      .from('tour_media')
+      .select('id')
+      .eq('tour_id', tour_id)
+      .eq('media_url', media_url)
+      .maybeSingle();
+
+    if (existingSameUrl) {
+      return NextResponse.json({
+        success: true,
+        data: existingSameUrl,
+        alreadyExists: true,
+      });
+    }
+
     // Получаем текущий максимальный order_index если не указан
     let finalOrderIndex = order_index;
     if (finalOrderIndex === undefined || finalOrderIndex === null) {
@@ -92,6 +107,52 @@ export async function POST(request: NextRequest) {
       { error: 'Внутренняя ошибка сервера', details: errorMessage },
       { status: 500 }
     );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await createClient();
+    const serviceClient = await createServiceClient();
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Необходима авторизация' }, { status: 401 });
+    }
+
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+
+    if (!profile || (profile.role !== 'tour_admin' && profile.role !== 'super_admin')) {
+      return NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 });
+    }
+
+    const body = await request.json();
+    const { tour_id, media_url } = body as { tour_id?: string; media_url?: string };
+
+    if (!tour_id || !media_url) {
+      return NextResponse.json({ error: 'Необходимы tour_id и media_url' }, { status: 400 });
+    }
+
+    const { error } = await serviceClient
+      .from('tour_media')
+      .delete()
+      .eq('tour_id', tour_id)
+      .eq('media_url', media_url);
+
+    if (error) {
+      console.error('Ошибка удаления медиа тура:', error);
+      return NextResponse.json({ error: 'Не удалось удалить медиа', details: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Ошибка удаления медиа тура:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Внутренняя ошибка сервера';
+    return NextResponse.json({ error: 'Внутренняя ошибка сервера', details: errorMessage }, { status: 500 });
   }
 }
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import toast from 'react-hot-toast';
+import Pusher from 'pusher-js';
 import { supabase } from '@/lib/supabase/client';
 
 type AchievementPayload = {
@@ -35,69 +36,82 @@ export default function RealtimeNotifications() {
   const lastAchievementIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null;
     let active = true;
+    let pusherInst: Pusher | null = null;
+    let channelInst: ReturnType<Pusher['subscribe']> | null = null;
+
+    const teardown = () => {
+      try {
+        channelInst?.unbind_all();
+        channelInst?.unsubscribe();
+        channelInst = null;
+        if (pusherInst) {
+          pusherInst.disconnect();
+          pusherInst = null;
+        }
+      } catch {
+        // ignore
+      }
+    };
 
     const subscribe = async () => {
+      teardown();
+      const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
+      const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
       const { data } = await supabase.auth.getUser();
       const userId = data.user?.id;
-      if (!active || !userId) return;
+      if (!active || !userId || !key || !cluster) return;
 
-      channel = supabase
-        .channel(`achievements-${userId}`)
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'achievements',
-            filter: `user_id=eq.${userId}`,
-          },
-          (payload) => {
-            const achievement = payload.new as AchievementPayload;
-            if (achievement?.id && lastAchievementIdRef.current === achievement.id) {
-              return;
-            }
-            lastAchievementIdRef.current = achievement?.id || null;
+      const pusher = new Pusher(key, {
+        cluster,
+        enabledTransports: ['ws', 'wss'],
+      });
+      pusherInst = pusher;
 
-            const title = achievement?.badge_name || 'Новое достижение';
-            toast.success(`Вам присвоено достижение: ${title}`);
-            playNotificationSound();
+      const channel = pusher.subscribe(`achievements-${userId}`);
+      channelInst = channel;
 
-            fetch('/api/notifications', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                title: title,
-                body: achievement?.badge_description || null,
-                type: 'achievement',
-              }),
-            }).finally(() => {
-              window.dispatchEvent(new Event('notifications:update'));
-            });
+      channel.bind(
+        'achievement-earned',
+        (payload: { achievement?: AchievementPayload }) => {
+          const achievement = payload?.achievement;
+          if (!achievement?.id) return;
+          if (lastAchievementIdRef.current === achievement.id) {
+            return;
           }
-        )
-        .subscribe();
+          lastAchievementIdRef.current = achievement.id;
+
+          const title = achievement.badge_name || 'Новое достижение';
+          toast.success(`Вам присвоено достижение: ${title}`);
+          playNotificationSound();
+
+          fetch('/api/notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              title,
+              body: achievement.badge_description || null,
+              type: 'achievement',
+            }),
+          }).finally(() => {
+            window.dispatchEvent(new Event('notifications:update'));
+          });
+        }
+      );
     };
 
     subscribe();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(() => {
-      channel?.unsubscribe();
-      channel = null;
       subscribe();
     });
 
     return () => {
       active = false;
-      channel?.unsubscribe();
+      teardown();
       authListener.subscription.unsubscribe();
     };
   }, []);
 
   return null;
 }
-
-
-
-

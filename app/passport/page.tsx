@@ -1,25 +1,8 @@
 // Страница туристического паспорта пользователя - редизайн в стиле соцсетей
 import { redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
-import Image from 'next/image';
-import Link from 'next/link';
-import { 
-  MapPin, 
-  Calendar, 
-  BookOpen, 
-  Award, 
-  Compass,
-  ExternalLink,
-  Star,
-  Trophy,
-  TrendingUp,
-  Users,
-} from 'lucide-react';
-import { escapeHtml } from '@/lib/utils/sanitize';
-import AchievementsRefreshButton from '@/components/passport/AchievementsRefreshButton';
-import AchievementCard from '@/components/passport/AchievementCard';
-import { ExportMapButton } from '@/components/passport/ExportMapButton';
 import PassportTabs from '@/components/passport/PassportTabs';
+import PassportHeaderEditor from '@/components/passport/PassportHeaderEditor';
 
 const ACHIEVEMENT_STYLES: Record<
   string,
@@ -200,6 +183,20 @@ export default async function PassportPage() {
   const achievements = achievementsResult.data || [];
   const completedTours = completedToursResult.data || [];
   const locations = Array.isArray(locationsResult) ? locationsResult : [];
+  const settingKey = `profile_cover:${user.id}`;
+  const { data: coverSetting } = await serviceClient
+    .from('site_settings')
+    .select('value_json')
+    .eq('key', settingKey)
+    .maybeSingle();
+
+  const profileCoverUrl =
+    coverSetting?.value_json &&
+    typeof coverSetting.value_json === 'object' &&
+    'url' in coverSetting.value_json &&
+    typeof coverSetting.value_json.url === 'string'
+      ? coverSetting.value_json.url
+      : null;
 
   const fullName = profile.first_name || profile.last_name 
     ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
@@ -207,81 +204,15 @@ export default async function PassportPage() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Шапка профиля в стиле соцсетей */}
-      <div className="bg-white border-b border-gray-200 shadow-sm">
-        {/* Обложка */}
-        <div className="relative h-64 md:h-80 bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-600">
-          <div className="absolute inset-0 bg-[url('/hero-tatarstan.jpg')] bg-cover bg-center opacity-20"></div>
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-emerald-900/30 to-emerald-900/50"></div>
-        </div>
-
-        {/* Контент профиля */}
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative -mt-20 pb-6">
-            {/* Аватар */}
-            <div className="relative inline-block">
-              <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white bg-white shadow-xl overflow-hidden">
-                {profile.avatar_url ? (
-                  <Image
-                    src={profile.avatar_url}
-                    alt={fullName}
-                    width={160}
-                    height={160}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-4xl md:text-5xl font-black">
-                    {fullName[0]?.toUpperCase() || 'П'}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Информация о пользователе */}
-            <div className="mt-4">
-              <h1 className="text-3xl md:text-4xl font-black text-gray-900 mb-1">
-                {fullName}
-              </h1>
-              <div className="flex items-center gap-2 text-gray-600 mb-4">
-                <BookOpen className="w-5 h-5 text-emerald-600" />
-                <span className="font-semibold">Туристический паспорт</span>
-              </div>
-
-              {/* Статистика */}
-              <div className="flex flex-wrap gap-4 md:gap-6 mb-6">
-                <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg">
-                  <Trophy className="w-5 h-5 text-emerald-600" />
-                  <div>
-                    <div className="text-xs text-gray-500 font-medium">Достижения</div>
-                    <div className="text-lg font-black text-gray-900">{achievements.length}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg">
-                  <Compass className="w-5 h-5 text-emerald-600" />
-                  <div>
-                    <div className="text-xs text-gray-500 font-medium">Туры</div>
-                    <div className="text-lg font-black text-gray-900">{completedTours.length}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg">
-                  <MapPin className="w-5 h-5 text-emerald-600" />
-                  <div>
-                    <div className="text-xs text-gray-500 font-medium">Места</div>
-                    <div className="text-lg font-black text-gray-900">{locations.length}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200">
-                  <Star className="w-5 h-5 text-emerald-600" />
-                  <div>
-                    <div className="text-xs text-gray-500 font-medium">Очки опыта</div>
-                    <div className="text-lg font-black text-emerald-700">{profile.reputation_score || 0}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <PassportHeaderEditor
+        fullName={fullName}
+        initialAvatarUrl={profile.avatar_url}
+        initialCoverUrl={profileCoverUrl}
+        achievementsCount={achievements.length}
+        completedToursCount={completedTours.length}
+        locationsCount={locations.length}
+        reputationScore={profile.reputation_score || 0}
+      />
 
       {/* Основной контент с табами */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

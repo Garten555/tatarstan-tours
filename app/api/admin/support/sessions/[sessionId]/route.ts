@@ -48,7 +48,12 @@ export async function DELETE(
       );
     }
 
-    // Удаляем все сообщения сессии
+    const { data: sessionRow } = await serviceClient
+      .from('support_sessions')
+      .select('user_id')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+
     const { error: messagesError } = await serviceClient
       .from('chat_messages')
       .delete()
@@ -62,7 +67,6 @@ export async function DELETE(
       );
     }
 
-    // Удаляем саму сессию
     const { error: sessionError } = await serviceClient
       .from('support_sessions')
       .delete()
@@ -76,22 +80,17 @@ export async function DELETE(
       );
     }
 
-    // Отправляем уведомление пользователю через Pusher с командой очистки сообщений
+    const userId = sessionRow?.user_id as string | undefined;
+
     try {
-      await pusher.trigger(
-        `support-chat-${sessionId}`,
-        'session-deleted',
-        { 
-          sessionId,
-          clearMessages: true // Флаг для очистки сообщений на клиенте
-        }
-      );
-      // Также отправляем отдельное событие для очистки сообщений
-      await pusher.trigger(
-        `support-chat-${sessionId}`,
-        'messages-cleared',
-        { sessionId }
-      );
+      const payloadDeleted = { sessionId, clearMessages: true };
+      const payloadCleared = { sessionId };
+      await pusher.trigger(`support-chat-${sessionId}`, 'session-deleted', payloadDeleted);
+      await pusher.trigger(`support-chat-${sessionId}`, 'messages-cleared', payloadCleared);
+      if (userId && userId !== sessionId) {
+        await pusher.trigger(`support-chat-${userId}`, 'session-deleted', payloadDeleted);
+        await pusher.trigger(`support-chat-${userId}`, 'messages-cleared', payloadCleared);
+      }
     } catch (pusherError) {
       console.error('Ошибка Pusher при удалении сессии:', pusherError);
       // Не прерываем выполнение, сессия уже удалена

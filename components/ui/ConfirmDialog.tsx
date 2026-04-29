@@ -1,6 +1,6 @@
 'use client';
 
-import { X, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { useEffect } from 'react';
 
 interface ConfirmDialogProps {
@@ -11,7 +11,7 @@ interface ConfirmDialogProps {
   cancelText?: string;
   onConfirm: () => void;
   onCancel: () => void;
-  variant?: 'danger' | 'warning' | 'info';
+  variant?: 'danger' | 'warning' | 'info' | 'emerald';
 }
 
 export default function ConfirmDialog({
@@ -48,8 +48,9 @@ export default function ConfirmDialog({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onCancel]);
 
-  // Определяем текст кнопки по умолчанию в зависимости от варианта
-  const defaultConfirmText = confirmText || (variant === 'danger' ? 'Удалить' : 'OK');
+  const defaultConfirmText =
+    confirmText ||
+    (variant === 'danger' ? 'Удалить' : variant === 'emerald' ? 'Очистить' : 'OK');
 
   if (!isOpen) return null;
 
@@ -71,6 +72,12 @@ export default function ConfirmDialog({
       icon: 'text-blue-600',
       iconBg: 'bg-blue-100',
       border: 'border-blue-200',
+    },
+    emerald: {
+      confirm: 'bg-emerald-600 hover:bg-emerald-700 text-white',
+      icon: 'text-emerald-600',
+      iconBg: 'bg-emerald-100',
+      border: 'border-emerald-200',
     },
   };
 

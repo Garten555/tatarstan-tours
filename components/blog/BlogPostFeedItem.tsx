@@ -7,10 +7,11 @@ import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import { createClient } from '@/lib/supabase/client';
-import { Trash2, Flag, X, Check } from 'lucide-react';
+import { Trash2, Flag, X, Check, Calendar, Eye, Heart, MessageCircle, Image as ImageIcon } from 'lucide-react';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
 import { useDialog } from '@/hooks/useDialog';
 import toast from 'react-hot-toast';
+import { bindPlyrRussianSpeedUi, type PlyrRussianUiHost } from '@/lib/video/plyr-ru-speed-ui';
 
 interface BlogPostFeedItemProps {
   post: {
@@ -148,85 +149,91 @@ export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeed
       wrapper.replaceChild(newVideo, tempDiv);
       
       // Инициализируем Plyr
-      import('plyr').then((PlyrModule) => {
-        const Plyr = PlyrModule.default;
-        new Plyr(newVideo, {
-          controls: [
-            'play-large',
-            'restart',
-            'rewind',
-            'play',
-            'fast-forward',
-            'progress',
-            'current-time',
-            'duration',
-            'mute',
-            'volume',
-            'settings',
-            'pip',
-            'airplay',
-            'fullscreen',
-          ],
-          settings: ['quality', 'speed'],
-          speed: {
-            selected: 1,
-            options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
-          },
-          keyboard: {
-            focused: true,
-            global: false,
-          },
-          tooltips: {
-            controls: true,
-            seek: true,
-          },
-          i18n: {
-            restart: 'Перезапустить',
-            rewind: 'Перемотать назад',
-            play: 'Воспроизвести',
-            pause: 'Пауза',
-            fastForward: 'Перемотать вперед',
-            seek: 'Перейти',
-            seekLabel: '{currentTime} из {duration}',
-            played: 'Воспроизведено',
-            buffered: 'Буферизовано',
-            currentTime: 'Текущее время',
-            duration: 'Длительность',
-            volume: 'Громкость',
-            mute: 'Отключить звук',
-            unmute: 'Включить звук',
-            enableCaptions: 'Включить субтитры',
-            disableCaptions: 'Выключить субтитры',
-            download: 'Скачать',
-            enterFullscreen: 'Полноэкранный режим',
-            exitFullscreen: 'Выйти из полноэкранного режима',
-            frameTitle: 'Плеер для {title}',
-            captions: 'Субтитры',
-            settings: 'Настройки',
-            pip: 'Картинка в картинке',
-            menu: 'Меню',
-            quality: 'Качество',
-            loop: 'Зациклить',
-            start: 'Начать',
-            end: 'Конец',
-            all: 'Все',
-            reset: 'Сбросить',
-            disabled: 'Отключено',
-            enabled: 'Включено',
-            advertisement: 'Реклама',
-            qualityBadge: {
-              2160: '4K',
-              1440: 'HD',
-              1080: 'HD',
-              720: 'HD',
-              576: 'SD',
-              480: 'SD',
+      import('plyr')
+        .then((PlyrModule) => {
+          const Plyr = PlyrModule.default;
+          const player = new Plyr(newVideo, {
+            controls: [
+              'play-large',
+              'restart',
+              'rewind',
+              'play',
+              'fast-forward',
+              'progress',
+              'current-time',
+              'duration',
+              'mute',
+              'volume',
+              'settings',
+              'pip',
+              'airplay',
+              'fullscreen',
+            ],
+            settings: ['quality', 'speed'],
+            speed: {
+              selected: 1,
+              options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
             },
-          },
+            keyboard: {
+              focused: true,
+              global: false,
+            },
+            tooltips: {
+              controls: true,
+              seek: true,
+            },
+            i18n: {
+              restart: 'Перезапустить',
+              rewind: 'Перемотать назад',
+              play: 'Воспроизвести',
+              pause: 'Пауза',
+              fastForward: 'Перемотать вперед',
+              seek: 'Перейти',
+              seekLabel: '{currentTime} из {duration}',
+              played: 'Воспроизведено',
+              buffered: 'Буферизовано',
+              currentTime: 'Текущее время',
+              duration: 'Длительность',
+              volume: 'Громкость',
+              mute: 'Отключить звук',
+              unmute: 'Включить звук',
+              enableCaptions: 'Включить субтитры',
+              disableCaptions: 'Выключить субтитры',
+              download: 'Скачать',
+              enterFullscreen: 'Полноэкранный режим',
+              exitFullscreen: 'Выйти из полноэкранного режима',
+              frameTitle: 'Плеер для {title}',
+              captions: 'Субтитры',
+              settings: 'Настройки',
+              speed: 'Скорость',
+              normal: 'Обычная',
+              menuBack: 'Назад к предыдущему меню',
+              pip: 'Картинка в картинке',
+              menu: 'Меню',
+              quality: 'Качество',
+              loop: 'Зациклить',
+              start: 'Начать',
+              end: 'Конец',
+              all: 'Все',
+              reset: 'Сбросить',
+              disabled: 'Отключено',
+              enabled: 'Включено',
+              advertisement: 'Реклама',
+              qualityBadge: {
+                2160: '4K',
+                1440: 'HD',
+                1080: 'HD',
+                720: 'HD',
+                576: 'SD',
+                480: 'SD',
+              },
+            },
+          }) as unknown as PlyrRussianUiHost;
+          bindPlyrRussianSpeedUi(player);
+        })
+        .catch((err) => {
+          console.error('Plyr init error:', err);
         });
-      }).catch((err) => {
-        console.error('Plyr init error:', err);
-      });
     });
   }, [post.content]);
 
@@ -304,7 +311,29 @@ export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeed
   const postTitle = getPostTitle();
 
   return (
-    <article className="bg-white rounded-2xl border-2 border-gray-100 p-6 md:p-8 shadow-lg hover:shadow-xl transition-all duration-300 w-full mb-6">
+    <article className="bg-white rounded-3xl border border-gray-200 shadow-sm hover:shadow-lg transition-all duration-300 w-full mb-6 overflow-hidden">
+      {post.cover_image_url ? (
+        <div className="relative h-56 sm:h-72 w-full">
+          <Image
+            src={post.cover_image_url}
+            alt={postTitle || 'Шапка записи'}
+            fill
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/10 to-transparent" />
+          <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-2 text-white">
+            <span className="inline-flex items-center gap-1 rounded-full bg-black/35 backdrop-blur px-3 py-1 text-xs font-medium">
+              <ImageIcon className="w-3.5 h-3.5" />
+              Запись с фото-шапкой
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-black/35 backdrop-blur px-3 py-1 text-xs font-medium">
+              <Calendar className="w-3.5 h-3.5" />
+              {format(new Date(displayDate), 'd MMMM yyyy', { locale: ru })}
+            </span>
+          </div>
+        </div>
+      ) : null}
+      <div className="p-6 md:p-8">
       {/* Заголовок поста с автором - как в отзывах */}
       <div className="flex items-start justify-between gap-4 mb-6">
         <div className="flex items-center gap-4">
@@ -405,40 +434,28 @@ export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeed
           />
         )}
         
-        {/* Обложка если есть */}
-        {post.cover_image_url && (
-          <div className="mt-6 rounded-xl overflow-hidden border border-gray-100">
-            <Image
-              src={post.cover_image_url}
-              alt={postTitle || 'Обложка поста'}
-              width={1200}
-              height={600}
-              className="w-full h-auto object-cover"
-            />
-          </div>
-        )}
       </div>
 
       {/* Реакции - как в отзывах */}
       <div className="mt-8">
-        <div className="flex items-center gap-6 text-base md:text-lg text-gray-500">
+        <div className="flex flex-wrap items-center gap-3 text-sm md:text-base text-gray-600">
+          <div className="inline-flex items-center gap-2 rounded-full bg-gray-50 px-3 py-1.5">
+            <Eye className="w-4 h-4" />
+            <span>{post.views_count || 0}</span>
+          </div>
           <button
             type="button"
-            className="inline-flex items-center gap-2 hover:text-emerald-600 transition-colors font-medium"
+            className="inline-flex items-center gap-2 rounded-full bg-emerald-50 text-emerald-700 px-3 py-1.5 hover:bg-emerald-100 transition-colors font-medium"
           >
-            <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
-            </svg>
+            <Heart className="w-4 h-4" />
             {post.likes_count || 0}
           </button>
           <button
             type="button"
             onClick={() => setCommentFormOpen(!commentFormOpen)}
-            className="inline-flex items-center gap-2 hover:text-emerald-600 transition-colors font-medium"
+            className="inline-flex items-center gap-2 rounded-full bg-blue-50 text-blue-700 px-3 py-1.5 hover:bg-blue-100 transition-colors font-medium"
           >
-            <svg className="w-5 h-5 md:w-6 md:h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
+            <MessageCircle className="w-4 h-4" />
             {post.comments_count || comments.length || 0}
           </button>
         </div>
@@ -597,6 +614,7 @@ export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeed
 
       {/* Диалоги */}
       {DialogComponents}
+      </div>
     </article>
   );
 }

@@ -1,6 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef } from 'react';
+import { videoPlaybackSrc } from '@/lib/video/playback-src';
+import { bindPlyrRussianSpeedUi, type PlyrRussianUiHost } from '@/lib/video/plyr-ru-speed-ui';
+import { loadPlyrFromCdn } from '@/lib/video/load-plyr-cdn';
 
 interface VideoPlayerProps {
   src: string;
@@ -8,45 +11,67 @@ interface VideoPlayerProps {
   title?: string;
 }
 
-export default function VideoPlayer({ src, mimeType, title }: VideoPlayerProps) {
+type PlyrInstance = PlyrRussianUiHost & { destroy(): void };
+
+/** У Chromium поле message у MediaError часто пустое — не полагаться на него в логах */
+const MEDIA_ERR_LABEL: Record<number, string> = {
+  1: 'MEDIA_ERR_ABORTED (прервано)',
+  2: 'MEDIA_ERR_NETWORK (сеть / доступ к файлу)',
+  3: 'MEDIA_ERR_DECODE (не удалось декодировать)',
+  4: 'MEDIA_ERR_SRC_NOT_SUPPORTED (кодек/формат не поддерживается браузером)',
+};
+
+export default function VideoPlayer({ src, title }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const playerRef = useRef<any>(null);
-  const [isClient, setIsClient] = useState(false);
+  const playerRef = useRef<PlyrInstance | null>(null);
+  const teardownRef = useRef(false);
 
-  const resolveMimeType = () => {
-    if (mimeType && mimeType !== 'application/octet-stream') return mimeType;
-    const cleanSrc = src.split('?')[0].toLowerCase();
-    if (cleanSrc.endsWith('.mp4')) return 'video/mp4';
-    if (cleanSrc.endsWith('.webm')) return 'video/webm';
-    if (cleanSrc.endsWith('.ogg') || cleanSrc.endsWith('.ogv')) return 'video/ogg';
-    if (cleanSrc.endsWith('.mov')) return 'video/quicktime';
-    return undefined;
-  };
+  useLayoutEffect(() => {
+    teardownRef.current = false;
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+    const trimmed = src?.trim();
+    if (!trimmed || typeof window === 'undefined') return;
 
-  useEffect(() => {
-    if (!isClient || !videoRef.current || typeof window === 'undefined') return;
+    const playback = videoPlaybackSrc(trimmed);
 
-    // Уничтожаем старый плеер если есть
-    if (playerRef.current) {
-      playerRef.current.destroy();
-      playerRef.current = null;
-    }
+    const videoEl = videoRef.current;
+    if (!videoEl) return;
 
-    // Динамический импорт Plyr только на клиенте
-    import('plyr').then((PlyrModule) => {
-      const Plyr = PlyrModule.default;
-      
-      if (!videoRef.current) return;
+    let cancelled = false;
 
-      // Перезагружаем источник перед инициализацией
-      videoRef.current.load();
+    const destroy = () => {
+      if (playerRef.current) {
+        try {
+          playerRef.current.destroy();
+        } catch {
+          /* уже уничтожен */
+        }
+        playerRef.current = null;
+      }
+    };
 
-      // Инициализируем Plyr
-      const player = new Plyr(videoRef.current, {
+    destroy();
+    videoEl.removeAttribute('controls');
+
+    const onVideoError = () => {
+      if (teardownRef.current) return;
+      const err = videoEl.error;
+      if (!err) return;
+
+      const label = MEDIA_ERR_LABEL[err.code] ?? `неизвестный код ${err.code}`;
+      const msg = err.message?.trim();
+      console.error(
+        `[VideoPlayer] ${label}${msg ? ` — ${msg}` : ''}\n` +
+          `  originalSrc: ${trimmed}\n` +
+          `  playbackSrc: ${playback}\n` +
+          `  currentSrc: ${videoEl.currentSrc || '(пусто)'}\n` +
+          `  networkState: ${videoEl.networkState} readyState: ${videoEl.readyState}`
+      );
+    };
+
+    videoEl.addEventListener('error', onVideoError);
+
+    const plyrOptions = {
       controls: [
         'play-large',
         'restart',
@@ -63,7 +88,7 @@ export default function VideoPlayer({ src, mimeType, title }: VideoPlayerProps) 
         'airplay',
         'fullscreen',
       ],
-      settings: ['quality', 'speed'],
+      settings: ['speed'],
       speed: {
         selected: 1,
         options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2],
@@ -99,6 +124,9 @@ export default function VideoPlayer({ src, mimeType, title }: VideoPlayerProps) 
         frameTitle: 'Плеер для {title}',
         captions: 'Субтитры',
         settings: 'Настройки',
+        speed: 'Скорость',
+        normal: 'Обычная',
+        menuBack: 'Назад к предыдущему меню',
         pip: 'Картинка в картинке',
         menu: 'Меню',
         quality: 'Качество',
@@ -119,40 +147,50 @@ export default function VideoPlayer({ src, mimeType, title }: VideoPlayerProps) 
           480: 'SD',
         },
       },
+    };
+
+    void loadPlyrFromCdn()
+      .then((PlyrCtor) => {
+        if (cancelled || videoRef.current !== videoEl) return;
+        try {
+          destroy();
+          const instance = new PlyrCtor(videoEl, plyrOptions) as unknown as PlyrInstance;
+          playerRef.current = instance;
+          bindPlyrRussianSpeedUi(instance);
+        } catch (e) {
+          console.error('[VideoPlayer] Plyr init failed', e);
+          videoEl.setAttribute('controls', '');
+        }
+      })
+      .catch((e) => {
+        console.error('[VideoPlayer] не удалось загрузить Plyr с CDN', e);
+        if (!cancelled) videoEl.setAttribute('controls', '');
       });
 
-      playerRef.current = player;
-    }).catch((err) => {
-      console.error('Plyr init error:', err);
-    });
-
-    // Очистка при размонтировании
     return () => {
-      if (playerRef.current) {
-        playerRef.current.destroy();
-        playerRef.current = null;
-      }
+      cancelled = true;
+      teardownRef.current = true;
+      videoEl.removeEventListener('error', onVideoError);
+      destroy();
+      videoEl.removeAttribute('controls');
     };
-  }, [src, isClient]);
+  }, [src]);
+
+  const safeSrc = src?.trim() ?? '';
+  if (!safeSrc) return null;
+
+  const playback = videoPlaybackSrc(safeSrc);
 
   return (
-    <div className="plyr-container w-full">
+    <div key={`${safeSrc}-${playback}`} className="plyr-container relative w-full aspect-video min-h-[200px] bg-black">
       <video
-        key={src}
         ref={videoRef}
-        className="plyr w-full"
+        className="plyr h-full w-full"
+        src={playback}
         playsInline
-        controls
-        preload="metadata"
-      >
-        {resolveMimeType() ? (
-          <source src={src} type={resolveMimeType()} />
-        ) : (
-          <source src={src} />
-        )}
-        Ваш браузер не поддерживает видео.
-      </video>
+        preload="auto"
+        {...(title ? { 'aria-label': title } : {})}
+      />
     </div>
   );
 }
-

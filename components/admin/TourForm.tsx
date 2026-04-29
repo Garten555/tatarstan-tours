@@ -6,6 +6,11 @@ import RichTextEditor from './RichTextEditor';
 import AutoResizeTextarea from './AutoResizeTextarea';
 import { Upload, Loader2, Save, AlertCircle, CheckCircle2, MapPin, Search, X, Copy, Calendar } from 'lucide-react';
 import Image from 'next/image';
+import toast from 'react-hot-toast';
+import VideoPlayer from '@/components/tours/VideoPlayer';
+
+/** Согласовано с подписью в форме и лимитом в app/api/upload/route.ts */
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 
 interface TourFormProps {
   mode: 'create' | 'edit';
@@ -99,8 +104,9 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
 
     const existingPhotos = existingMedia.filter((m) => m.media_type === 'image' || (m as any).media_type === 'photo');
     const existingVideos = existingMedia.filter((m) => m.media_type === 'video');
+    const existingVideoUrls = existingVideos.map((m) => m.media_url);
     setGalleryPreviews(existingPhotos.map((m) => m.media_url));
-    setVideoPreviews(existingVideos.map((m) => m.media_url));
+    setVideoPreviews(existingVideoUrls);
   }, [mode, existingMedia]);
 
   // Загрузка выбранного города при редактировании
@@ -402,7 +408,25 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
   const handleVideoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-    
+
+    const oversized = files.filter((f) => f.size > MAX_VIDEO_BYTES);
+    if (oversized.length > 0) {
+      toast.error(
+        oversized.length === 1
+          ? `Файл «${oversized[0].name}» больше 100 МБ`
+          : `Превышен лимит 100 МБ: ${oversized.map((f) => f.name).join(', ')}`
+      );
+      e.target.value = '';
+      return;
+    }
+
+    const notVideo = files.filter((f) => !f.type.startsWith('video/'));
+    if (notVideo.length > 0) {
+      toast.error('Разрешены только видеофайлы');
+      e.target.value = '';
+      return;
+    }
+
     try {
       setLoading(true);
       setLoadingStatus(`Загрузка ${files.length} видео...`);
@@ -433,26 +457,63 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
       });
 
       const uploadedUrls = await Promise.all(uploadPromises);
-      setVideoPreviews(prev => [...prev, ...uploadedUrls]);
-      setVideoFiles(prev => [...prev, ...files]);
+      setVideoPreviews((prev) => [...prev, ...uploadedUrls]);
+      setVideoFiles((prev) => [...prev, ...files]);
     } catch (error: any) {
-      alert(error.message || 'Ошибка загрузки видео');
+      toast.error(error.message || 'Ошибка загрузки видео');
     } finally {
       setLoading(false);
       setLoadingStatus('');
+      e.target.value = '';
     }
   };
 
   // Remove gallery photo
-  const removeGalleryPhoto = (index: number) => {
-    setGalleryFiles(prev => prev.filter((_, i) => i !== index));
-    setGalleryPreviews(prev => prev.filter((_, i) => i !== index));
+  const removeGalleryPhoto = async (index: number) => {
+    const url = galleryPreviews[index];
+    if (mode === 'edit' && initialData?.id && url) {
+      try {
+        const res = await fetch('/api/admin/tours/media', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tour_id: initialData.id, media_url: url }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          toast.error((err as { error?: string }).error || 'Не удалось удалить фото из тура');
+          return;
+        }
+      } catch {
+        toast.error('Не удалось удалить фото из тура');
+        return;
+      }
+    }
+    setGalleryFiles((prev) => prev.filter((_, i) => i !== index));
+    setGalleryPreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
   // Remove video
-  const removeVideo = (index: number) => {
-    setVideoFiles(prev => prev.filter((_, i) => i !== index));
-    setVideoPreviews(prev => prev.filter((_, i) => i !== index));
+  const removeVideo = async (index: number) => {
+    const url = videoPreviews[index];
+    if (mode === 'edit' && initialData?.id && url) {
+      try {
+        const res = await fetch('/api/admin/tours/media', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tour_id: initialData.id, media_url: url }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          toast.error((err as { error?: string }).error || 'Не удалось удалить видео из тура');
+          return;
+        }
+      } catch {
+        toast.error('Не удалось удалить видео из тура');
+        return;
+      }
+    }
+    setVideoFiles((prev) => prev.filter((_, i) => i !== index));
+    setVideoPreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
   // Submit form
@@ -1113,30 +1174,32 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
           </label>
           <div className="space-y-4">
             {videoPreviews.length > 0 && (
-              <div className="space-y-2">
+              <div className="space-y-4">
                 {videoPreviews.map((preview, index) => (
-                  <div key={index} className="relative flex items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-200">
-                    <video
-                      className="w-32 h-20 object-cover rounded-lg"
-                      controls
-                      playsInline
-                      preload="metadata"
+                  <div
+                    key={`${preview}-${index}`}
+                    className="rounded-xl border border-gray-200 bg-black shadow-lg overflow-visible"
+                  >
+                    <div className="flex items-center justify-between gap-3 px-3 py-2 bg-gray-50 border-b border-gray-200">
+                      <span className="text-sm text-gray-700 font-medium truncate min-w-0">
+                        {videoFiles[index]?.name || `Видео ${index + 1}`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeVideo(index)}
+                        className="shrink-0 bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-colors shadow-sm"
+                        aria-label="Удалить видео"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    <VideoPlayer
                       src={preview}
-                    >
-                      Ваш браузер не поддерживает видео.
-                    </video>
-                    <span className="flex-1 text-sm text-gray-600 font-medium">
-                      {videoFiles[index]?.name || `Видео ${index + 1}`}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeVideo(index)}
-                      className="bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-colors shadow-sm"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
+                      mimeType={videoFiles[index]?.type || undefined}
+                      title={videoFiles[index]?.name || `Видео ${index + 1}`}
+                    />
                   </div>
                 ))}
               </div>

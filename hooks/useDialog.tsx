@@ -12,7 +12,7 @@ export function useDialog() {
     message: string;
     onConfirm: () => void;
     onCancel: () => void;
-    variant?: 'danger' | 'warning' | 'info';
+    variant?: 'danger' | 'warning' | 'info' | 'emerald';
     confirmText?: string;
     cancelText?: string;
   }>({
@@ -58,7 +58,7 @@ export function useDialog() {
   const confirm = useCallback((
     message: string,
     title: string = 'Подтвердите действие',
-    variant: 'danger' | 'warning' | 'info' = 'danger',
+    variant: 'danger' | 'warning' | 'info' | 'emerald' = 'danger',
     confirmText: string = 'OK',
     cancelText: string = 'Отмена'
   ): Promise<boolean> => {
