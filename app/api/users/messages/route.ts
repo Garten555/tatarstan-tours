@@ -95,27 +95,54 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      // Помечаем сообщения как прочитанные
+      const isCurrentUser1 = user.id === user1_id;
+
+      // Помечаем входящие как прочитанные
       const unreadMessageIds = (messages || [])
         .filter((msg: any) => msg.recipient_id === user.id && !msg.is_read)
         .map((msg: any) => msg.id);
 
+      let readAtBatch: string | null = null;
       if (unreadMessageIds.length > 0) {
+        readAtBatch = new Date().toISOString();
         await serviceClient
           .from('user_messages')
           .update({
             is_read: true,
-            read_at: new Date().toISOString(),
+            read_at: readAtBatch,
           })
           .in('id', unreadMessageIds);
       }
+
+      const readIdSet = new Set(unreadMessageIds.map((id: unknown) => String(id)));
+      const messagesForClient = (messages || []).map((msg: any) => {
+        if (readIdSet.has(String(msg.id))) {
+          return {
+            ...msg,
+            is_read: true,
+            read_at: readAtBatch,
+          };
+        }
+        return msg;
+      });
+
+      // Сбрасываем счётчик непрочитанных в беседе (иначе бейдж в списке не сбрасывается)
+      await serviceClient
+        .from('user_conversations')
+        .update(
+          isCurrentUser1
+            ? { unread_count_user1: 0 }
+            : { unread_count_user2: 0 }
+        )
+        .eq('user1_id', user1_id)
+        .eq('user2_id', user2_id);
 
       // Убираем записи в колокольчике: переписку открыли / сообщения помечены прочитанными
       await dismissDmNotificationsForSender(serviceClient, user.id, conversationWith);
 
       return NextResponse.json({
         success: true,
-        messages: messages || [],
+        messages: messagesForClient,
       });
     } else {
       // Получаем список всех бесед пользователя

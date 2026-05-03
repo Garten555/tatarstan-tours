@@ -3,7 +3,7 @@
 // Компонент мессенджера для приватных сообщений между пользователями
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Send, Search, UserPlus, Settings, Loader2, WifiOff, Image as ImageIcon, X, MessageSquare } from 'lucide-react';
+import { Send, Search, UserPlus, Loader2, WifiOff, Image as ImageIcon, X, MessageSquare, Check, CheckCheck } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { createClient } from '@/lib/supabase/client';
 import { resolveAuthUserForUi } from '@/lib/supabase/auth-quick-client';
@@ -33,6 +33,12 @@ interface Conversation {
   is_pinned: boolean;
   is_archived: boolean;
   updated_at: string;
+}
+
+function appendDmMessageDeduped(prev: Message[], incoming: Message): Message[] {
+  const id = String(incoming.id);
+  if (prev.some((m) => String(m.id) === id)) return prev;
+  return [...prev, incoming];
 }
 
 interface Message {
@@ -207,6 +213,7 @@ export default function UserMessenger() {
             window.dispatchEvent(new CustomEvent('messages:update'));
             window.dispatchEvent(new Event('notifications:update'));
             void fetchPeerPresence(userId);
+            void loadConversations({ silent: true });
           }
         }
       }
@@ -244,11 +251,7 @@ export default function UserMessenger() {
 
     channel.bind('new-message', (data: { message: Message }) => {
       if (data.message.sender_id === peerUserId || data.message.recipient_id === peerUserId) {
-        setMessages((prev) => {
-          const exists = prev.some((msg) => msg.id === data.message.id);
-          if (exists) return prev;
-          return [...prev, data.message];
-        });
+        setMessages((prev) => appendDmMessageDeduped(prev, data.message));
         const isMine = data.message.sender_id === myUserId;
         if (isMine || nearBottomRef.current) {
           autoScrollNextRef.current = true;
@@ -374,8 +377,7 @@ export default function UserMessenger() {
       const contentType = response.headers.get('content-type');
       if (contentType && contentType.includes('application/json')) {
         const data = await response.json();
-        // Добавляем сообщение в список
-        setMessages((prev) => [...prev, data.message]);
+        setMessages((prev) => appendDmMessageDeduped(prev, data.message));
         playNotificationSound('message');
         autoScrollNextRef.current = true;
         void loadConversations({ silent: true });
@@ -688,11 +690,28 @@ export default function UserMessenger() {
                             </div>
                           )}
                         </div>
-                        <div className={`text-xs text-gray-500 mt-2 font-medium ${isMine ? 'text-right' : 'text-left'}`}>
+                        <div
+                          className={`mt-2 flex items-center gap-1 text-xs font-medium text-gray-500 ${
+                            isMine ? 'justify-end' : 'justify-start'
+                          }`}
+                        >
                           {new Date(message.created_at).toLocaleTimeString('ru-RU', {
                             hour: '2-digit',
                             minute: '2-digit',
                           })}
+                          {isMine ? (
+                            <span
+                              className="inline-flex shrink-0 text-white/80"
+                              title={message.is_read ? 'Прочитано' : 'Доставлено'}
+                              aria-label={message.is_read ? 'Прочитано' : 'Доставлено'}
+                            >
+                              {message.is_read ? (
+                                <CheckCheck className="h-3.5 w-3.5" strokeWidth={2.5} />
+                              ) : (
+                                <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+                              )}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                     </div>
