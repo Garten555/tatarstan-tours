@@ -29,7 +29,7 @@ import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
 import { insertEmojiAtCursor } from '@/lib/chat/insert-emoji-at-cursor';
 import { formatLastSeen, type PresenceStatus } from '@/lib/utils/presence';
 import { postFormDataJsonWithProgress } from '@/lib/upload/post-form-data-xhr';
-import { ChatImageLightbox } from '@/components/chat/ChatImageLightbox';
+import ImageViewerModal from '@/components/common/ImageViewerModal';
 
 interface Conversation {
   id: string;
@@ -96,7 +96,7 @@ export default function UserMessenger() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedImage, setSelectedImage] = useState<{ file: File; preview: string } | null>(null);
-  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
+  const [imageViewer, setImageViewer] = useState<{ urls: string[]; index: number } | null>(null);
   const [clearingThread, setClearingThread] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -361,10 +361,10 @@ export default function UserMessenger() {
 
   const messageImageUrls = messages.map((m) => m.image_url).filter((u): u is string => !!u);
 
-  const openLightbox = (url: string) => {
+  const openImageViewer = (url: string) => {
     const urls = messageImageUrls.length ? messageImageUrls : [url];
     const index = Math.max(0, urls.indexOf(url));
-    setLightbox({ urls, index });
+    setImageViewer({ urls, index });
   };
 
   const clearThreadWithPeer = async () => {
@@ -759,7 +759,7 @@ export default function UserMessenger() {
                             <button
                               type="button"
                               className="mb-3 block w-full overflow-hidden rounded-xl text-left outline-none ring-emerald-400/50 focus-visible:ring-2"
-                              onClick={() => openLightbox(message.image_url!)}
+                              onClick={() => openImageViewer(message.image_url!)}
                               title="Открыть фото"
                             >
                               <img
@@ -901,14 +901,12 @@ export default function UserMessenger() {
         )}
       </div>
     </div>
-    <ChatImageLightbox
-      open={lightbox !== null}
-      urls={lightbox?.urls ?? []}
-      index={lightbox?.index ?? 0}
-      onClose={() => setLightbox(null)}
-      onIndexChange={(next) =>
-        setLightbox((prev) => (prev ? { ...prev, index: next } : null))
-      }
+    <ImageViewerModal
+      isOpen={imageViewer !== null}
+      images={imageViewer?.urls ?? []}
+      initialIndex={imageViewer?.index ?? 0}
+      title="Фото в чате"
+      onClose={() => setImageViewer(null)}
     />
     </>
   );

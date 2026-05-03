@@ -15,7 +15,7 @@ import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
 import { insertEmojiAtCursor } from '@/lib/chat/insert-emoji-at-cursor';
 import ReportReasonModal from '@/components/common/ReportReasonModal';
 import { postFormDataJsonWithProgress } from '@/lib/upload/post-form-data-xhr';
-import { ChatImageLightbox } from '@/components/chat/ChatImageLightbox';
+import ImageViewerModal from '@/components/common/ImageViewerModal';
 
 interface TourRoomChatProps {
   roomId: string;
@@ -34,7 +34,7 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedImage, setSelectedImage] = useState<{ file: File; preview: string } | null>(null);
-  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
+  const [imageViewer, setImageViewer] = useState<{ urls: string[]; index: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messageTextareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -382,9 +382,9 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
     [messages]
   );
 
-  const openTourLightbox = (url: string) => {
+  const openTourImageViewer = (url: string) => {
     const urls = messageImageUrls.length ? messageImageUrls : [url];
-    setLightbox({ urls, index: Math.max(0, urls.indexOf(url)) });
+    setImageViewer({ urls, index: Math.max(0, urls.indexOf(url)) });
   };
 
   return (
@@ -555,7 +555,7 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
                       <button
                         type="button"
                         className="mb-2 block w-full overflow-hidden rounded-lg text-left outline-none ring-emerald-400/40 focus-visible:ring-2"
-                        onClick={() => openTourLightbox(message.image_url!)}
+                        onClick={() => openTourImageViewer(message.image_url!)}
                         title="Открыть фото"
                       >
                         <img
@@ -779,14 +779,12 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
         onSubmit={(reason) => void submitMessageReport(reason)}
       />
     </div>
-    <ChatImageLightbox
-      open={lightbox !== null}
-      urls={lightbox?.urls ?? []}
-      index={lightbox?.index ?? 0}
-      onClose={() => setLightbox(null)}
-      onIndexChange={(next) =>
-        setLightbox((prev) => (prev ? { ...prev, index: next } : null))
-      }
+    <ImageViewerModal
+      isOpen={imageViewer !== null}
+      images={imageViewer?.urls ?? []}
+      initialIndex={imageViewer?.index ?? 0}
+      title="Фото в чате комнаты"
+      onClose={() => setImageViewer(null)}
     />
     </>
   );
