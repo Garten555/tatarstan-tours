@@ -1,10 +1,11 @@
 // Страница со списком комнат пользователя
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { resolveAuthUserForUi } from '@/lib/supabase/auth-quick-client';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import { 
   MessageSquare, 
@@ -47,35 +48,34 @@ interface Room {
 
 export default function MyRoomsPage() {
   const router = useRouter();
-  const supabase = createClient();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [unreadByRoom, setUnreadByRoom] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
 
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser) {
-        router.push('/auth/login');
-        return;
-      }
-      setUser(currentUser);
-      loadRooms();
-    };
-    checkAuth();
-  }, [router, supabase]);
+  const loadUnreadRoomMessages = useCallback(async () => {
+    try {
+      const response = await fetch('/api/notifications?mode=summary', {
+        credentials: 'include',
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!data?.success) return;
+      setUnreadByRoom(data?.summary?.room_counts || {});
+    } catch {
+      // ignore
+    }
+  }, []);
 
-  const loadRooms = async () => {
+  const loadRooms = useCallback(async () => {
     try {
       setLoading(true);
-      
-      // Добавляем таймаут для запроса
+
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут
-      
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
       const response = await fetch('/api/user/rooms', {
         signal: controller.signal,
+        credentials: 'include',
       });
       
       clearTimeout(timeoutId);
@@ -103,19 +103,27 @@ export default function MyRoomsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [loadUnreadRoomMessages]);
 
-  const loadUnreadRoomMessages = async () => {
-    try {
-      const response = await fetch('/api/notifications?mode=summary', { credentials: 'include' });
-      if (!response.ok) return;
-      const data = await response.json();
-      if (!data?.success) return;
-      setUnreadByRoom(data?.summary?.room_counts || {});
-    } catch {
-      // ignore
-    }
-  };
+  useEffect(() => {
+    let cancelled = false;
+    const supabase = createClient();
+
+    void (async () => {
+      const currentUser = await resolveAuthUserForUi(supabase);
+      if (cancelled) return;
+      if (!currentUser) {
+        setLoading(false);
+        router.replace('/auth');
+        return;
+      }
+      await loadRooms();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router, loadRooms]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('ru-RU', {
