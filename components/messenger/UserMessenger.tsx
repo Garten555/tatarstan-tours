@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { Send, Search, UserPlus, Settings, Loader2, WifiOff, Image as ImageIcon, X, MessageSquare } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { createClient } from '@/lib/supabase/client';
+import { resolveAuthUserForUi } from '@/lib/supabase/auth-quick-client';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import toast from 'react-hot-toast';
 import Image from 'next/image';
@@ -107,10 +108,10 @@ export default function UserMessenger() {
   // Получаем текущего пользователя
   useEffect(() => {
     const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await resolveAuthUserForUi(supabase);
       setCurrentUserId(user?.id || null);
     };
-    getCurrentUser();
+    void getCurrentUser();
   }, [supabase]);
 
   // Загружаем список бесед
@@ -216,7 +217,6 @@ export default function UserMessenger() {
 
     const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
       cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'eu',
-      enabledTransports: ['ws', 'wss'],
     });
 
     pusherRef.current = pusher;

@@ -9,6 +9,7 @@ import { useEffect, useRef } from 'react';
 import Pusher from 'pusher-js';
 import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
+import { resolveAuthUserForUi } from '@/lib/supabase/auth-quick-client';
 import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
 import { dispatchPusherBridge } from '@/lib/pusher/user-bridge-events';
 
@@ -65,14 +66,11 @@ export default function PusherUserBridge() {
       const cluster = process.env.NEXT_PUBLIC_PUSHER_CLUSTER;
       if (!key || !cluster) return;
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await resolveAuthUserForUi(supabase);
       if (!active || !user?.id) return;
 
       const pusher = new Pusher(key, {
         cluster,
-        enabledTransports: ['ws', 'wss'],
       });
       pusherRef.current = pusher;
 

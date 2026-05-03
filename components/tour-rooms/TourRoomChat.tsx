@@ -6,6 +6,7 @@ import { TourRoomMessage } from '@/types';
 import { Send, Trash2, Loader2, Wifi, WifiOff, Image as ImageIcon, X, Flag } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { createClient } from '@/lib/supabase/client';
+import { resolveAuthUserForUi } from '@/lib/supabase/auth-quick-client';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import toast from 'react-hot-toast';
 import { playNotificationSound } from '@/lib/sound/notifications';
@@ -45,10 +46,10 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
   // Получаем текущего пользователя
   useEffect(() => {
     const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await resolveAuthUserForUi(supabase);
       setCurrentUserId(user?.id || null);
     };
-    getCurrentUser();
+    void getCurrentUser();
   }, [supabase]);
 
   // Загружаем сообщения
@@ -66,7 +67,6 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
     // Инициализируем Pusher (без авторизации для публичных каналов)
     const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
       cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'eu',
-      enabledTransports: ['ws', 'wss'],
     });
 
     pusherRef.current = pusher;

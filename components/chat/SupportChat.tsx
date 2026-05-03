@@ -5,6 +5,7 @@ import { Send, Loader2, MessageSquare, Bot, MessageCircle, Trash2, X } from 'luc
 import Pusher from 'pusher-js';
 import toast from 'react-hot-toast';
 import { createClient } from '@/lib/supabase/client';
+import { getUserFromSession, resolveAuthUserForUi } from '@/lib/supabase/auth-quick-client';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { playNotificationSound } from '@/lib/sound/notifications';
 import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
@@ -42,14 +43,26 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
   const isInitializingRef = useRef(false);
   const [clearConfirm, setClearConfirm] = useState<null | 'ai' | 'support'>(null);
 
-  // Проверяем авторизацию при монтировании
+  // Авторизация: getSession (локально) + при необходимости getUser с таймаутом — без вечного зависания без VPN
   useEffect(() => {
-    const checkAuth = async () => {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      setIsAuthenticated(!!user);
+    let cancelled = false;
+    const supabase = createClient();
+
+    void (async () => {
+      const user = await resolveAuthUserForUi(supabase);
+      if (!cancelled) setIsAuthenticated(!!user);
+    })();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session?.user);
+    });
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
     };
-    checkAuth();
   }, []);
 
   // Синхронизируем ref с state
@@ -74,9 +87,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
         }
       } else {
         const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        const user = await getUserFromSession(supabase);
         if (user) setSessionStatus(null);
       }
     } catch (error) {
@@ -159,13 +170,14 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
         pusherRef.current = null;
 
         const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
+        const user = await getUserFromSession(supabase);
         const userId = user?.id;
         if (!userId) {
           isInitializingRef.current = false;
           return;
         }
 
+        // Transports по умолчанию: WS, при блокировке — xhr long polling
         const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
           cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'eu',
         });
@@ -286,7 +298,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
     
     // Проверяем авторизацию
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await resolveAuthUserForUi(supabase);
     if (!user) {
       toast.error('Для отправки сообщений необходимо войти в аккаунт');
       return;
