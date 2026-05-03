@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Bell, Loader2, UserCheck, UserX } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { createClient } from '@/lib/supabase/client';
 import { playNotificationSound } from '@/lib/sound/notifications';
 import { sanitizeImageUrl } from '@/lib/utils/sanitize';
 import {
@@ -80,8 +81,22 @@ export default function NotificationBell() {
 
   const loadNotifications = useCallback(async () => {
     try {
-      const response = await fetch('/api/notifications');
-      const data = await response.json();
+      const {
+        data: { session },
+      } = await createClient().auth.getSession();
+      if (!session) {
+        setNotifications([]);
+        setUnreadCount(0);
+        return;
+      }
+
+      const response = await fetch('/api/notifications', { credentials: 'include' });
+      if (response.status === 401) {
+        setNotifications([]);
+        setUnreadCount(0);
+        return;
+      }
+      const data = await response.json().catch(() => ({}));
       if (data.success) {
         setNotifications(data.notifications || []);
         setUnreadCount(data.notifications?.length || 0);
@@ -94,10 +109,19 @@ export default function NotificationBell() {
   }, []);
 
   useEffect(() => {
-    loadNotifications();
+    setLoading(true);
+    void loadNotifications();
+
+    const supabase = createClient();
+    const {
+      data: { subscription: authSubscription },
+    } = supabase.auth.onAuthStateChange(() => {
+      setLoading(true);
+      void loadNotifications();
+    });
 
     const handleUpdate = () => {
-      loadNotifications();
+      void loadNotifications();
     };
     window.addEventListener('notifications:update', handleUpdate);
 
@@ -105,11 +129,12 @@ export default function NotificationBell() {
       const d = (ev as CustomEvent<PusherBridgeDetail>).detail;
       if (!d || d.channel !== 'notifications' || d.event !== 'new-notification') return;
       playNotificationSound('notification');
-      loadNotifications();
+      void loadNotifications();
     };
     window.addEventListener(PUSHER_BRIDGE_EVENT, onPusherBridge);
 
     return () => {
+      authSubscription.unsubscribe();
       window.removeEventListener('notifications:update', handleUpdate);
       window.removeEventListener(PUSHER_BRIDGE_EVENT, onPusherBridge);
     };
@@ -121,7 +146,7 @@ export default function NotificationBell() {
   };
 
   const deleteNotificationRemote = async (id: string) => {
-    await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
+    await fetch(`/api/notifications/${id}`, { method: 'DELETE', credentials: 'include' });
   };
 
   const handleFriendAccept = async (notification: Notification, senderId: string) => {
@@ -200,7 +225,7 @@ export default function NotificationBell() {
                 <button
                   onClick={async () => {
                     try {
-                      await fetch('/api/notifications', { method: 'DELETE' });
+                      await fetch('/api/notifications', { method: 'DELETE', credentials: 'include' });
                       loadNotifications();
                     } catch (error) {
                       console.error('Ошибка очистки уведомлений:', error);

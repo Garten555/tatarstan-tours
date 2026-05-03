@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 
 const INTERVAL_MS = 120_000;
 
@@ -9,10 +10,15 @@ async function pingPresence() {
   if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
     return;
   }
+  const {
+    data: { session },
+  } = await createClient().auth.getSession();
+  if (!session) return;
+
   try {
     await fetch('/api/users/presence', {
       method: 'POST',
-      credentials: 'same-origin',
+      credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
     });
   } catch {

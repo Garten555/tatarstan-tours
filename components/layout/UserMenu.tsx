@@ -75,7 +75,7 @@ export default function UserMenu() {
       return;
     }
     try {
-      const response = await fetch('/api/notifications?mode=summary');
+      const response = await fetch('/api/notifications?mode=summary', { credentials: 'include' });
       if (!response.ok) return;
       const data = await response.json();
       if (!data?.success) return;

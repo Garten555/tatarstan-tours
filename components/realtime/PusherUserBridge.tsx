@@ -104,6 +104,7 @@ export default function PusherUserBridge() {
 
           fetch('/api/notifications', {
             method: 'POST',
+            credentials: 'include',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               title,
