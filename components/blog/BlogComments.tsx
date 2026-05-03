@@ -1,12 +1,14 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import { escapeHtml } from '@/lib/utils/sanitize';
+import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
+import { insertEmojiAtCursor } from '@/lib/chat/insert-emoji-at-cursor';
 
 interface BlogCommentsProps {
   postId: string;
@@ -31,6 +33,7 @@ export default function BlogComments({ postId }: BlogCommentsProps) {
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const commentTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const loadComments = async () => {
     try {
@@ -100,24 +103,32 @@ export default function BlogComments({ postId }: BlogCommentsProps) {
 
       {/* Форма добавления комментария */}
       <form onSubmit={handleSubmit} className="mb-8">
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3 items-end">
+          <ChatEmojiPicker
+            disabled={submitting}
+            buttonClassName="flex h-[52px] w-[52px] flex-shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+            onEmojiSelect={(emoji) =>
+              insertEmojiAtCursor(emoji, newComment, setNewComment, commentTextareaRef)
+            }
+          />
           <textarea
+            ref={commentTextareaRef}
             value={newComment}
             onChange={(e) => setNewComment(e.target.value)}
             placeholder="Написать комментарий..."
-            className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+            className="flex-1 min-w-[200px] px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
             rows={3}
           />
           <button
             type="submit"
             disabled={!newComment.trim() || submitting}
-            className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-2 shrink-0"
           >
             {submitting ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin text-white" />
             ) : (
               <>
-                <Send className="w-5 h-5" />
+                <Send className="w-5 h-5 text-white" strokeWidth={2} />
                 Отправить
               </>
             )}

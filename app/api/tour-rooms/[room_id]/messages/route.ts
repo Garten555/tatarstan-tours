@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
+import { dismissTourRoomNotificationsForRoom } from '@/lib/notifications/dismiss-on-chat-read';
 
 // GET /api/tour-rooms/[room_id]/messages
 // Получить сообщения комнаты (с пагинацией)
@@ -82,7 +83,7 @@ export async function GET(
         image_path,
         created_at,
         deleted_at,
-        user:profiles!inner(id, first_name, last_name, avatar_url)
+        user:profiles!tour_room_messages_user_id_fkey!inner(id, first_name, last_name, avatar_url)
       `)
       .eq('room_id', room_id)
       .is('deleted_at', null)
@@ -100,6 +101,8 @@ export async function GET(
     // Оптимизировано: не используем count: 'exact' (медленно)
     // Используем приблизительное количество на основе загруженных данных
     const estimatedTotal = messages ? messages.length : 0;
+
+    await dismissTourRoomNotificationsForRoom(serviceClient, user.id, room_id);
 
     return NextResponse.json({
       success: true,
@@ -247,7 +250,7 @@ export async function POST(
         image_path,
         created_at,
         deleted_at,
-        user:profiles(id, first_name, last_name, avatar_url)
+        user:profiles!tour_room_messages_user_id_fkey(id, first_name, last_name, avatar_url)
       `)
       .single();
 

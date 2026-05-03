@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
+import { dedupeTourRowsForCatalog } from '@/lib/tours/listing-dedupe';
 
 export async function GET(request: NextRequest) {
   try {
@@ -56,8 +57,9 @@ export async function GET(request: NextRequest) {
         current_participants,
         max_participants,
         cover_image,
+        city_id,
         created_at
-      `, { count: 'exact' });
+      `);
 
     // Поиск по названию
     if (search) {
@@ -85,10 +87,9 @@ export async function GET(request: NextRequest) {
     const sortField = validSortFields.includes(sortBy) ? sortBy : 'created_at';
     query = query.order(sortField, { ascending: sortOrder === 'asc' });
 
-    // Пагинация
-    query = query.range(offset, offset + limit - 1);
+    query = query.limit(8000);
 
-    const { data: tours, error, count } = await query;
+    const { data: toursRaw, error } = await query;
 
     if (error) {
       console.error('Ошибка загрузки туров:', error);
@@ -98,11 +99,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const total = count || 0;
-    const totalPages = Math.ceil(total / limit);
+    const toursDeduped = dedupeTourRowsForCatalog(toursRaw || []);
+    const total = toursDeduped.length;
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+    const tours = toursDeduped.slice(offset, offset + limit);
 
     return NextResponse.json({
-      tours: tours || [],
+      tours,
       total,
       page,
       limit,

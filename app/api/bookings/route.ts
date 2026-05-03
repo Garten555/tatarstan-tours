@@ -1,6 +1,8 @@
 // API для создания бронирования
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import type { TourSessionRow } from '@/lib/types/tour-session';
+import { ensureTourRoomForSession } from '@/lib/tour/ensure-session-room';
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,6 +26,7 @@ export async function POST(request: NextRequest) {
     const bookingData = await request.json();
     const {
       tour_id,
+      session_id: sessionIdRaw,
       num_people,
       total_price,
       payment_method,
@@ -31,6 +34,8 @@ export async function POST(request: NextRequest) {
       save_card,
       attendees,
     } = bookingData;
+    const session_id =
+      typeof sessionIdRaw === 'string' && sessionIdRaw.length > 0 ? sessionIdRaw : null;
 
     // Валидация
     if (!tour_id || !num_people || !total_price || !payment_method) {
@@ -61,44 +66,126 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Проверяем, есть ли уже бронирование этого тура у пользователя
-    const { data: existingBookings, error: existingBookingsError } = await serviceClient
-      .from('bookings')
-      .select('id, status')
+    const now = new Date();
+
+    const sessionProbeRes = await serviceClient
+      .from('tour_sessions')
+      .select('id')
       .eq('tour_id', tour_id)
-      .eq('user_id', user.id)
-      .in('status', ['pending', 'confirmed'])
       .limit(1);
 
-    if (existingBookingsError) {
-      console.error('Ошибка проверки бронирований:', existingBookingsError);
-      return NextResponse.json(
-        { error: 'Не удалось проверить бронирование' },
-        { status: 500 }
-      );
-    }
+    const tourHasSessions =
+      !sessionProbeRes.error &&
+      Array.isArray(sessionProbeRes.data) &&
+      sessionProbeRes.data.length > 0;
 
-    const hasExistingBooking = (existingBookings || []).length > 0;
+    let sessionRow: TourSessionRow | null = null;
 
-    // Проверяем даты тура
-    const now = new Date();
-    const startDate = new Date((tour as any).start_date);
-    const endDate = (tour as any).end_date ? new Date((tour as any).end_date) : null;
+    if (tourHasSessions) {
+      if (!session_id) {
+        return NextResponse.json(
+          { error: 'Выберите дату выезда (слот тура)' },
+          { status: 400 }
+        );
+      }
+      const { data: srow, error: sErr } = await serviceClient
+        .from('tour_sessions')
+        .select('id, start_at, end_at, max_participants, current_participants, status, guide_id')
+        .eq('id', session_id)
+        .eq('tour_id', tour_id)
+        .single();
 
-    // Тур уже закончился (если есть end_date)
-    if (endDate && endDate <= now) {
-      return NextResponse.json(
-        { error: 'Бронирование недоступно: тур уже закончился' },
-        { status: 400 }
-      );
-    }
+      if (sErr || !srow || (srow as any).status !== 'active') {
+        return NextResponse.json({ error: 'Слот тура не найден или недоступен' }, { status: 400 });
+      }
+      sessionRow = srow as TourSessionRow;
+      const endS = sessionRow.end_at ? new Date(sessionRow.end_at) : null;
+      const startS = new Date(sessionRow.start_at);
+      if (endS && endS <= now) {
+        return NextResponse.json(
+          { error: 'Бронирование недоступно: выбранная дата уже прошла' },
+          { status: 400 }
+        );
+      }
+      if (!endS && startS <= now) {
+        return NextResponse.json(
+          { error: 'Бронирование недоступно: выбранная дата уже прошла' },
+          { status: 400 }
+        );
+      }
 
-    const availableSpots = (tour as any).max_participants - ((tour as any).current_participants || 0);
-    if (num_people > availableSpots) {
-      return NextResponse.json(
-        { error: `Доступно только ${availableSpots} мест` },
-        { status: 400 }
-      );
+      const availableSpots =
+        sessionRow.max_participants - (sessionRow.current_participants ?? 0);
+      if (num_people > availableSpots) {
+        return NextResponse.json(
+          { error: `Доступно только ${availableSpots} мест` },
+          { status: 400 }
+        );
+      }
+
+      const { data: existingBookings, error: existingBookingsError } = await serviceClient
+        .from('bookings')
+        .select('id')
+        .eq('tour_id', tour_id)
+        .eq('user_id', user.id)
+        .eq('session_id', session_id)
+        .in('status', ['pending', 'confirmed'])
+        .limit(1);
+
+      if (existingBookingsError) {
+        console.error('Ошибка проверки бронирований:', existingBookingsError);
+        return NextResponse.json(
+          { error: 'Не удалось проверить бронирование' },
+          { status: 500 }
+        );
+      }
+
+      if ((existingBookings || []).length > 0) {
+        return NextResponse.json(
+          { error: 'У вас уже есть бронирование на этот выезд' },
+          { status: 400 }
+        );
+      }
+    } else {
+      const endDate = (tour as any).end_date ? new Date((tour as any).end_date) : null;
+      if (endDate && endDate <= now) {
+        return NextResponse.json(
+          { error: 'Бронирование недоступно: тур уже закончился' },
+          { status: 400 }
+        );
+      }
+
+      const availableSpots =
+        (tour as any).max_participants - ((tour as any).current_participants || 0);
+      if (num_people > availableSpots) {
+        return NextResponse.json(
+          { error: `Доступно только ${availableSpots} мест` },
+          { status: 400 }
+        );
+      }
+
+      const { data: existingBookings, error: existingBookingsError } = await serviceClient
+        .from('bookings')
+        .select('id, status')
+        .eq('tour_id', tour_id)
+        .eq('user_id', user.id)
+        .in('status', ['pending', 'confirmed'])
+        .limit(1);
+
+      if (existingBookingsError) {
+        console.error('Ошибка проверки бронирований:', existingBookingsError);
+        return NextResponse.json(
+          { error: 'Не удалось проверить бронирование' },
+          { status: 500 }
+        );
+      }
+
+      if ((existingBookings || []).length > 0) {
+        return NextResponse.json(
+          { error: 'У вас уже есть бронирование на этот тур' },
+          { status: 400 }
+        );
+      }
     }
 
     // Сохраняем карту если нужно (только для новых карт, не для уже сохраненных)
@@ -159,39 +246,6 @@ export async function POST(request: NextRequest) {
       profileData?.first_name && profileData?.last_name
         ? `${profileData.first_name} ${profileData.last_name}`
         : profileData?.email || user.email;
-    const normalizedProfileName = fullNameFromProfile?.toLowerCase().replace(/\s+/g, ' ').trim();
-    const normalizedProfileEmail = (profileData?.email || user.email || '').toLowerCase();
-
-    if (hasExistingBooking) {
-      if (!attendees && num_people === 1) {
-        return NextResponse.json(
-          { error: 'У вас уже есть билет. Для повторного бронирования укажите другого участника.' },
-          { status: 400 }
-        );
-      }
-
-      if (attendees && Array.isArray(attendees)) {
-        const includesSelf = attendees.some((a: any) => {
-          if (a?.source === 'self') return true;
-          const name = String(a?.full_name || '').toLowerCase().replace(/\s+/g, ' ').trim();
-          const email = String(a?.email || '').toLowerCase();
-          if (normalizedProfileEmail && email && email === normalizedProfileEmail) {
-            return true;
-          }
-          if (!email && normalizedProfileName && name && name === normalizedProfileName) {
-            return true;
-          }
-          return false;
-        });
-        if (includesSelf) {
-          return NextResponse.json(
-            { error: 'У вас уже есть билет. Для повторного бронирования выберите других участников.' },
-            { status: 400 }
-          );
-        }
-      }
-    }
-
     // Создаем бронирование
     // Когда билет создан, статус оплаты сразу "оплачен"
     const { data: booking, error: bookingError } = await (serviceClient as any)
@@ -199,6 +253,8 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: user.id,
         tour_id,
+        ...(session_id ? { session_id } : {}),
+        booking_date: new Date().toISOString(),
         num_people,
         total_price,
         payment_method,
@@ -214,8 +270,28 @@ export async function POST(request: NextRequest) {
 
     if (bookingError) {
       console.error('Ошибка создания бронирования:', bookingError);
+      // 42P10: триггер/функция в БД использует ON CONFLICT без подходящего UNIQUE — см. database/migrations/004_booking_on_conflict_42p10.sql
+      if (bookingError.code === '42P10') {
+        return NextResponse.json(
+          {
+            error:
+              'База: триггер при создании брони использует ON CONFLICT без подходящего индекса. Если индексы из database/migrations/004_booking_on_conflict_42p10.sql уже есть — выполните database/migrations/005_create_tour_room_trigger_no_on_conflict.sql в Supabase SQL Editor (переписывает create_tour_room_on_booking без ON CONFLICT).',
+            code: bookingError.code,
+          },
+          { status: 500 }
+        );
+      }
       return NextResponse.json(
-        { error: 'Не удалось создать бронирование' },
+        {
+          error: 'Не удалось создать бронирование',
+          ...(process.env.NODE_ENV === 'development' && {
+            debug: {
+              code: bookingError.code,
+              message: bookingError.message,
+              hint: bookingError.hint,
+            },
+          }),
+        },
         { status: 500 }
       );
     }
@@ -303,45 +379,83 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const { error: participantsError } = await serviceClient
-        .from('tours')
-        .update({
-          current_participants:
-            ((tour as any).current_participants || 0) + attendeesToInsert.length,
-        })
-        .eq('id', tour_id);
+      if (session_id && sessionRow) {
+        const sr = sessionRow;
+        const { error: participantsError } = await serviceClient
+          .from('tour_sessions')
+          .update({
+            current_participants:
+              (sr.current_participants ?? 0) + attendeesToInsert.length,
+          })
+          .eq('id', session_id);
 
-      if (participantsError) {
-        console.error('Ошибка обновления участников тура:', participantsError);
+        if (participantsError) {
+          console.error('Ошибка обновления участников слота:', participantsError);
+        }
+      } else {
+        const { error: participantsError } = await serviceClient
+          .from('tours')
+          .update({
+            current_participants:
+              ((tour as any).current_participants || 0) + attendeesToInsert.length,
+          })
+          .eq('id', tour_id);
+
+        if (participantsError) {
+          console.error('Ошибка обновления участников тура:', participantsError);
+        }
       }
     }
 
     // Явно добавляем пользователя в участники комнаты тура (на случай если триггер не сработал)
     try {
-      // Получаем или создаем комнату для тура
-      const { data: room, error: roomError } = await serviceClient
-        .from('tour_rooms')
-        .select('id')
-        .eq('tour_id', tour_id)
-        .single();
+      let roomId: string | undefined;
 
-      let roomId = room?.id;
+      if (session_id) {
+        const { data: sessionGuideRow } = await serviceClient
+          .from('tour_sessions')
+          .select('guide_id')
+          .eq('id', session_id)
+          .eq('tour_id', tour_id)
+          .maybeSingle();
+        const guideFromSession =
+          (sessionGuideRow as { guide_id?: string | null } | null)?.guide_id ?? null;
 
-      // Если комнаты нет - создаем
-      if (roomError || !roomId) {
-        const { data: newRoom, error: createRoomError } = await serviceClient
+        const ensured = await ensureTourRoomForSession(serviceClient, {
+          tourId: tour_id,
+          sessionId: session_id,
+          guideId: guideFromSession,
+          createdBy: user.id,
+        });
+        roomId = ensured.roomId;
+        if (!ensured.ok) {
+          console.error('Ошибка комнаты слота:', ensured.error);
+        }
+      } else {
+        const { data: legacyRoom } = await serviceClient
           .from('tour_rooms')
-          .insert({
-            tour_id,
-            created_by: user.id,
-          })
           .select('id')
-          .single();
+          .eq('tour_id', tour_id)
+          .is('tour_session_id', null)
+          .maybeSingle();
 
-        if (createRoomError) {
-          console.error('Ошибка создания комнаты:', createRoomError);
-        } else if (newRoom) {
-          roomId = newRoom.id;
+        roomId = (legacyRoom as { id?: string } | null)?.id;
+
+        if (!roomId) {
+          const { data: newRoom, error: createRoomError } = await serviceClient
+            .from('tour_rooms')
+            .insert({
+              tour_id,
+              created_by: user.id,
+            })
+            .select('id')
+            .single();
+
+          if (createRoomError) {
+            console.error('Ошибка создания комнаты:', createRoomError);
+          } else if (newRoom) {
+            roomId = (newRoom as { id: string }).id;
+          }
         }
       }
 

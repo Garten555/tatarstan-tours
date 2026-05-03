@@ -1,4 +1,9 @@
 import Pusher from 'pusher';
+import {
+  type AdminSyncPayload,
+  ADMIN_SYNC_PUSHER_EVENT,
+  adminSyncChannelName,
+} from '@/lib/pusher/admin-sync-payload';
 
 export type UserNotificationRow = {
   id: string;
@@ -67,5 +72,17 @@ export async function publishAchievementEarned(
     });
   } catch (e) {
     console.error('[publishAchievementEarned]', e);
+  }
+}
+
+export type { AdminSyncPayload } from '@/lib/pusher/admin-sync-payload';
+
+export async function publishAdminSync(userId: string, payload: AdminSyncPayload): Promise<void> {
+  const pusher = getPusher();
+  if (!pusher) return;
+  try {
+    await pusher.trigger(adminSyncChannelName(userId), ADMIN_SYNC_PUSHER_EVENT, payload);
+  } catch (e) {
+    console.error('[publishAdminSync]', e);
   }
 }

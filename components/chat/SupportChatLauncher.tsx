@@ -51,8 +51,9 @@ export default function SupportChatLauncher() {
 
   // Скрываем чат в админ панели (после всех хуков)
   const isAdminRoute = pathname?.startsWith('/admin');
-  
-  if (isAdminRoute) {
+  const isTourRoomRoute = pathname?.startsWith('/tour-rooms');
+
+  if (isAdminRoute || isTourRoomRoute) {
     return null;
   }
 

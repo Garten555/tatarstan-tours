@@ -99,6 +99,23 @@ export async function POST(
         message: 'Вы отписались',
       });
     } else {
+      // Если уже друзья, не даем создавать новую подписку (связь дружбы считается сильнее)
+      const user1_id = user.id < finalTargetProfile.id ? user.id : finalTargetProfile.id;
+      const user2_id = user.id < finalTargetProfile.id ? finalTargetProfile.id : user.id;
+      const { data: existingFriendship } = await serviceClient
+        .from('user_friends')
+        .select('status')
+        .or(`and(user_id.eq.${user1_id},friend_id.eq.${user2_id}),and(user_id.eq.${user2_id},friend_id.eq.${user1_id})`)
+        .eq('status', 'accepted')
+        .maybeSingle();
+
+      if (existingFriendship) {
+        return NextResponse.json(
+          { error: 'Вы уже друзья, отдельная подписка не требуется' },
+          { status: 400 }
+        );
+      }
+
       // Админы могут подписываться независимо от настроек приватности
       if (!isAdmin) {
         // Проверяем настройки приватности целевого пользователя

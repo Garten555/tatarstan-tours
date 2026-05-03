@@ -342,51 +342,6 @@ export function getPasswordResetCodeEmail(userName: string, code: string): strin
   `;
 }
 
-export function getEmailVerificationCodeEmail(userName: string, code: string): string {
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-        .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
-        .code-box { background: white; padding: 30px; border-radius: 8px; margin: 20px 0; border: 2px solid #10b981; text-align: center; }
-        .code { font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #10b981; font-family: 'Courier New', monospace; }
-        .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 12px; }
-        .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 12px; margin: 20px 0; border-radius: 4px; font-size: 12px; color: #92400e; }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>✨ Код подтверждения email</h1>
-        </div>
-        <div class="content">
-          <p>Здравствуйте, ${userName || 'пользователь'}!</p>
-          <p>Спасибо за регистрацию! Используйте код ниже для подтверждения вашего email:</p>
-          <div class="code-box">
-            <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 14px;">Ваш код подтверждения:</p>
-            <div class="code">${code}</div>
-          </div>
-          <div class="warning">
-            <strong>⚠️ Важно:</strong> Код действителен в течение 15 минут. Не передавайте его никому!
-          </div>
-          <p style="font-size: 12px; color: #6b7280; margin-top: 20px;">
-            Если вы не регистрировались на нашем сайте, просто проигнорируйте это письмо.
-          </p>
-          <div class="footer">
-            <p>С уважением,<br>Команда туров по Татарстану</p>
-          </div>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-}
-
 export function getBanNotificationEmail(
   userName: string,
   reason: string | null,

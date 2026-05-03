@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff, Loader2, UserPlus, Mail, Lock, User } from 'lucide-react';
-import { validateEmail, validatePassword } from '@/lib/validation/auth';
+import { validateEmail, validatePassword, validatePersonName } from '@/lib/validation/auth';
 import PasswordStrengthIndicator from './PasswordStrengthIndicator';
+import ConfirmModal from '@/components/common/ConfirmModal';
 
 type Step = 'form' | 'code';
 
@@ -28,6 +29,7 @@ export default function RegisterForm() {
     percentage: 0,
     valid: false,
   });
+  const [backToFormConfirmOpen, setBackToFormConfirmOpen] = useState(false);
   
   const [formData, setFormData] = useState({
     email: '',
@@ -41,6 +43,8 @@ export default function RegisterForm() {
   // Код подтверждения (6 отдельных полей)
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  /** Один запрос verify+register за раз (Strict Mode / двойной useEffect). */
+  const verifyRegisterInFlightRef = useRef(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -150,6 +154,17 @@ export default function RegisterForm() {
       return 'Заполните все обязательные поля';
     }
 
+    const first = validatePersonName(formData.firstName, { required: true, label: 'Имя' });
+    if (!first.valid) return first.error ?? null;
+
+    const last = validatePersonName(formData.lastName, { required: true, label: 'Фамилия' });
+    if (!last.valid) return last.error ?? null;
+
+    if (formData.middleName.trim()) {
+      const mid = validatePersonName(formData.middleName, { required: false, label: 'Отчество' });
+      if (!mid.valid) return mid.error ?? null;
+    }
+
     // Валидация email
     const emailValidation = validateEmail(formData.email);
     if (!emailValidation.valid) {
@@ -157,9 +172,9 @@ export default function RegisterForm() {
     }
 
     // Валидация пароля
-    const passwordValidation = validatePassword(formData.password);
-    if (!passwordValidation.valid) {
-      return passwordValidation.error || 'Некорректный пароль';
+    const passwordValidationResult = validatePassword(formData.password);
+    if (!passwordValidationResult.valid) {
+      return passwordValidationResult.error || 'Некорректный пароль';
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -204,6 +219,11 @@ export default function RegisterForm() {
       const data = await response.json();
 
       if (!response.ok) {
+        if (response.status === 429 && typeof data.retryAfterSeconds === 'number') {
+          throw new Error(
+            data.error || `Подождите ${data.retryAfterSeconds} с перед повторной отправкой`
+          );
+        }
         throw new Error(data.error || 'Не удалось отправить код');
       }
 
@@ -230,6 +250,11 @@ export default function RegisterForm() {
       return;
     }
 
+    if (verifyRegisterInFlightRef.current) {
+      return;
+    }
+    verifyRegisterInFlightRef.current = true;
+
     setVerifying(true);
     setError(null);
     setMessage(null);
@@ -253,6 +278,7 @@ export default function RegisterForm() {
         setError(verifyData.error || 'Код неверен или истек. Запросите новый код.');
         setCode(['', '', '', '', '', '']);
         codeInputRefs.current[0]?.focus();
+        verifyRegisterInFlightRef.current = false;
         return;
       }
 
@@ -300,12 +326,43 @@ export default function RegisterForm() {
       setCode(['', '', '', '', '', '']);
       codeInputRefs.current[0]?.focus();
     } finally {
+      verifyRegisterInFlightRef.current = false;
       setVerifying(false);
     }
   };
 
+  const requestBackToForm = () => {
+    if (code.some((d) => d !== '')) {
+      setBackToFormConfirmOpen(true);
+      return;
+    }
+    setStep('form');
+    setCode(['', '', '', '', '', '']);
+    setError(null);
+    setMessage(null);
+  };
+
+  const confirmBackToForm = () => {
+    setBackToFormConfirmOpen(false);
+    setStep('form');
+    setCode(['', '', '', '', '', '']);
+    setError(null);
+    setMessage(null);
+  };
+
   return (
     <div className="space-y-6">
+      <ConfirmModal
+        open={backToFormConfirmOpen}
+        title="Вернуться к форме?"
+        description="Введённый код будет сброшен. После изменения данных нужно снова запросить код на email."
+        confirmLabel="Да, изменить данные"
+        cancelLabel="Остаться"
+        variant="default"
+        onConfirm={confirmBackToForm}
+        onCancel={() => setBackToFormConfirmOpen(false)}
+      />
+
       {/* Заголовок */}
       <div className="mb-6">
         <h2 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 mb-2">
@@ -599,12 +656,8 @@ export default function RegisterForm() {
           </button>
 
           <button
-            onClick={() => {
-              setStep('form');
-              setCode(['', '', '', '', '', '']);
-              setError(null);
-              setMessage(null);
-            }}
+            type="button"
+            onClick={requestBackToForm}
             className="w-full text-gray-600 hover:text-gray-800 text-sm sm:text-base font-bold py-3 transition-colors"
           >
             Изменить данные

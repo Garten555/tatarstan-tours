@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { publishUserNotification } from '@/lib/pusher/user-notification';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
     const serviceClient = await createServiceClient();
@@ -14,6 +14,44 @@ export async function GET() {
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Необходима авторизация' }, { status: 401 });
+    }
+
+    const mode = request.nextUrl.searchParams.get('mode');
+    if (mode === 'summary') {
+      const { data: notifications, error } = await serviceClient
+        .from('notifications')
+        .select('id, type, body')
+        .eq('user_id', user.id)
+        .limit(200);
+      if (error) {
+        return NextResponse.json({ error: 'Не удалось загрузить уведомления' }, { status: 500 });
+      }
+
+      let total = 0;
+      let tourRoomCount = 0;
+      const roomCounts: Record<string, number> = {};
+      for (const n of notifications || []) {
+        total += 1;
+        if (n.type === 'tour_room_message') {
+          tourRoomCount += 1;
+          const body = n.body || '';
+          const marker = '\nroom_id:';
+          const idx = body.indexOf(marker);
+          if (idx !== -1) {
+            const roomId = body.slice(idx + marker.length).trim();
+            if (roomId) roomCounts[roomId] = (roomCounts[roomId] || 0) + 1;
+          }
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        summary: {
+          total,
+          tour_room_message: tourRoomCount,
+          room_counts: roomCounts,
+        },
+      });
     }
 
     const { data: notifications, error } = await serviceClient

@@ -7,11 +7,17 @@ import toast from 'react-hot-toast';
 interface FriendButtonProps {
   userId: string;
   username: string;
+  compact?: boolean;
 }
 
 type FriendshipStatus = 'none' | 'pending_sent' | 'pending_received' | 'accepted' | 'loading';
 
-export function FriendButton({ userId, username }: FriendButtonProps) {
+const btnBase =
+  'font-bold transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed';
+const btnLg = 'px-6 py-3 rounded-xl text-base [&_svg]:w-5 [&_svg]:h-5';
+const btnSm = 'px-4 py-2 rounded-lg text-sm [&_svg]:w-4 [&_svg]:h-4';
+
+export function FriendButton({ userId, username, compact }: FriendButtonProps) {
   const [status, setStatus] = useState<FriendshipStatus>('loading');
   const [loading, setLoading] = useState(false);
 
@@ -79,13 +85,15 @@ export function FriendButton({ userId, username }: FriendButtonProps) {
     }
   };
 
+  const b = compact ? btnSm : btnLg;
+
   if (status === 'loading') {
     return (
       <button
         disabled
-        className="px-6 py-3 rounded-xl font-bold text-base bg-gray-200 text-gray-500 cursor-not-allowed flex items-center gap-2"
+        className={`${b} ${btnBase} bg-gray-200 text-gray-500 cursor-not-allowed`}
       >
-        <Loader2 className="w-5 h-5 animate-spin" />
+        <Loader2 className={compact ? 'w-4 h-4 animate-spin' : 'w-5 h-5 animate-spin'} />
         <span>Загрузка...</span>
       </button>
     );
@@ -93,23 +101,25 @@ export function FriendButton({ userId, username }: FriendButtonProps) {
 
   if (status === 'accepted') {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={() => handleAction('remove')}
           disabled={loading}
-          className="px-6 py-3 rounded-xl font-bold text-base bg-red-600 hover:bg-red-700 text-white transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`${b} ${btnBase} bg-red-600 hover:bg-red-700 text-white`}
         >
           {loading ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
+            <Loader2 className={compact ? 'w-4 h-4 animate-spin' : 'w-5 h-5 animate-spin'} />
           ) : (
             <>
-              <UserX className="w-5 h-5" />
-              <span>Удалить из друзей</span>
+              <UserX />
+              <span>{compact ? 'Удалить' : 'Удалить из друзей'}</span>
             </>
           )}
         </button>
-        <div className="px-4 py-3 bg-emerald-100 text-emerald-700 rounded-xl font-bold text-base flex items-center gap-2">
-          <UserCheck className="w-5 h-5" />
+        <div
+          className={`${b} bg-emerald-100 text-emerald-700 font-bold flex items-center gap-2`}
+        >
+          <UserCheck />
           <span>Друзья</span>
         </div>
       </div>
@@ -118,24 +128,26 @@ export function FriendButton({ userId, username }: FriendButtonProps) {
 
   if (status === 'pending_sent') {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={() => handleAction('reject')}
           disabled={loading}
-          className="px-6 py-3 rounded-xl font-bold text-base bg-gray-200 hover:bg-gray-300 text-gray-700 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`${b} ${btnBase} bg-gray-200 hover:bg-gray-300 text-gray-700`}
         >
           {loading ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
+            <Loader2 className={compact ? 'w-4 h-4 animate-spin' : 'w-5 h-5 animate-spin'} />
           ) : (
             <>
-              <UserX className="w-5 h-5" />
-              <span>Отменить запрос</span>
+              <UserX />
+              <span>{compact ? 'Отменить' : 'Отменить запрос'}</span>
             </>
           )}
         </button>
-        <div className="px-4 py-3 bg-yellow-100 text-yellow-700 rounded-xl font-bold text-base flex items-center gap-2">
-          <Clock className="w-5 h-5" />
-          <span>Запрос отправлен</span>
+        <div
+          className={`${b} bg-yellow-100 text-yellow-700 font-bold flex items-center gap-2`}
+        >
+          <Clock />
+          <span>{compact ? 'Ожидание' : 'Запрос отправлен'}</span>
         </div>
       </div>
     );
@@ -143,31 +155,31 @@ export function FriendButton({ userId, username }: FriendButtonProps) {
 
   if (status === 'pending_received') {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={() => handleAction('accept')}
           disabled={loading}
-          className="px-6 py-3 rounded-xl font-bold text-base bg-emerald-600 hover:bg-emerald-700 text-white transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`${b} ${btnBase} bg-emerald-600 hover:bg-emerald-700 text-white`}
         >
           {loading ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
+            <Loader2 className={compact ? 'w-4 h-4 animate-spin' : 'w-5 h-5 animate-spin'} />
           ) : (
             <>
-              <UserCheck className="w-5 h-5" />
-              <span>Принять запрос</span>
+              <UserCheck />
+              <span>{compact ? 'Принять' : 'Принять запрос'}</span>
             </>
           )}
         </button>
         <button
           onClick={() => handleAction('reject')}
           disabled={loading}
-          className="px-6 py-3 rounded-xl font-bold text-base bg-gray-200 hover:bg-gray-300 text-gray-700 transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className={`${b} ${btnBase} bg-gray-200 hover:bg-gray-300 text-gray-700`}
         >
           {loading ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
+            <Loader2 className={compact ? 'w-4 h-4 animate-spin' : 'w-5 h-5 animate-spin'} />
           ) : (
             <>
-              <UserX className="w-5 h-5" />
+              <UserX />
               <span>Отклонить</span>
             </>
           )}
@@ -181,14 +193,14 @@ export function FriendButton({ userId, username }: FriendButtonProps) {
     <button
       onClick={() => handleAction('request')}
       disabled={loading}
-      className="px-6 py-3 rounded-xl font-bold text-base bg-blue-600 hover:bg-blue-700 text-white transition-all duration-200 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+      className={`${b} ${btnBase} bg-blue-600 hover:bg-blue-700 text-white`}
     >
       {loading ? (
-        <Loader2 className="w-5 h-5 animate-spin" />
+        <Loader2 className={compact ? 'w-4 h-4 animate-spin' : 'w-5 h-5 animate-spin'} />
       ) : (
         <>
-          <UserPlus className="w-5 h-5" />
-          <span>Добавить в друзья</span>
+          <UserPlus />
+          <span>{compact ? 'В друзья' : 'Добавить в друзья'}</span>
         </>
       )}
     </button>

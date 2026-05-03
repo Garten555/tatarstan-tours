@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
         .single();
 
       const role = (profile as { role?: string } | null)?.role;
-      if (!role || !['super_admin', 'tour_admin'].includes(role)) {
+      if (!role || !['super_admin', 'tour_admin', 'support_admin'].includes(role)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
     }

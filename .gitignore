@@ -17,6 +17,8 @@
 /build
 
 # misc
+/zap-report/
+
 .DS_Store
 *.pem
 

@@ -36,6 +36,7 @@ export interface Database {
           ban_until: string | null
           created_at: string
           updated_at: string
+          last_seen_at: string | null
         }
         Insert: {
           id: string
@@ -59,6 +60,7 @@ export interface Database {
           ban_until?: string | null
           created_at?: string
           updated_at?: string
+          last_seen_at?: string | null
         }
         Update: {
           id?: string
@@ -82,6 +84,7 @@ export interface Database {
           ban_until?: string | null
           created_at?: string
           updated_at?: string
+          last_seen_at?: string | null
         }
       }
       travel_diaries: {
@@ -329,6 +332,44 @@ export interface Database {
           updated_at?: string
         }
       }
+      tour_sessions: {
+        Row: {
+          id: string
+          tour_id: string
+          start_at: string
+          end_at: string | null
+          max_participants: number
+          current_participants: number
+          status: 'draft' | 'active' | 'completed' | 'cancelled'
+          guide_id: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          tour_id: string
+          start_at: string
+          end_at?: string | null
+          max_participants?: number
+          current_participants?: number
+          status?: 'draft' | 'active' | 'completed' | 'cancelled'
+          guide_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          tour_id?: string
+          start_at?: string
+          end_at?: string | null
+          max_participants?: number
+          current_participants?: number
+          status?: 'draft' | 'active' | 'completed' | 'cancelled'
+          guide_id?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
       tour_media: {
         Row: {
           id: string
@@ -363,6 +404,7 @@ export interface Database {
           id: string
           user_id: string
           tour_id: string
+          session_id: string | null
           booking_date: string
           num_people: number
           total_price: number
@@ -375,6 +417,7 @@ export interface Database {
           id?: string
           user_id: string
           tour_id: string
+          session_id?: string | null
           booking_date?: string
           num_people: number
           total_price: number
@@ -387,6 +430,7 @@ export interface Database {
           id?: string
           user_id?: string
           tour_id?: string
+          session_id?: string | null
           booking_date?: string
           num_people?: number
           total_price?: number

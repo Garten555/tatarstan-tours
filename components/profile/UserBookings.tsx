@@ -3,11 +3,11 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { 
-  Calendar, 
-  MapPin, 
-  Users, 
-  Coins, 
+import {
+  Calendar,
+  MapPin,
+  Users,
+  Coins,
   Download,
   CheckCircle2,
   Star,
@@ -15,14 +15,19 @@ import {
   XCircle,
   Loader2,
   MessageSquare,
-  BookOpen
+  BookOpen,
+  Ban,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { generateTicketPDF } from '@/lib/pdf/ticket';
 import ReviewModal from '@/components/reviews/ReviewModal';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 
 interface Booking {
   id: string;
   tour_id: string;
+  /** Слот выезда; если null — бронь по старой схеме без слотов */
+  session_id?: string | null;
   num_people: number;
   total_price: number;
   status: string;
@@ -55,9 +60,11 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [generatingPDF, setGeneratingPDF] = useState<string | null>(null);
-  const [roomIds, setRoomIds] = useState<Record<string, string>>({}); // tour_id -> room_id
+  const [roomIds, setRoomIds] = useState<Record<string, string>>({}); // booking.id -> room_id
   const [reviewBooking, setReviewBooking] = useState<Booking | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [cancelBooking, setCancelBooking] = useState<Booking | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadBookings = async () => {
@@ -75,11 +82,13 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
           const loadRooms = async () => {
             const roomPromises = confirmedBookings.map(async (booking: Booking) => {
               try {
-                const roomResponse = await fetch(`/api/tour-rooms?tour_id=${booking.tour_id}`);
+                const qs = new URLSearchParams({ tour_id: booking.tour_id });
+                if (booking.session_id) qs.set('session_id', booking.session_id);
+                const roomResponse = await fetch(`/api/tour-rooms?${qs.toString()}`);
                 if (!roomResponse.ok) return null;
                 const roomData = await roomResponse.json();
                 if (roomData.success && roomData.room) {
-                  return { tourId: booking.tour_id, roomId: roomData.room.id };
+                  return { bookingId: booking.id, roomId: roomData.room.id };
                 }
                 return null;
               } catch (error) {
@@ -92,7 +101,7 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
             const roomIdsMap: Record<string, string> = {};
             results.forEach((result) => {
               if (result) {
-                roomIdsMap[result.tourId] = result.roomId;
+                roomIdsMap[result.bookingId] = result.roomId;
               }
             });
             setRoomIds(roomIdsMap);
@@ -196,6 +205,39 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
   };
 
   // Генерация PDF билета
+  const handleConfirmCancelBooking = async () => {
+    if (!cancelBooking) return;
+    setCancellingId(cancelBooking.id);
+    try {
+      const response = await fetch(`/api/user/bookings/${cancelBooking.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cancel' }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        toast.error(typeof data.error === 'string' ? data.error : 'Не удалось отменить бронирование');
+        return;
+      }
+      toast.success('Бронирование отменено');
+      setBookings((prev) =>
+        prev.map((b) =>
+          b.id === cancelBooking.id
+            ? { ...b, status: 'cancelled', payment_status: 'refunded' }
+            : b
+        )
+      );
+      setRoomIds((prev) => {
+        const next = { ...prev };
+        delete next[cancelBooking.id];
+        return next;
+      });
+      setCancelBooking(null);
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
   const handleDownloadTicket = async (booking: Booking) => {
     setGeneratingPDF(booking.id);
     try {
@@ -258,7 +300,12 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
           const effectiveStatus = completedByDate && booking.status === 'confirmed'
             ? 'completed'
             : booking.status;
-          
+
+          const canCancelBooking =
+            !isViewMode &&
+            !completedByDate &&
+            (booking.status === 'confirmed' || booking.status === 'pending');
+
           return (
             <div
               key={booking.id}
@@ -349,9 +396,24 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
                   >
                     Подробнее о туре
                   </Link>
-                  {['confirmed', 'completed'].includes(effectiveStatus) && roomIds[booking.tour_id] && (
+                  {canCancelBooking && (
+                    <button
+                      type="button"
+                      onClick={() => setCancelBooking(booking)}
+                      disabled={cancellingId === booking.id}
+                      className="px-4 py-2 border border-red-200 text-red-700 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors disabled:opacity-50 inline-flex items-center gap-2"
+                    >
+                      {cancellingId === booking.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Ban className="w-4 h-4" />
+                      )}
+                      Отменить бронирование
+                    </button>
+                  )}
+                  {['confirmed', 'completed'].includes(effectiveStatus) && roomIds[booking.id] && (
                     <Link
-                      href={`/tour-rooms/${roomIds[booking.tour_id]}`}
+                      href={`/tour-rooms/${roomIds[booking.id]}`}
                       className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
                     >
                       <MessageSquare className="w-4 h-4" />
@@ -399,6 +461,20 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
           );
         })}
       </div>
+
+      <ConfirmDialog
+        isOpen={!!cancelBooking}
+        title="Отменить бронирование?"
+        message={
+          cancelBooking?.tour?.title
+            ? `Отменить бронирование тура «${cancelBooking.tour.title}»? Места будут освобождены. Вопросы по возврату средств можно уточнить в поддержке.`
+            : 'Отменить это бронирование?'
+        }
+        confirmText="Да, отменить"
+        variant="danger"
+        onConfirm={handleConfirmCancelBooking}
+        onCancel={() => !cancellingId && setCancelBooking(null)}
+      />
 
       {reviewBooking && (
         <ReviewModal

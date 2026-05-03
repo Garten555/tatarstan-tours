@@ -49,6 +49,7 @@ export default function MyRoomsPage() {
   const router = useRouter();
   const supabase = createClient();
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [unreadByRoom, setUnreadByRoom] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
 
@@ -87,6 +88,7 @@ export default function MyRoomsPage() {
 
       if (data.success) {
         setRooms(data.rooms || []);
+        await loadUnreadRoomMessages();
       } else {
         console.error('Ошибка загрузки комнат:', data.error);
         alert(data.error || 'Не удалось загрузить комнаты');
@@ -100,6 +102,18 @@ export default function MyRoomsPage() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadUnreadRoomMessages = async () => {
+    try {
+      const response = await fetch('/api/notifications?mode=summary');
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!data?.success) return;
+      setUnreadByRoom(data?.summary?.room_counts || {});
+    } catch {
+      // ignore
     }
   };
 
@@ -188,6 +202,7 @@ export default function MyRoomsPage() {
               const isUpcoming = daysUntil !== null && daysUntil > 0;
               const isToday = daysUntil === 0;
               const isPast = daysUntil !== null && daysUntil < 0;
+              const unreadRoomMessages = unreadByRoom[room.id] || 0;
 
               return (
                 <Link
@@ -210,6 +225,11 @@ export default function MyRoomsPage() {
                           Гид
                         </div>
                       )}
+                      {unreadRoomMessages > 0 && (
+                        <div className="absolute bottom-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                          {unreadRoomMessages > 99 ? '99+' : unreadRoomMessages} новых
+                        </div>
+                      )}
                       {isToday && (
                         <div className="absolute top-3 left-3 bg-red-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
                           Сегодня
@@ -228,6 +248,11 @@ export default function MyRoomsPage() {
                         <div className="absolute top-3 right-3 bg-yellow-500 text-white px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
                           <Crown className="w-3 h-3" />
                           Гид
+                        </div>
+                      )}
+                      {unreadRoomMessages > 0 && (
+                        <div className="absolute bottom-3 right-3 bg-red-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                          {unreadRoomMessages > 99 ? '99+' : unreadRoomMessages} новых
                         </div>
                       )}
                     </div>

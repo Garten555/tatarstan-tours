@@ -3,9 +3,10 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { SITE_VERSION } from "@/lib/site-version";
 import "./globals.css";
 import ConditionalLayout from "@/components/layout/ConditionalLayout";
-import RealtimeNotifications from "@/components/notifications/RealtimeNotifications";
+import PusherUserBridge from "@/components/realtime/PusherUserBridge";
 import MaintenanceWatcher from "@/components/maintenance/MaintenanceWatcher";
 import SupportChatLauncher from "@/components/chat/SupportChatLauncher";
+import PresenceHeartbeat from "@/components/presence/PresenceHeartbeat";
 import BanBanner from "@/components/ban/BanBanner";
 import { Toaster } from "react-hot-toast";
 
@@ -101,7 +102,8 @@ export default function RootLayout({
           {children}
         </ConditionalLayout>
         <BanBanner />
-        <RealtimeNotifications />
+        <PusherUserBridge />
+        <PresenceHeartbeat />
         <MaintenanceWatcher />
         <SupportChatLauncher />
         <Toaster 

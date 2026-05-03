@@ -1,15 +1,20 @@
 'use client';
 
 // Компонент мессенджера для приватных сообщений между пользователями
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Send, Search, UserPlus, Settings, Loader2, Wifi, WifiOff, Image as ImageIcon, X, MessageSquare } from 'lucide-react';
+import { Send, Search, UserPlus, Settings, Loader2, WifiOff, Image as ImageIcon, X, MessageSquare } from 'lucide-react';
 import Pusher from 'pusher-js';
 import { createClient } from '@/lib/supabase/client';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import toast from 'react-hot-toast';
 import Image from 'next/image';
 import Link from 'next/link';
+import { playNotificationSound } from '@/lib/sound/notifications';
+import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
+import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
+import { insertEmojiAtCursor } from '@/lib/chat/insert-emoji-at-cursor';
+import { formatLastSeen, type PresenceStatus } from '@/lib/utils/presence';
 
 interface Conversation {
   id: string;
@@ -64,18 +69,40 @@ export default function UserMessenger() {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [connected, setConnected] = useState(false);
+  /** Подписка Pusher на канал текущего пользователя (ваше соединение с сервером чата, не статус собеседника). */
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [peerPresence, setPeerPresence] = useState<PresenceStatus | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedImage, setSelectedImage] = useState<{ file: File; preview: string } | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageTextareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<any>(null);
+  const nearBottomRef = useRef(true);
+  const autoScrollNextRef = useRef(true);
   const supabase = createClient();
+
+  const fetchPeerPresence = useCallback(async (otherUserId: string) => {
+    try {
+      const res = await fetch('/api/users/activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_ids: [otherUserId] }),
+      });
+      const data = await res.json();
+      if (data.success && data.activityByUserId && otherUserId in data.activityByUserId) {
+        setPeerPresence(formatLastSeen(data.activityByUserId[otherUserId]));
+      } else {
+        setPeerPresence(formatLastSeen(null));
+      }
+    } catch {
+      setPeerPresence(formatLastSeen(null));
+    }
+  }, []);
 
   // Получаем текущего пользователя
   useEffect(() => {
@@ -106,60 +133,33 @@ export default function UserMessenger() {
     }
   }, [searchParams, currentUserId, conversations]);
 
+  useEffect(() => {
+    if (!selectedConversation) {
+      setPeerPresence(null);
+      return;
+    }
+    void fetchPeerPresence(selectedConversation);
+    const t = window.setInterval(() => fetchPeerPresence(selectedConversation), 60_000);
+    return () => clearInterval(t);
+  }, [selectedConversation, fetchPeerPresence]);
+
   // Загружаем сообщения при выборе беседы
   useEffect(() => {
     if (selectedConversation) {
+      autoScrollNextRef.current = true;
       loadMessages(selectedConversation);
       initPusher(selectedConversation);
     } else {
-      // Отключаемся от Pusher при закрытии беседы
-      if (channelRef.current) {
-        try {
-          channelRef.current.unbind_all();
-          channelRef.current.unsubscribe();
-        } catch (error) {
-          // Игнорируем ошибки, если канал уже закрыт
-        }
-        channelRef.current = null;
-      }
-      if (pusherRef.current) {
-        try {
-          const state = pusherRef.current.connection?.state;
-          if (state && state !== 'disconnected' && state !== 'disconnecting') {
-            pusherRef.current.disconnect();
-          }
-        } catch (error) {
-          // Игнорируем ошибки, если соединение уже закрыто
-        }
-        pusherRef.current = null;
-      }
-      setConnected(false);
+      disconnectPusherSafely(pusherRef.current, [channelRef.current]);
+      channelRef.current = null;
+      pusherRef.current = null;
+      setRealtimeConnected(false);
     }
 
     return () => {
-      // Очистка канала
-      if (channelRef.current) {
-        try {
-          channelRef.current.unbind_all();
-          channelRef.current.unsubscribe();
-        } catch (error) {
-          // Игнорируем ошибки, если канал уже закрыт
-        }
-        channelRef.current = null;
-      }
-      
-      // Очистка Pusher
-      if (pusherRef.current) {
-        try {
-          const state = pusherRef.current.connection?.state;
-          if (state && state !== 'disconnected' && state !== 'disconnecting') {
-            pusherRef.current.disconnect();
-          }
-        } catch (error) {
-          // Игнорируем ошибки, если соединение уже закрыто
-        }
-        pusherRef.current = null;
-      }
+      disconnectPusherSafely(pusherRef.current, [channelRef.current]);
+      channelRef.current = null;
+      pusherRef.current = null;
     };
   }, [selectedConversation]);
 
@@ -173,6 +173,7 @@ export default function UserMessenger() {
           const data = await response.json();
           if (data.success) {
             setConversations(data.conversations || []);
+            window.dispatchEvent(new CustomEvent('messages:update'));
           }
         }
       }
@@ -193,7 +194,10 @@ export default function UserMessenger() {
           const data = await response.json();
           if (data.success) {
             setMessages(data.messages || []);
-            scrollToBottom();
+            autoScrollNextRef.current = true;
+            window.dispatchEvent(new CustomEvent('messages:update'));
+            window.dispatchEvent(new Event('notifications:update'));
+            void fetchPeerPresence(userId);
           }
         }
       }
@@ -223,7 +227,7 @@ export default function UserMessenger() {
 
     channel.bind('pusher:subscription_succeeded', () => {
       console.log('[UserMessenger] Pusher subscribed to channel:', channelName);
-      setConnected(true);
+      setRealtimeConnected(true);
     });
 
     channel.bind('new-message', (data: { message: Message }) => {
@@ -233,17 +237,43 @@ export default function UserMessenger() {
           if (exists) return prev;
           return [...prev, data.message];
         });
-        scrollToBottom();
+        const isMine = data.message.sender_id === currentUserId;
+        if (isMine || nearBottomRef.current) {
+          autoScrollNextRef.current = true;
+        }
+        if (!isMine) playNotificationSound('message');
         loadConversations(); // Обновляем список бесед
       }
     });
   };
 
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const onScroll = () => {
+      const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
+      nearBottomRef.current = distance <= 120;
+    };
+    onScroll();
+    container.addEventListener('scroll', onScroll);
+    return () => container.removeEventListener('scroll', onScroll);
+  }, []);
+
   const scrollToBottom = () => {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    requestAnimationFrame(() => {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    });
   };
+
+  useEffect(() => {
+    if (!messages.length) return;
+    if (autoScrollNextRef.current || nearBottomRef.current) {
+      autoScrollNextRef.current = false;
+      scrollToBottom();
+    }
+  }, [messages]);
 
   const uploadImage = async (file: File) => {
     try {
@@ -333,7 +363,8 @@ export default function UserMessenger() {
         const data = await response.json();
         // Добавляем сообщение в список
         setMessages((prev) => [...prev, data.message]);
-        scrollToBottom();
+        playNotificationSound('message');
+        autoScrollNextRef.current = true;
         loadConversations(); // Обновляем список бесед
       }
     } catch (error: any) {
@@ -533,17 +564,28 @@ export default function UserMessenger() {
                     <div className="font-black text-xl text-gray-900">
                       {selectedConv ? getConversationName(selectedConv) : 'Пользователь'}
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
-                      {connected ? (
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      {!realtimeConnected ? (
                         <>
-                          <Wifi className="w-4 h-4 text-emerald-600" />
-                          <span>В сети</span>
+                          <WifiOff className="w-4 h-4 text-amber-500 shrink-0" />
+                          <span className="text-amber-700">Подключение к чату...</span>
                         </>
+                      ) : peerPresence ? (
+                        <span
+                          className={`inline-flex items-center gap-2 ${
+                            peerPresence.online ? 'text-emerald-700' : 'text-gray-500'
+                          }`}
+                        >
+                          {peerPresence.online ? (
+                            <span
+                              className="h-2 w-2 shrink-0 rounded-full bg-emerald-500"
+                              aria-hidden
+                            />
+                          ) : null}
+                          {peerPresence.label}
+                        </span>
                       ) : (
-                        <>
-                          <WifiOff className="w-4 h-4 text-gray-400" />
-                          <span>Подключение...</span>
-                        </>
+                        <span className="text-gray-400">Загрузка...</span>
                       )}
                     </div>
                   </div>
@@ -644,7 +686,7 @@ export default function UserMessenger() {
                   );
                 })
               )}
-              <div ref={messagesEndRef} />
+              <div />
             </div>
 
             {/* Поле ввода */}
@@ -684,7 +726,15 @@ export default function UserMessenger() {
                     <ImageIcon className="w-6 h-6" />
                   )}
                 </button>
+                <ChatEmojiPicker
+                  disabled={uploadingImage || sending}
+                  buttonClassName="flex h-[52px] w-[52px] flex-shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  onEmojiSelect={(emoji) =>
+                    insertEmojiAtCursor(emoji, newMessage, setNewMessage, messageTextareaRef)
+                  }
+                />
                 <textarea
+                  ref={messageTextareaRef}
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
                   onKeyDown={(e) => {
@@ -703,9 +753,9 @@ export default function UserMessenger() {
                   className="p-4 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 hover:scale-105 hover:shadow-lg"
                 >
                   {sending ? (
-                    <Loader2 className="w-6 h-6 animate-spin" />
+                    <Loader2 className="w-6 h-6 animate-spin text-white" />
                   ) : (
-                    <Send className="w-6 h-6" />
+                    <Send className="w-6 h-6 text-white" strokeWidth={2} />
                   )}
                 </button>
               </div>

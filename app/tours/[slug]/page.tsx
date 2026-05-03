@@ -4,14 +4,18 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import Image from 'next/image';
 import Link from 'next/link';
 import TourHeaderCard from '@/components/tours/TourHeaderCard';
-import TourBookingCard from '@/components/tours/TourBookingCard';
+import TourScheduleBooking from '@/components/tours/TourScheduleBooking';
+import { TourSessionsProvider } from '@/components/tours/TourSessionsProvider';
 import TourDescriptionSection from '@/components/tours/TourDescriptionSection';
-import TourCharacteristicsSection from '@/components/tours/TourCharacteristicsSection';
+import TourCharacteristicsSectionConnected from '@/components/tours/TourCharacteristicsSectionConnected';
+import { tourDurationLabel } from '@/lib/tour/session-display';
+import { LEGACY_TOUR_SESSION_ID } from '@/lib/tour/legacy-session';
 import TourMediaGallery from '@/components/tours/TourMediaGallery';
 import TourVideoSection from '@/components/tours/TourVideoSection';
 import TourMapSection from '@/components/tours/TourMapSection';
 import TourReviewsSection from '@/components/tours/TourReviewsSection';
 import { ArrowLeft } from 'lucide-react';
+import { isInvalidTourSlug } from '@/lib/tours/isInvalidTourSlug';
 
 interface TourPageProps {
   params: Promise<{ slug: string }>;
@@ -19,6 +23,9 @@ interface TourPageProps {
 
 export default async function TourPage({ params }: TourPageProps) {
   const { slug } = await params;
+  if (isInvalidTourSlug(slug)) {
+    notFound();
+  }
   const supabase = await createServiceClient();
   const supabaseAuth = await createClient();
   const {
@@ -61,8 +68,48 @@ export default async function TourPage({ params }: TourPageProps) {
     return true;
   });
 
-  const availableSpots = t.max_participants - (t.current_participants || 0);
-  const isFullyBooked = availableSpots <= 0;
+  const tourSessionsRes = await supabase
+    .from('tour_sessions')
+    .select('id, start_at, end_at, max_participants, current_participants')
+    .eq('tour_id', t.id)
+    .eq('status', 'active')
+    .order('start_at', { ascending: true });
+
+  if (tourSessionsRes.error) {
+    console.error('[tour page] tour_sessions:', tourSessionsRes.error.message);
+  }
+
+  let tourSessions = ((!tourSessionsRes.error && tourSessionsRes.data)
+    ? tourSessionsRes.data
+    : []) as {
+    id: string;
+    start_at: string;
+    end_at: string | null;
+    max_participants: number;
+    current_participants: number | null;
+  }[];
+
+  /** Нет слотов в БД — показываем дату/места из строки тура и бронь без session_id (как раньше). */
+  if (tourSessions.length === 0 && t.start_date) {
+    const { count: sessionRowsCount, error: cntErr } = await supabase
+      .from('tour_sessions')
+      .select('id', { count: 'exact', head: true })
+      .eq('tour_id', t.id);
+
+    const hasAnySessionRows = !cntErr && (sessionRowsCount ?? 0) > 0;
+
+    if (!hasAnySessionRows) {
+      tourSessions = [
+        {
+          id: LEGACY_TOUR_SESSION_ID,
+          start_at: t.start_date,
+          end_at: t.end_date ?? null,
+          max_participants: t.max_participants,
+          current_participants: t.current_participants ?? 0,
+        },
+      ];
+    }
+  }
 
   const { data: reviewsData } = await supabase
     .from('reviews')
@@ -203,20 +250,7 @@ export default async function TourPage({ params }: TourPageProps) {
     });
   };
 
-  // Вычисляем продолжительность
-  const getDuration = () => {
-    const start = new Date(t.start_date);
-    const end = new Date(t.end_date);
-    const diffTime = Math.abs(end.getTime() - start.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) {
-      const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
-      return `${diffHours} ${diffHours === 1 ? 'час' : diffHours < 5 ? 'часа' : 'часов'}`;
-    }
-    
-    return `${diffDays} ${diffDays === 1 ? 'день' : diffDays < 5 ? 'дня' : 'дней'}`;
-  };
+  const fallbackDurationLabel = tourDurationLabel(t.start_date, t.end_date ?? null);
 
   return (
     <div className="min-h-screen bg-gray-50 relative w-full">
@@ -230,14 +264,14 @@ export default async function TourPage({ params }: TourPageProps) {
           <span className="font-bold text-sm sm:text-base">Назад на главную</span>
         </Link>
 
+        <TourSessionsProvider sessions={tourSessions}>
         <div className="mt-4 sm:mt-6 flex flex-col md:flex-col lg:flex-row gap-6 sm:gap-8 w-full items-start">
           <div className="w-full md:w-full lg:w-[320px] xl:w-[380px] 2xl:w-[400px] flex-shrink-0">
-            <TourBookingCard
+            <TourScheduleBooking
+              tourId={t.id}
               price={t.price_per_person}
-              availableSpots={availableSpots}
-              maxParticipants={t.max_participants}
-              isFullyBooked={isFullyBooked}
-              bookingHref={`/booking?tour=${t.id}`}
+              tourMaxParticipants={t.max_participants}
+              tourCurrentParticipants={t.current_participants || 0}
             />
           </div>
 
@@ -250,10 +284,10 @@ export default async function TourPage({ params }: TourPageProps) {
               category={t.category}
             />
 
-            <TourCharacteristicsSection
-              startDateLabel={formatDate(t.start_date)}
-              durationLabel={getDuration()}
-              maxParticipants={t.max_participants}
+            <TourCharacteristicsSectionConnected
+              fallbackStartDateLabel={formatDate(t.start_date)}
+              fallbackDurationLabel={fallbackDurationLabel}
+              fallbackMaxParticipants={t.max_participants}
               priceLabel={`${t.price_per_person.toLocaleString('ru-RU')} ₽`}
             />
 
@@ -287,6 +321,7 @@ export default async function TourPage({ params }: TourPageProps) {
             />
           </div>
         </div>
+        </TourSessionsProvider>
       </div>
     </div>
   );

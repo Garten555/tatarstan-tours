@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { escapeHtml } from '@/lib/utils/sanitize';
+import { escapeHtml, sanitizeRichHtml } from '@/lib/utils/sanitize';
 import { createClient } from '@/lib/supabase/client';
 import { Trash2, Flag, X, Check, Calendar, Eye, Heart, MessageCircle, Image as ImageIcon } from 'lucide-react';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
@@ -430,7 +430,7 @@ export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeed
             ref={contentRef}
             className="text-gray-700 whitespace-pre-line break-words text-base sm:text-lg md:text-xl lg:text-xl leading-relaxed sm:leading-relaxed md:leading-relaxed lg:leading-relaxed"
             style={{ wordBreak: 'break-word', overflowWrap: 'break-word', maxWidth: '100%' }}
-            dangerouslySetInnerHTML={{ __html: post.content }}
+            dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(post.content) }}
           />
         )}
         

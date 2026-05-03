@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { buildContentSecurityPolicy } from './lib/security/csp';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -28,7 +29,7 @@ const nextConfig: NextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     qualities: [75, 90],
     minimumCacheTTL: 60,
-    dangerouslyAllowSVG: true,
+    dangerouslyAllowSVG: false,
     contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   },
@@ -38,32 +39,64 @@ const nextConfig: NextConfig = {
   },
   // Разрешаем cross-origin запросы в dev режиме
   allowedDevOrigins: ['192.168.56.1'],
+  async redirects() {
+    return [
+      {
+        source: '/api/maintenance',
+        destination: '/api/maintenance/status',
+        permanent: false,
+      },
+      {
+        source: '/api/maintenance/',
+        destination: '/api/maintenance/status',
+        permanent: false,
+      },
+      {
+        source: '/api/tours',
+        destination: '/api/tours/filter',
+        permanent: false,
+      },
+      {
+        source: '/api/tours/',
+        destination: '/api/tours/filter',
+        permanent: false,
+      },
+      {
+        source: '/api/cities',
+        destination: '/api/cities/featured',
+        permanent: false,
+      },
+      {
+        source: '/api/cities/',
+        destination: '/api/cities/featured',
+        permanent: false,
+      },
+    ];
+  },
   async headers() {
     const securityHeaders = [
       { key: 'X-DNS-Prefetch-Control', value: 'off' },
-      { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+      { key: 'X-Frame-Options', value: 'DENY' },
       { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
+      { key: 'X-Download-Options', value: 'noopen' },
+      { key: 'Origin-Agent-Cluster', value: '?1' },
       { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
       { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()' },
-      { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' },
+      { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+      { key: 'Cross-Origin-Resource-Policy', value: 'same-site' },
       {
         key: 'Content-Security-Policy',
-        value: [
-          "default-src 'self'",
-          "base-uri 'self'",
-          "form-action 'self'",
-          "frame-ancestors 'self'",
-          "frame-src 'self' https://*.yandex.ru https://*.yandex.com https://yandex.ru https://yandex.com",
-          "object-src 'none'",
-          "img-src 'self' data: blob: https:",
-          "font-src 'self' data: https:",
-          "style-src 'self' 'unsafe-inline' https:",
-          "script-src 'self' 'unsafe-inline' 'unsafe-eval' https:",
-          "connect-src 'self' https: wss: wss://*.supabase.co wss://ws-eu.pusher.com wss://ws.pusher.com",
-          "media-src 'self' https: blob:",
-        ].join('; '),
+        value: buildContentSecurityPolicy(),
       },
     ];
+
+    if (process.env.NEXT_PUBLIC_APP_URL?.startsWith('https://')) {
+      securityHeaders.splice(8, 0, {
+        key: 'Strict-Transport-Security',
+        value: 'max-age=31536000; includeSubDomains; preload',
+      });
+    }
 
     return [
       {

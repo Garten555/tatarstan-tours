@@ -1,76 +1,93 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
+import { findAuthUserByEmail } from '@/lib/supabase/admin-users';
+import { validateEmail, validatePersonName, normalizeAuthEmail } from '@/lib/validation/auth';
+
+/** Полная регистрация только после шага с паролем (/register ставит app_metadata.registration_completed). Запись в Auth после OTP без этого флага — не считаем «уже зарегистрирован». */
+function hasCompletedRegistrationInApp(user: { app_metadata?: object | null }): boolean {
+  const app = user.app_metadata as Record<string, unknown> | undefined;
+  return app?.registration_completed === true;
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, firstName } = await request.json();
+    const body = await request.json().catch(() => ({}));
+    const emailRaw = typeof body.email === 'string' ? body.email : '';
+    const firstNameRaw = typeof body.firstName === 'string' ? body.firstName : '';
 
-    if (!email || !email.trim()) {
-      return NextResponse.json(
-        { error: 'Email обязателен' },
-        { status: 400 }
-      );
+    const ev = validateEmail(emailRaw);
+    if (!ev.valid) {
+      return NextResponse.json({ error: ev.error }, { status: 400 });
     }
 
+    const fn = validatePersonName(firstNameRaw, { required: true, label: 'Имя' });
+    if (!fn.valid) {
+      return NextResponse.json({ error: fn.error }, { status: 400 });
+    }
+
+    const normEmail = normalizeAuthEmail(emailRaw);
     const supabase = createServiceClient();
 
-    // Проверяем, не существует ли уже пользователь с таким email
-    let user;
     try {
-      const { data: userList } = await supabase.auth.admin.listUsers();
-      user = userList?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase().trim());
-    } catch (error) {
-      console.error('Error checking user:', error);
-    }
-    
-    // Если пользователь уже существует, возвращаем ошибку
-    if (user) {
-      return NextResponse.json(
-        { error: 'Пользователь с таким email уже зарегистрирован' },
-        { status: 400 }
-      );
+      const { user: existing, error: findErr } = await findAuthUserByEmail(supabase, normEmail);
+      if (findErr) {
+        console.error('[send-verification-code] findAuthUserByEmail:', findErr);
+      } else if (existing && hasCompletedRegistrationInApp(existing)) {
+        return NextResponse.json(
+          { error: 'Пользователь с таким email уже зарегистрирован' },
+          { status: 400 }
+        );
+      }
+    } catch (e) {
+      console.error('[send-verification-code] findAuthUserByEmail:', e);
     }
 
-    // Для отправки кода используем Supabase Auth (письмо пойдет через SMTP, настроенный в Supabase Dashboard)
     const origin = request.headers.get('origin');
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || origin || 'http://localhost:3000';
+
     const { error: otpError } = await supabase.auth.signInWithOtp({
-      email: email.trim().toLowerCase(),
+      email: normEmail,
       options: {
-        shouldCreateUser: false,
-        emailRedirectTo: `${siteUrl}/auth/login`,
+        shouldCreateUser: true,
+        emailRedirectTo: `${siteUrl}/auth/register`,
         data: {
-          first_name: firstName || null,
+          first_name: firstNameRaw.trim(),
         },
       },
     });
 
     if (otpError) {
-      console.error('❌ Failed to send verification code via Supabase Auth:', otpError);
+      console.error('[send-verification-code] signInWithOtp:', otpError);
+      const msg = (otpError.message || '').toLowerCase();
+      const status = (otpError as { status?: number }).status;
+      if (msg.includes('rate') || status === 429) {
+        return NextResponse.json(
+          {
+            error: 'Слишком частые запросы. Подождите минуту и попробуйте снова.',
+            retryAfterSeconds: 60,
+          },
+          { status: 429 }
+        );
+      }
       return NextResponse.json(
-        { error: 'Не удалось отправить письмо. Пожалуйста, проверьте настройки email на сервере или попробуйте позже.' },
-        { status: 500 }
+        {
+          error:
+            otpError.message ||
+            'Не удалось отправить письмо. Проверьте шаблоны и SMTP в Supabase (Authentication → Email).',
+        },
+        { status: 503 }
       );
     }
 
-    console.log(`✅ Verification code email sent via Supabase Auth to ${email.trim()}`);
-
-    return NextResponse.json(
-      { 
-        success: true, 
-        message: 'Код подтверждения отправлен на ваш email' 
-      },
-      { status: 200 }
-    );
-  } catch (error: any) {
+    return NextResponse.json({
+      success: true,
+      message: 'Код подтверждения отправлен на ваш email',
+    });
+  } catch (error: unknown) {
     console.error('Error in send verification code:', error);
     return NextResponse.json(
-      { error: error.message || 'Не удалось отправить код. Проверьте email.' },
+      { error: error instanceof Error ? error.message : 'Не удалось отправить код' },
       { status: 500 }
     );
   }
 }
-
-
-
-

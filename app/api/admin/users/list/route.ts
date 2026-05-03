@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     // Получаем пользователей с ролями 'user' и 'guide' (оптимизировано)
     const { data: users, error } = await serviceClient
       .from('profiles')
-      .select('id, first_name, last_name, email, role')
+      .select('id, first_name, last_name, email, role, avatar_url')
       .in('role', ['user', 'guide'])
       .order('first_name')
       .limit(100); // Ограничиваем количество для производительности

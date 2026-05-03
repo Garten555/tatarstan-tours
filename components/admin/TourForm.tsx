@@ -8,14 +8,25 @@ import { Upload, Loader2, Save, AlertCircle, CheckCircle2, MapPin, Search, X, Co
 import Image from 'next/image';
 import toast from 'react-hot-toast';
 import VideoPlayer from '@/components/tours/VideoPlayer';
+import UploadProgressBar from '@/components/common/UploadProgressBar';
+import { uploadFormDataWithProgress } from '@/lib/http/upload-form-progress';
 
 /** Согласовано с подписью в форме и лимитом в app/api/upload/route.ts */
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+
+type SessionDraft = {
+  id: string;
+  start_at: string;
+  end_at: string | null;
+  guide_id?: string | null;
+};
 
 interface TourFormProps {
   mode: 'create' | 'edit';
   initialData?: any;
   existingMedia?: Array<{ id: string; media_type: string; media_url: string }>;
+  /** Слоты из tour_sessions (режим редактирования) */
+  initialSessions?: SessionDraft[];
 }
 
 interface FormErrors {
@@ -31,10 +42,16 @@ interface FormErrors {
   cover_image?: string;
 }
 
-export default function TourForm({ mode, initialData, existingMedia = [] }: TourFormProps) {
+export default function TourForm({
+  mode,
+  initialData,
+  existingMedia = [],
+  initialSessions = [],
+}: TourFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState<string>(''); // ✅ Статус загрузки
+  const [fileUploadProgress, setFileUploadProgress] = useState<number | null>(null);
   const [coverImage, setCoverImage] = useState<string | null>(initialData?.cover_image || null);
   const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
@@ -43,7 +60,63 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
   const [videoPreviews, setVideoPreviews] = useState<string[]>([]);
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<{ [key: string]: boolean }>({});
-  const [extraDateRanges, setExtraDateRanges] = useState<Array<{ start_date: string; end_date: string }>>([]);
+  const [primarySessionId] = useState<string | undefined>(() =>
+    mode === 'edit' && initialSessions?.[0]?.id ? initialSessions[0].id : undefined
+  );
+
+  const [primaryGuideId, setPrimaryGuideId] = useState<string>(() =>
+    mode === 'edit' && initialSessions?.[0]?.guide_id ? String(initialSessions[0].guide_id) : ''
+  );
+
+  const [extraDateRanges, setExtraDateRanges] = useState<
+    Array<{ id?: string; start_date: string; end_date: string; guide_id: string }>
+  >(() => {
+    if (mode !== 'edit' || !initialSessions || initialSessions.length <= 1) return [];
+    return initialSessions.slice(1).map((s) => ({
+      id: s.id,
+      start_date: s.start_at ? new Date(s.start_at).toISOString().slice(0, 16) : '',
+      end_date: s.end_at ? new Date(s.end_at).toISOString().slice(0, 16) : '',
+      guide_id: s.guide_id ? String(s.guide_id) : '',
+    }));
+  });
+
+  const [guideOptions, setGuideOptions] = useState<
+    Array<{ id: string; first_name: string; last_name: string; email?: string }>
+  >([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/admin/users/list')
+      .then((r) => r.json())
+      .then((data: { success?: boolean; users?: Array<{ id: string; first_name?: string; last_name?: string; email?: string; role?: string }> }) => {
+        if (cancelled || !data?.success || !Array.isArray(data.users)) return;
+        setGuideOptions(
+          data.users.filter((u) => u.role === 'guide').map((u) => ({
+            id: u.id,
+            first_name: u.first_name || '',
+            last_name: u.last_name || '',
+            email: u.email,
+          }))
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const primaryStart =
+    mode === 'edit' && initialSessions?.[0]?.start_at
+      ? new Date(initialSessions[0].start_at).toISOString().slice(0, 16)
+      : initialData?.start_date
+        ? new Date(initialData.start_date).toISOString().slice(0, 16)
+        : '';
+  const primaryEnd =
+    mode === 'edit' && initialSessions?.[0]?.end_at
+      ? new Date(initialSessions[0].end_at).toISOString().slice(0, 16)
+      : initialData?.end_date
+        ? new Date(initialData.end_date).toISOString().slice(0, 16)
+        : '';
 
   // Form data
   const [formData, setFormData] = useState({
@@ -55,8 +128,8 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
     tour_type: initialData?.tour_type || 'excursion',
     category: initialData?.category || 'history',
     price_per_person: initialData?.price_per_person || '',
-    start_date: initialData?.start_date ? new Date(initialData.start_date).toISOString().slice(0, 16) : '',
-    end_date: initialData?.end_date ? new Date(initialData.end_date).toISOString().slice(0, 16) : '',
+    start_date: primaryStart,
+    end_date: primaryEnd,
     max_participants: initialData?.max_participants || 20,
     status: initialData?.status || 'draft',
     yandex_map_url: initialData?.yandex_map_url || '',
@@ -315,6 +388,21 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
     handleFieldChange('yandex_map_url', parsedUrl);
   };
 
+  const postTourUpload = async (
+    formDataUpload: FormData,
+    onProgress: (p: number | null) => void
+  ): Promise<string> => {
+    const { ok, status, data } = await uploadFormDataWithProgress('/api/upload', formDataUpload, onProgress);
+    if (!ok) {
+      throw new Error((data.error as string) || `Ошибка загрузки (${status})`);
+    }
+    const uploadUrl = data.url as string | undefined;
+    if (!uploadUrl) {
+      throw new Error('Не получен URL файла');
+    }
+    return uploadUrl;
+  };
+
   // Handle cover image upload - сразу загружаем на S3
   const handleCoverImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -328,34 +416,23 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
     try {
       setLoading(true);
       setLoadingStatus('Загрузка обложки...');
-      
+      setFileUploadProgress(0);
+
       const formDataUpload = new FormData();
       formDataUpload.append('file', file);
       formDataUpload.append('folder', 'tours/covers');
 
-      const uploadResponse = await fetch('/api/upload', {
-        method: 'POST',
-        body: formDataUpload,
-      });
+      const uploadUrl = await postTourUpload(formDataUpload, setFileUploadProgress);
 
-      if (!uploadResponse.ok) {
-        const uploadError = await uploadResponse.json();
-        throw new Error(uploadError.error || 'Не удалось загрузить обложку');
-      }
-      
-      const uploadData = await uploadResponse.json();
-      if (!uploadData.url) {
-        throw new Error('Не получен URL загруженной обложки');
-      }
-      
       setCoverImageFile(file);
-      setCoverImage(uploadData.url);
+      setCoverImage(uploadUrl);
       setErrors(prev => ({ ...prev, cover_image: undefined }));
     } catch (error: any) {
       setErrors(prev => ({ ...prev, cover_image: error.message || 'Ошибка загрузки обложки' }));
     } finally {
       setLoading(false);
       setLoadingStatus('');
+      setFileUploadProgress(null);
     }
   };
 
@@ -366,41 +443,42 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
     
     try {
       setLoading(true);
-      setLoadingStatus(`Загрузка ${files.length} фото...`);
-      
-      const uploadPromises = files.map(async (file) => {
+      setFileUploadProgress(0);
+      const n = files.length;
+      const uploadedUrls: string[] = [];
+
+      for (let i = 0; i < n; i++) {
+        const file = files[i];
+        setLoadingStatus(`Фото ${i + 1} из ${n}…`);
+
         const formDataUpload = new FormData();
         formDataUpload.append('file', file);
         formDataUpload.append('folder', 'tours/gallery');
-        
-        // Если редактируем тур, добавляем tourId для сохранения в БД
+
         if (mode === 'edit' && initialData?.id) {
           formDataUpload.append('tourId', initialData.id);
           formDataUpload.append('mediaType', 'photo');
         }
 
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          body: formDataUpload,
-        });
+        const wrapProgress = (p: number | null) => {
+          if (p === null) return;
+          const base = (i / n) * 100;
+          const slice = 100 / n;
+          setFileUploadProgress(Math.min(100, Math.round(base + (slice * p) / 100)));
+        };
 
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || `Ошибка загрузки: ${file.name}`);
-        }
+        const url = await postTourUpload(formDataUpload, wrapProgress);
+        uploadedUrls.push(url);
+      }
 
-        const data = await response.json();
-        return data.url;
-      });
-
-      const uploadedUrls = await Promise.all(uploadPromises);
-      setGalleryPreviews(prev => [...prev, ...uploadedUrls]);
-      setGalleryFiles(prev => [...prev, ...files]);
+      setGalleryPreviews((prev) => [...prev, ...uploadedUrls]);
+      setGalleryFiles((prev) => [...prev, ...files]);
     } catch (error: any) {
       alert(error.message || 'Ошибка загрузки фото');
     } finally {
       setLoading(false);
       setLoadingStatus('');
+      setFileUploadProgress(null);
     }
   };
 
@@ -429,34 +507,34 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
 
     try {
       setLoading(true);
-      setLoadingStatus(`Загрузка ${files.length} видео...`);
-      
-      const uploadPromises = files.map(async (file) => {
+      setFileUploadProgress(0);
+      const n = files.length;
+      const uploadedUrls: string[] = [];
+
+      for (let i = 0; i < n; i++) {
+        const file = files[i];
+        setLoadingStatus(`Видео ${i + 1} из ${n}…`);
+
         const formDataUpload = new FormData();
         formDataUpload.append('file', file);
         formDataUpload.append('folder', 'tours/videos');
-        
-        // Если редактируем тур, добавляем tourId для сохранения в БД
+
         if (mode === 'edit' && initialData?.id) {
           formDataUpload.append('tourId', initialData.id);
           formDataUpload.append('mediaType', 'video');
         }
 
-        const response = await fetch('/api/upload', {
-          method: 'POST',
-          body: formDataUpload,
-        });
+        const wrapProgress = (p: number | null) => {
+          if (p === null) return;
+          const base = (i / n) * 100;
+          const slice = 100 / n;
+          setFileUploadProgress(Math.min(100, Math.round(base + (slice * p) / 100)));
+        };
 
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.error || `Ошибка загрузки: ${file.name}`);
-        }
+        const url = await postTourUpload(formDataUpload, wrapProgress);
+        uploadedUrls.push(url);
+      }
 
-        const data = await response.json();
-        return data.url;
-      });
-
-      const uploadedUrls = await Promise.all(uploadPromises);
       setVideoPreviews((prev) => [...prev, ...uploadedUrls]);
       setVideoFiles((prev) => [...prev, ...files]);
     } catch (error: any) {
@@ -464,6 +542,7 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
     } finally {
       setLoading(false);
       setLoadingStatus('');
+      setFileUploadProgress(null);
       e.target.value = '';
     }
   };
@@ -657,24 +736,36 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
         }
       }
       
-      if (extraDateRanges.length > 0) {
-        setLoadingStatus('Создание дополнительных дат...');
-        const datesPayload = extraDateRanges.map((range) => ({
-          start_date: new Date(range.start_date).toISOString(),
-          end_date: new Date(range.end_date).toISOString(),
-        }));
+      setLoadingStatus('Сохранение выездов (слотов)...');
+      const sessionsPayload = [
+        {
+          id: primarySessionId,
+          start_at: new Date(formData.start_date).toISOString(),
+          end_at: new Date(formData.end_date).toISOString(),
+          guide_id: primaryGuideId.trim() ? primaryGuideId.trim() : null,
+        },
+        ...extraDateRanges.map((range) => ({
+          id: range.id,
+          start_at: new Date(range.start_date).toISOString(),
+          end_at: new Date(range.end_date).toISOString(),
+          guide_id: range.guide_id?.trim() ? range.guide_id.trim() : null,
+        })),
+      ];
 
-        const duplicateResponse = await fetch(`/api/admin/tours/${tourId}/duplicate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dates: datesPayload }),
-        });
+      const syncResponse = await fetch(`/api/admin/tours/${tourId}/sessions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessions: sessionsPayload }),
+      });
 
-        const duplicateResult = await duplicateResponse.json();
+      const syncResult = await syncResponse.json().catch(() => ({}));
 
-        if (!duplicateResponse.ok) {
-          throw new Error(duplicateResult.error || 'Не удалось добавить дополнительные даты');
-        }
+      if (!syncResponse.ok) {
+        throw new Error(
+          (syncResult as { error?: string; details?: string }).error ||
+            (syncResult as { details?: string }).details ||
+            'Не удалось сохранить даты выездов (tour_sessions)'
+        );
       }
 
       setLoadingStatus('Завершение...');
@@ -716,6 +807,14 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
 
   return (
     <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-8">
+      {fileUploadProgress !== null && (
+        <UploadProgressBar
+          label={loadingStatus || 'Загрузка файла'}
+          percent={fileUploadProgress}
+          className="mb-2"
+          sticky
+        />
+      )}
       {/* Header */}
       <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl p-8 shadow-sm border border-emerald-100">
         <h2 className="text-3xl font-bold text-gray-900 mb-2">
@@ -963,15 +1062,18 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
               <button
                 type="button"
                 onClick={() => {
-                  setExtraDateRanges((prev) => [...prev, { start_date: '', end_date: '' }]);
+                  setExtraDateRanges((prev) => [...prev, { start_date: '', end_date: '', guide_id: '' }]);
                 }}
                 className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
-                title="Добавить ещё даты тура"
+                title="Добавить ещё один выезд (слот в tour_sessions)"
               >
                 <Copy className="w-3 h-3" />
                 + даты
               </button>
             </div>
+            <p className="text-xs text-gray-500 mb-2">
+              Дополнительные выезды сохраняются как слоты одного тура (не отдельные карточки в админке).
+            </p>
             <input
               type="datetime-local"
               value={formData.end_date}
@@ -984,6 +1086,27 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
               }`}
             />
             <ErrorMessage message={errors.end_date && touched.end_date ? errors.end_date : undefined} />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Гид на первом выезде
+            </label>
+            <select
+              value={primaryGuideId}
+              onChange={(e) => setPrimaryGuideId(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-500 transition-all bg-white text-gray-900"
+            >
+              <option value="">Не назначен</option>
+              {guideOptions.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {[g.first_name, g.last_name].filter(Boolean).join(' ') || g.email || g.id}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1.5">
+              На каждый выезд — свой гид и отдельная комната чата группы (после сохранения дат).
+            </p>
           </div>
 
           {/* Status */}
@@ -1008,48 +1131,72 @@ export default function TourForm({ mode, initialData, existingMedia = [] }: Tour
           <div className="space-y-4">
             <h4 className="text-sm font-semibold text-gray-900">Дополнительные даты тура</h4>
             {extraDateRanges.map((range, index) => (
-              <div key={index} className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Дата начала
-                  </label>
-                  <input
-                    type="datetime-local"
-                    value={range.start_date}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setExtraDateRanges((prev) =>
-                        prev.map((item, idx) => (idx === index ? { ...item, start_date: value } : item))
-                      );
-                    }}
-                    className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all border-gray-300 focus:ring-emerald-200 focus:border-emerald-500"
-                  />
-                </div>
-                <div className="flex gap-2 items-end">
-                  <div className="flex-1">
+              <div key={index} className="space-y-4 rounded-xl border border-gray-100 bg-gray-50/80 p-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Дата окончания
+                      Дата начала
                     </label>
                     <input
                       type="datetime-local"
-                      value={range.end_date}
+                      value={range.start_date}
                       onChange={(e) => {
                         const value = e.target.value;
                         setExtraDateRanges((prev) =>
-                          prev.map((item, idx) => (idx === index ? { ...item, end_date: value } : item))
+                          prev.map((item, idx) => (idx === index ? { ...item, start_date: value } : item))
                         );
                       }}
-                      className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all border-gray-300 focus:ring-emerald-200 focus:border-emerald-500"
+                      className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all border-gray-300 focus:ring-emerald-200 focus:border-emerald-500 bg-white"
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setExtraDateRanges((prev) => prev.filter((_, idx) => idx !== index))}
-                    className="px-3 py-3 border border-gray-300 rounded-xl text-gray-600 hover:text-red-600 hover:border-red-300 transition-colors"
-                    title="Удалить даты"
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Дата окончания
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={range.end_date}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setExtraDateRanges((prev) =>
+                            prev.map((item, idx) => (idx === index ? { ...item, end_date: value } : item))
+                          );
+                        }}
+                        className="w-full px-4 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all border-gray-300 focus:ring-emerald-200 focus:border-emerald-500 bg-white"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setExtraDateRanges((prev) => prev.filter((_, idx) => idx !== index))}
+                      className="px-3 py-3 border border-gray-300 rounded-xl text-gray-600 hover:text-red-600 hover:border-red-300 transition-colors bg-white"
+                      title="Удалить даты"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Гид на этом выезде
+                  </label>
+                  <select
+                    value={range.guide_id}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setExtraDateRanges((prev) =>
+                        prev.map((item, idx) => (idx === index ? { ...item, guide_id: value } : item))
+                      );
+                    }}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-500 transition-all bg-white text-gray-900"
                   >
-                    <X className="w-4 h-4" />
-                  </button>
+                    <option value="">Не назначен</option>
+                    {guideOptions.map((g) => (
+                      <option key={g.id} value={g.id}>
+                        {[g.first_name, g.last_name].filter(Boolean).join(' ') || g.email || g.id}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             ))}

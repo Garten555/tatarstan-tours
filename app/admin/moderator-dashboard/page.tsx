@@ -2,7 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
-import { MessageSquare, Users, AlertCircle, Shield } from 'lucide-react';
+import { MessageSquare, Users, AlertCircle, Shield, Flag } from 'lucide-react';
 
 export const metadata = {
   title: 'Панель модератора - Админ панель',
@@ -69,6 +69,12 @@ export default async function ModeratorDashboard() {
     .from('tour_rooms')
     .select('*', { count: 'exact', head: true });
 
+  const { count: reportedTourMessages } = await supabase
+    .from('tour_room_messages')
+    .select('*', { count: 'exact', head: true })
+    .eq('is_reported', true)
+    .is('deleted_at', null);
+
   const stats = {
     totalSessions: totalSessions || 0,
     activeSessions: activeSessions || 0,
@@ -76,6 +82,7 @@ export default async function ModeratorDashboard() {
     bannedUsers: bannedUsers || 0,
     pendingReviews: pendingReviews || 0,
     totalRooms: totalRooms || 0,
+    reportedTourMessages: reportedTourMessages || 0,
   };
 
   return (
@@ -161,6 +168,18 @@ export default async function ModeratorDashboard() {
             </div>
           </div>
         </div>
+
+        <div className="bg-white rounded-lg shadow p-4 sm:p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm sm:text-base text-gray-600 font-medium">Жалоб на сообщения в турах</p>
+              <p className="text-2xl sm:text-3xl font-bold text-amber-600 mt-1">{stats.reportedTourMessages}</p>
+            </div>
+            <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center">
+              <Flag className="w-6 h-6 text-amber-700" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Быстрые действия */}
@@ -195,6 +214,16 @@ export default async function ModeratorDashboard() {
             <div>
               <p className="font-semibold text-gray-900">Отзывы</p>
               <p className="text-sm text-gray-600">Модерация отзывов</p>
+            </div>
+          </Link>
+          <Link
+            href="/admin/tour-room-reports"
+            className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-amber-500 hover:bg-amber-50 transition-all"
+          >
+            <Flag className="w-6 h-6 text-amber-700" />
+            <div>
+              <p className="font-semibold text-gray-900">Жалобы в чатах туров</p>
+              <p className="text-sm text-gray-600">Сообщения с флагом жалобы</p>
             </div>
           </Link>
         </div>

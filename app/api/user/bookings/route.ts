@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
       .select(`
         id,
         tour_id,
+        session_id,
         status,
         payment_status,
         total_price,
@@ -40,8 +41,9 @@ export async function GET(request: NextRequest) {
           start_date,
           end_date,
           cover_image,
+          yandex_map_url,
           status,
-          city:cities(name)
+          city:cities(id, name)
         ),
         review:reviews!reviews_booking_id_fkey(
           id,

@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
+import { formatLastSeen } from '@/lib/utils/presence';
 
 interface User {
   id: string;
@@ -17,6 +18,7 @@ interface User {
   bio: string | null;
   status_level: number;
   reputation_score: number;
+  last_activity_at?: string | null;
 }
 
 type TabType = 'friends' | 'requests' | 'find';
@@ -34,6 +36,7 @@ export default function FriendsPage() {
   const [friends, setFriends] = useState<Set<string>>(new Set());
   const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set());
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [activityByUserId, setActivityByUserId] = useState<Record<string, string | null>>({});
   const supabase = createClient();
 
   useEffect(() => {
@@ -102,6 +105,7 @@ export default function FriendsPage() {
             setFriendsList(data.friends || []);
             const friendIds = new Set<string>(data.friends.map((f: any) => f.friend_id));
             setFriends(friendIds);
+            await loadUsersActivity(data.friends.map((f: any) => f.friend_id).filter(Boolean));
           }
         }
       }
@@ -129,6 +133,12 @@ export default function FriendsPage() {
             
             const pendingIds = new Set<string>(outgoing.map((f: any) => f.friend_id));
             setPendingRequests(pendingIds);
+            const ids = [...incoming, ...outgoing]
+              .map((r: any) => r.friend_id)
+              .filter(Boolean);
+            if (ids.length > 0) {
+              await loadUsersActivity(ids);
+            }
           }
         }
       }
@@ -328,10 +338,29 @@ export default function FriendsPage() {
     return name.slice(0, 2).toUpperCase();
   };
 
+  const loadUsersActivity = async (userIds: string[]) => {
+    const unique = Array.from(new Set(userIds.filter(Boolean)));
+    if (unique.length === 0) return;
+    try {
+      const response = await fetch('/api/users/activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_ids: unique }),
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!data?.success || !data?.activityByUserId) return;
+      setActivityByUserId((prev) => ({ ...prev, ...data.activityByUserId }));
+    } catch {
+      // Тихо игнорируем, чтобы не ломать основной UX друзей
+    }
+  };
+
   const renderUserCard = (user: User, index: number, showAddButton = false) => {
     const isFriend = friends.has(user.id);
     const isPending = pendingRequests.has(user.id);
     const isMe = user.id === currentUserId;
+    const seen = formatLastSeen(activityByUserId[user.id] ?? user.last_activity_at);
 
     return (
       <div
@@ -370,6 +399,10 @@ export default function FriendsPage() {
                 @{user.username}
               </p>
             )}
+            <p className={`text-sm mb-3 font-semibold ${seen.online ? 'text-emerald-600' : 'text-gray-400'}`}>
+              {seen.online ? '● ' : ''}
+              {seen.label}
+            </p>
             
             {user.bio && (
               <p className="text-base md:text-lg text-gray-600 mb-4 line-clamp-2 leading-relaxed">
@@ -518,7 +551,9 @@ export default function FriendsPage() {
                     bio: friend.bio,
                     status_level: friend.status_level || 1,
                     reputation_score: friend.reputation_score || 0,
+                    last_activity_at: activityByUserId[friend.id] ?? null,
                   };
+                  const seen = formatLastSeen(friendUser.last_activity_at);
 
                   return (
                     <div
@@ -557,6 +592,10 @@ export default function FriendsPage() {
                               @{friendUser.username}
                             </p>
                           )}
+                          <p className={`text-sm mb-3 font-semibold ${seen.online ? 'text-emerald-600' : 'text-gray-400'}`}>
+                            {seen.online ? '● ' : ''}
+                            {seen.label}
+                          </p>
                           
                           {friendUser.bio && (
                             <p className="text-base md:text-lg text-gray-600 mb-4 line-clamp-2 leading-relaxed">
@@ -657,7 +696,9 @@ export default function FriendsPage() {
                         bio: requester.bio,
                         status_level: requester.status_level || 1,
                         reputation_score: requester.reputation_score || 0,
+                        last_activity_at: activityByUserId[requester.id] ?? null,
                       };
+                      const seen = formatLastSeen(requesterUser.last_activity_at);
 
                       return (
                         <div
@@ -693,6 +734,10 @@ export default function FriendsPage() {
                                   @{requesterUser.username}
                                 </p>
                               )}
+                              <p className={`text-sm mb-3 font-semibold ${seen.online ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                {seen.online ? '● ' : ''}
+                                {seen.label}
+                              </p>
                             </div>
 
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
@@ -741,7 +786,9 @@ export default function FriendsPage() {
                         bio: target.bio,
                         status_level: target.status_level || 1,
                         reputation_score: target.reputation_score || 0,
+                        last_activity_at: activityByUserId[target.id] ?? null,
                       };
+                      const seen = formatLastSeen(targetUser.last_activity_at);
 
                       return (
                         <div
@@ -777,6 +824,10 @@ export default function FriendsPage() {
                                   @{targetUser.username}
                                 </p>
                               )}
+                              <p className={`text-sm mb-3 font-semibold ${seen.online ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                {seen.online ? '● ' : ''}
+                                {seen.label}
+                              </p>
                             </div>
 
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">

@@ -1,7 +1,30 @@
 // API для работы с конкретным дневником
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { deleteFileFromS3 } from '@/lib/s3/upload';
 import { UpdateDiaryRequest } from '@/types';
+
+async function deleteDiaryMediaFromS3(coverPath: string | null, mediaItems: unknown): Promise<void> {
+  const paths = new Set<string>();
+  if (coverPath && typeof coverPath === 'string' && coverPath.trim()) {
+    paths.add(coverPath.trim());
+  }
+  if (Array.isArray(mediaItems)) {
+    for (const item of mediaItems) {
+      if (item && typeof item === 'object' && 'path' in item) {
+        const p = (item as { path?: unknown }).path;
+        if (typeof p === 'string' && p.trim()) paths.add(p.trim());
+      }
+    }
+  }
+  for (const key of paths) {
+    try {
+      await deleteFileFromS3(key);
+    } catch (e) {
+      console.warn('[Diary DELETE] Не удалось удалить файл из S3:', key, e);
+    }
+  }
+}
 
 // GET /api/diaries/[id] - Получить дневник по ID
 export async function GET(
@@ -249,7 +272,7 @@ export async function DELETE(
       );
     }
 
-    // TODO: Удаление медиа из S3 (cover_image_path и media_items)
+    await deleteDiaryMediaFromS3(diary.cover_image_path, diary.media_items);
 
     // Удаляем дневник
     const { error: deleteError } = await serviceClient

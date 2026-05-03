@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 
 type ImageViewerModalProps = {
   isOpen: boolean;
@@ -11,6 +11,9 @@ type ImageViewerModalProps = {
   initialIndex?: number;
   isLoading?: boolean;
   onClose: () => void;
+  /** Скачать текущее фото (индекс совпадает с положением в `images`) */
+  onDownloadCurrent?: (index: number) => void | Promise<void>;
+  downloadBusy?: boolean;
 };
 
 export default function ImageViewerModal({
@@ -20,6 +23,8 @@ export default function ImageViewerModal({
   initialIndex = 0,
   isLoading = false,
   onClose,
+  onDownloadCurrent,
+  downloadBusy = false,
 }: ImageViewerModalProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [imageError, setImageError] = useState(false);
@@ -89,7 +94,27 @@ export default function ImageViewerModal({
             </span>
           </div>
         )}
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2 md:gap-3">
+          {onDownloadCurrent && images.length > 0 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                void onDownloadCurrent(currentIndex);
+              }}
+              disabled={downloadBusy}
+              className="rounded-full p-3 md:p-4 transition-all duration-300 hover:scale-110 z-[60] min-w-[52px] min-h-[52px] flex items-center justify-center disabled:opacity-50 disabled:pointer-events-none"
+              aria-label="Скачать фото"
+              title="Скачать фото"
+              style={{
+                background: 'linear-gradient(to bottom right, #ffffff, #f3f4f6)',
+                boxShadow: '0 4px 20px rgba(0, 0, 0, 0.3), 0 0 0 2px rgba(255, 255, 255, 0.8)',
+                border: '2px solid rgba(255, 255, 255, 0.9)',
+              }}
+            >
+              <Download className="w-6 h-6 md:w-7 md:h-7 text-gray-900" strokeWidth={2.5} />
+            </button>
+          )}
           <button
             onClick={onClose}
             className="group relative rounded-full p-3 md:p-4 transition-all duration-300 hover:scale-110 z-[60] min-w-[52px] min-h-[52px] flex items-center justify-center"

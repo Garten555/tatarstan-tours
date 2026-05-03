@@ -6,6 +6,10 @@ import Pusher from 'pusher-js';
 import toast from 'react-hot-toast';
 import { createClient } from '@/lib/supabase/client';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import { playNotificationSound } from '@/lib/sound/notifications';
+import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
+import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
+import { insertEmojiAtCursor } from '@/lib/chat/insert-emoji-at-cursor';
 
 type ChatMessage = {
   id: string;
@@ -31,7 +35,9 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
   const modeRef = useRef<'support' | 'ai'>('support');
   const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<any>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const nearBottomRef = useRef(true);
+  const autoScrollNextRef = useRef(true);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isInitializingRef = useRef(false);
   const [clearConfirm, setClearConfirm] = useState<null | 'ai' | 'support'>(null);
@@ -133,47 +139,9 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       isInitializingRef.current = true;
 
       try {
-        // Очищаем предыдущее подключение, если оно есть
-        if (channelRef.current) {
-          try {
-            const channel = channelRef.current;
-            // Проверяем состояние канала перед отпиской
-            if (channel && typeof channel.unbind_all === 'function') {
-              channel.unbind_all();
-            }
-            if (channel && typeof channel.unsubscribe === 'function') {
-              // Проверяем состояние WebSocket перед отпиской
-              const pusher = pusherRef.current;
-              if (pusher && pusher.connection) {
-                const wsState = pusher.connection.state;
-                if (wsState && wsState !== 'disconnected' && wsState !== 'disconnecting' && wsState !== 'closed') {
-                  // Дополнительный try-catch для самого вызова unsubscribe
-                  try {
-                    channel.unsubscribe();
-                  } catch (unsubError) {
-                    // Игнорируем ошибки при unsubscribe
-                  }
-                }
-              }
-            }
-          } catch (error) {
-            // Игнорируем ошибки при очистке
-          }
-          channelRef.current = null;
-        }
-
-        if (pusherRef.current) {
-          try {
-            const pusher = pusherRef.current;
-            const state = pusher.connection?.state;
-            if (state && state !== 'disconnected' && state !== 'disconnecting' && state !== 'closed') {
-              pusher.disconnect();
-            }
-          } catch (error) {
-            // Игнорируем ошибки при отключении
-          }
-          pusherRef.current = null;
-        }
+        disconnectPusherSafely(pusherRef.current, [channelRef.current]);
+        channelRef.current = null;
+        pusherRef.current = null;
 
         const supabase = createClient();
         const { data: { user } } = await supabase.auth.getUser();
@@ -209,6 +177,9 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
             setMessages((prev) => {
               if (prev.some((m) => m.id === data.message.id)) {
                 return prev;
+              }
+              if (data.message.is_support) {
+                playNotificationSound('message');
               }
               return [...prev, data.message];
             });
@@ -253,72 +224,34 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
 
     return () => {
       isInitializingRef.current = false;
-      
-      // Очистка канала - безопасная отписка с полной обработкой ошибок
-      if (channelRef.current) {
-        const channel = channelRef.current;
-        
-        // Отвязываем обработчики событий (безопасно)
-        try {
-          if (channel && typeof channel.unbind_all === 'function') {
-            channel.unbind_all();
-          }
-        } catch (error) {
-          // Игнорируем ошибки при unbind_all
-        }
-        
-        // Отписываемся от канала (может вызвать ошибку, если WebSocket уже закрыт)
-        try {
-          if (channel && typeof channel.unsubscribe === 'function') {
-            // Проверяем состояние Pusher перед отпиской
-            const pusher = pusherRef.current;
-            if (pusher && pusher.connection) {
-              const wsState = pusher.connection.state;
-              // Отписываемся только если WebSocket не закрыт
-              if (wsState && 
-                  wsState !== 'disconnected' && 
-                  wsState !== 'disconnecting' && 
-                  wsState !== 'closed') {
-                // Дополнительный try-catch для самого вызова unsubscribe
-                // так как состояние может измениться между проверкой и вызовом
-                try {
-                  channel.unsubscribe();
-                } catch (unsubError) {
-                  // Игнорируем ошибки при unsubscribe (WebSocket может быть уже в CLOSING/CLOSED)
-                  // Это нормально, если канал уже закрыт или закрывается
-                }
-              }
-            }
-          }
-        } catch (error) {
-          // Игнорируем ошибки при unsubscribe (WebSocket может быть уже в CLOSING/CLOSED)
-          // Это нормально, если канал уже закрыт или закрывается
-        }
-        
-        channelRef.current = null;
-      }
-      
-      // Очистка Pusher
-      if (pusherRef.current) {
-        try {
-          const pusher = pusherRef.current;
-          const state = pusher.connection?.state;
-          if (state && 
-              state !== 'disconnected' && 
-              state !== 'disconnecting' && 
-              state !== 'closed') {
-            pusher.disconnect();
-          }
-        } catch (error) {
-          // Игнорируем ошибки, если соединение уже закрыто
-        }
-        pusherRef.current = null;
-      }
+      disconnectPusherSafely(pusherRef.current, [channelRef.current]);
+      channelRef.current = null;
+      pusherRef.current = null;
     };
   }, [mode]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const onScroll = () => {
+      const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
+      nearBottomRef.current = distance <= 120;
+    };
+    onScroll();
+    container.addEventListener('scroll', onScroll);
+    return () => container.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (!messages.length) return;
+    if (autoScrollNextRef.current || nearBottomRef.current) {
+      autoScrollNextRef.current = false;
+      requestAnimationFrame(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+      });
+    }
   }, [messages]);
 
   // Автоподстройка высоты textarea
@@ -371,6 +304,8 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
 
       const data = JSON.parse(text);
       if (data.success) {
+        playNotificationSound('message');
+        autoScrollNextRef.current = true;
         setInput('');
         if (textareaRef.current) {
           textareaRef.current.style.height = 'auto';
@@ -627,6 +562,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
 
       {/* Сообщения */}
       <div
+        ref={messagesContainerRef}
         className={`flex-1 overflow-y-auto chat-scroll bg-gray-50 min-h-0 ${
           isWidget ? 'p-2 space-y-2' : 'p-2 sm:p-3 md:p-4 space-y-2 sm:space-y-2.5 md:space-y-3'
         }`}
@@ -674,7 +610,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
                 </div>
               </div>
             ))}
-            <div ref={messagesEndRef} />
+            <div />
           </>
         )}
       </div>
@@ -764,6 +700,18 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
                 style={{ fontSize: 'clamp(14px, 1rem, 18px)', color: (!isAuthenticated || (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))) ? '#4b5563' : '#111827' }} // Адаптивный размер шрифта с clamp
               />
             </div>
+            <ChatEmojiPicker
+              disabled={
+                !isAuthenticated ||
+                (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
+              }
+              buttonClassName={`flex-shrink-0 inline-flex items-center justify-center rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                isWidget ? 'min-h-[44px] min-w-[44px]' : 'min-h-[52px] min-w-[52px] sm:min-h-[56px] sm:min-w-[56px]'
+              }`}
+              onEmojiSelect={(emoji) =>
+                insertEmojiAtCursor(emoji, input, setInput, textareaRef)
+              }
+            />
             <button
               onClick={sendMessage}
               disabled={
@@ -783,9 +731,9 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
               }`}
             >
               {sending ? (
-                <Loader2 className={isWidget ? 'w-5 h-5 animate-spin' : 'w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 animate-spin'} />
+                <Loader2 className={`${isWidget ? 'w-5 h-5' : 'w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7'} animate-spin text-white`} />
               ) : (
-                <Send className={isWidget ? 'w-5 h-5' : 'w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7'} />
+                <Send className={`${isWidget ? 'w-5 h-5' : 'w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7'} text-white`} strokeWidth={2} />
               )}
               <span className={isWidget ? 'sr-only' : 'hidden sm:inline'}>Отправить</span>
             </button>

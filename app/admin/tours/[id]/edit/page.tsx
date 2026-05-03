@@ -67,6 +67,30 @@ export default async function EditTourPage({ params }: EditTourPageProps) {
   const gallery = mediaTyped.filter((m) => m.media_type === 'image' || m.media_type === 'photo');
   const videos = mediaTyped.filter((m) => m.media_type === 'video');
 
+  const { data: sessionsRows, error: sessionsError } = await serviceClient
+    .from('tour_sessions')
+    .select('id, start_at, end_at, guide_id')
+    .eq('tour_id', id)
+    .order('start_at', { ascending: true });
+
+  if (sessionsError) {
+    console.error('❌ tour_sessions при загрузке редактирования:', sessionsError.message);
+  }
+
+  const initialSessions = (
+    (sessionsRows ?? []) as {
+      id: string;
+      start_at: string;
+      end_at: string | null;
+      guide_id?: string | null;
+    }[]
+  ).map((s) => ({
+    id: s.id,
+    start_at: s.start_at,
+    end_at: s.end_at,
+    guide_id: s.guide_id ?? null,
+  }));
+
   // Подготавливаем данные для формы
   interface TourData {
     id: string;
@@ -105,7 +129,7 @@ export default async function EditTourPage({ params }: EditTourPageProps) {
       </div>
 
       {/* Форма */}
-      <TourForm mode="edit" initialData={tourData} existingMedia={mediaTyped} />
+      <TourForm mode="edit" initialData={tourData} existingMedia={mediaTyped} initialSessions={initialSessions} />
     </div>
   );
 }

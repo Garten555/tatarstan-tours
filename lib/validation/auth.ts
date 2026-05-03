@@ -52,6 +52,34 @@ export function validateEmail(email: string): { valid: boolean; error?: string }
   return { valid: true };
 }
 
+/** Нормализация email для сравнения и вызовов Auth API */
+export function normalizeAuthEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+/**
+ * Имя/фамилия/отчество: буквы Unicode, пробел, дефис, точка, апостроф.
+ */
+export function validatePersonName(
+  name: string,
+  options: { required: boolean; label: string }
+): { valid: boolean; error?: string } {
+  const t = name.trim();
+  if (!t) {
+    return options.required ? { valid: false, error: `${options.label} обязательно` } : { valid: true };
+  }
+  if (t.length > 100) {
+    return { valid: false, error: `${options.label}: не более 100 символов` };
+  }
+  if (!/^[\p{L}\s\-'.]+$/u.test(t)) {
+    return {
+      valid: false,
+      error: `${options.label}: допустимы только буквы, пробел, дефис, точка`,
+    };
+  }
+  return { valid: true };
+}
+
 /**
  * Проверка наличия русских символов
  */

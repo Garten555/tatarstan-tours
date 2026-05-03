@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import Image from 'next/image';
 import { Upload, X, Loader2 } from 'lucide-react';
 
@@ -34,6 +35,8 @@ export default function PassportHeaderEditor({
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
+
+  useBodyScrollLock(isModalOpen);
 
   useEffect(() => {
     return () => {
@@ -207,7 +210,7 @@ export default function PassportHeaderEditor({
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center overscroll-contain bg-black/45 p-4">
           <div className="w-full max-w-3xl rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <h3 className="text-lg font-black text-gray-900">Сменить шапку и аватар</h3>

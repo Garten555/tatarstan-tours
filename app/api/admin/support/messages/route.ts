@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import Pusher from 'pusher';
+import { publishUserNotification } from '@/lib/pusher/user-notification';
+import { rateLimit } from '@/lib/security/rate-limit';
 
 const ADMIN_ROLES = ['support_admin', 'super_admin'];
 
@@ -88,6 +90,14 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const limiter = rateLimit(request, { windowMs: 60_000, maxRequests: 80 });
+    if (!limiter.success) {
+      return NextResponse.json(
+        { error: 'Слишком много запросов. Попробуйте позже.' },
+        { status: 429, headers: { 'Retry-After': Math.ceil((limiter.resetTime - Date.now()) / 1000).toString() } }
+      );
+    }
+
     const supabase = await createClient();
     const serviceClient = await createServiceClient();
 
@@ -162,6 +172,24 @@ export async function POST(request: NextRequest) {
         await pusher.trigger(`support-chat-${uid}`, 'new-message', {
           message: newMessage,
         });
+
+        const preview = message.length > 90 ? `${message.slice(0, 90)}...` : message;
+        const { data: notifRow, error: notifErr } = await serviceClient
+          .from('notifications')
+          .insert({
+            user_id: uid,
+            title: 'Ответ поддержки',
+            body: `Поддержка: ${preview}`,
+            type: 'support_message',
+          })
+          .select('id, user_id, title, body, type, created_at')
+          .single();
+
+        if (notifErr) {
+          console.error('Ошибка уведомления поддержки:', notifErr);
+        } else if (notifRow) {
+          await publishUserNotification(uid, notifRow);
+        }
       }
     } catch (pusherError) {
       console.error('Ошибка Pusher:', pusherError);

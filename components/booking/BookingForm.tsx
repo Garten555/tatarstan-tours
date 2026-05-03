@@ -24,6 +24,14 @@ import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface BookingFormProps {
   tour: any;
+  /** Выбранный слот (несколько дат на один тур) */
+  session?: {
+    id: string;
+    start_at: string;
+    end_at?: string | null;
+    max_participants: number;
+    current_participants?: number | null;
+  } | null;
   user: SupabaseUser;
   savedCards: Array<{
     id: string;
@@ -53,7 +61,7 @@ type Attendee = {
   traveler_id?: string | null;
 };
 
-export default function BookingForm({ tour, user, savedCards }: BookingFormProps) {
+export default function BookingForm({ tour, session = null, user, savedCards }: BookingFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'details' | 'payment'>('details');
@@ -80,7 +88,9 @@ export default function BookingForm({ tour, user, savedCards }: BookingFormProps
   });
 
   const totalPrice = tour.price_per_person * formData.num_people;
-  const availableSpots = tour.max_participants - (tour.current_participants || 0);
+  const availableSpots = session
+    ? session.max_participants - (session.current_participants ?? 0)
+    : tour.max_participants - (tour.current_participants || 0);
 
   // Функция форматирования телефона с улучшенной маской
   const formatPhone = (value: string): string => {
@@ -154,10 +164,13 @@ export default function BookingForm({ tour, user, savedCards }: BookingFormProps
         const response = await fetch('/api/user/bookings');
         const data = await response.json();
         if (response.ok && Array.isArray(data.bookings)) {
-          const hasBooking = data.bookings.some(
-            (booking: any) =>
-              booking.tour_id === tour.id && ['pending', 'confirmed'].includes(booking.status)
-          );
+          const hasBooking = data.bookings.some((booking: any) => {
+            if (booking.tour_id !== tour.id || !['pending', 'confirmed'].includes(booking.status)) {
+              return false;
+            }
+            if (session?.id) return booking.session_id === session.id;
+            return booking.session_id == null || booking.session_id === '';
+          });
           setHasExistingBooking(hasBooking);
         }
       } catch (err) {
@@ -282,6 +295,7 @@ export default function BookingForm({ tour, user, savedCards }: BookingFormProps
     try {
       const bookingData: any = {
         tour_id: tour.id,
+        ...(session?.id ? { session_id: session.id } : {}),
         num_people: formData.num_people,
         total_price: totalPrice,
         payment_method: formData.payment_method,
@@ -363,6 +377,10 @@ export default function BookingForm({ tour, user, savedCards }: BookingFormProps
     });
   };
 
+  const bookingDateLabel = session
+    ? `${formatDate(session.start_at)}${session.end_at ? ` — ${formatDate(session.end_at)}` : ''}`
+    : formatDate(tour.start_date);
+
   return (
     <div className="max-w-7xl mx-auto">
       {/* Навигация */}
@@ -401,7 +419,7 @@ export default function BookingForm({ tour, user, savedCards }: BookingFormProps
                   )}
                   <div className="flex items-center gap-1.5 sm:gap-2 text-gray-600">
                     <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 flex-shrink-0" />
-                    <span className="font-medium text-sm sm:text-base break-words">{formatDate(tour.start_date)}</span>
+                    <span className="font-medium text-sm sm:text-base break-words">{bookingDateLabel}</span>
                   </div>
                 </div>
               </div>
@@ -1088,7 +1106,7 @@ export default function BookingForm({ tour, user, savedCards }: BookingFormProps
             <div className="border-t pt-4 space-y-2 text-sm text-gray-600">
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4" />
-                <span>{formatDate(tour.start_date)}</span>
+                <span>{bookingDateLabel}</span>
               </div>
               {tour.city && (
                 <div className="flex items-center gap-2">

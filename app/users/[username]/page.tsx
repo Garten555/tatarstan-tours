@@ -2,6 +2,7 @@
 import { notFound } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import PublicProfileLayout from '@/components/profile/PublicProfileLayout';
+import { mergeLatestActivityTimestamps } from '@/lib/utils/presence';
 
 interface PublicProfilePageProps {
   params: Promise<{ username: string }>;
@@ -86,7 +87,8 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
       banned_at,
       ban_reason,
       ban_until,
-      created_at
+      created_at,
+      last_seen_at
     `);
 
   if (isUUID) {
@@ -126,7 +128,35 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
     ban_reason: string | null;
     ban_until: string | null;
     created_at: string;
+    last_seen_at?: string | null;
+    last_activity_at?: string | null;
   };
+
+  // Последняя активность пользователя (по сообщениям)
+  const [{ data: dmActivity }, { data: roomActivity }] = await Promise.all([
+    serviceClient
+      .from('user_messages')
+      .select('created_at')
+      .eq('sender_id', profileData.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    serviceClient
+      .from('tour_room_messages')
+      .select('created_at')
+      .eq('user_id', profileData.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const dmTs = dmActivity?.created_at ? new Date(dmActivity.created_at).getTime() : 0;
+  const roomTs = roomActivity?.created_at ? new Date(roomActivity.created_at).getTime() : 0;
+  const messageActivityAt =
+    dmTs === 0 && roomTs === 0 ? null : new Date(Math.max(dmTs || 0, roomTs || 0)).toISOString();
+  profileData.last_activity_at = mergeLatestActivityTimestamps(
+    profileData.last_seen_at ?? null,
+    messageActivityAt
+  );
 
   // Определяем, является ли пользователь админом
   const isAdmin = Boolean(profileData.role && ['tour_admin', 'support_admin', 'super_admin'].includes(profileData.role));

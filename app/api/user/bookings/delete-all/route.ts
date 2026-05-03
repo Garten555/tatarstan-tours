@@ -37,7 +37,7 @@ export async function DELETE(request: NextRequest) {
     // Получаем все бронирования пользователя
     const { data: bookings, error: bookingsError } = await serviceClient
       .from('bookings')
-      .select('id, tour_id')
+      .select('id, tour_id, session_id')
       .eq('user_id', user.id);
 
     if (bookingsError) {
@@ -56,8 +56,8 @@ export async function DELETE(request: NextRequest) {
       });
     }
 
-    const bookingIds = bookings.map(b => b.id);
-    const tourIds = [...new Set(bookings.map(b => b.tour_id))];
+    const bookingIds = bookings.map((b) => b.id);
+    const tourIds = [...new Set(bookings.map((b) => b.tour_id))];
 
     // Удаляем связанные данные
     // 1. Удаляем участников бронирований
@@ -66,19 +66,26 @@ export async function DELETE(request: NextRequest) {
       .delete()
       .in('booking_id', bookingIds);
 
-    // 2. Удаляем участников из комнат туров
-    for (const tourId of tourIds) {
-      const { data: room } = await serviceClient
-        .from('tour_rooms')
-        .select('id')
-        .eq('tour_id', tourId)
-        .single();
+    // 2. Удаляем участников из комнат туров (комната может быть привязана к слоту)
+    for (const b of bookings) {
+      const tourId = (b as { tour_id: string }).tour_id;
+      const sessionId = (b as { session_id?: string | null }).session_id ?? null;
 
-      if (room) {
+      let roomQuery = serviceClient.from('tour_rooms').select('id');
+      if (sessionId) {
+        roomQuery = roomQuery.eq('tour_session_id', sessionId);
+      } else {
+        roomQuery = roomQuery.eq('tour_id', tourId).is('tour_session_id', null);
+      }
+
+      const { data: room } = await roomQuery.maybeSingle();
+
+      const rid = (room as { id?: string } | null)?.id;
+      if (rid) {
         await serviceClient
           .from('tour_room_participants')
           .delete()
-          .eq('room_id', room.id)
+          .eq('room_id', rid)
           .eq('user_id', user.id);
       }
     }

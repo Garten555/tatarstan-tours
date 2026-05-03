@@ -14,7 +14,7 @@ import {
   ArrowLeft,
   Share2
 } from 'lucide-react';
-import { escapeHtml } from '@/lib/utils/sanitize';
+import { escapeHtml, sanitizeRichHtml } from '@/lib/utils/sanitize';
 import BlogLikeButton from '@/components/blog/BlogLikeButton';
 import BlogComments from '@/components/blog/BlogComments';
 
@@ -209,7 +209,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
             {post.content && (
               <div 
                 className="prose prose-lg max-w-none mb-8"
-                dangerouslySetInnerHTML={{ __html: post.content }}
+                dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(post.content) }}
               />
             )}
 

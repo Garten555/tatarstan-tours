@@ -3,6 +3,8 @@
 import { useState, useRef } from 'react';
 import { Upload, X, CheckCircle, AlertCircle } from 'lucide-react';
 import Image from 'next/image';
+import UploadProgressBar from '@/components/common/UploadProgressBar';
+import { uploadFormDataWithProgress } from '@/lib/http/upload-form-progress';
 
 interface FileUploaderProps {
   type: 'tour-cover' | 'tour-gallery' | 'tour-video' | 'avatar';
@@ -18,6 +20,7 @@ export default function FileUploader({
   maxSizeMB = 10,
 }: FileUploaderProps) {
   const [uploading, setUploading] = useState(false);
+  const [uploadPercent, setUploadPercent] = useState<number | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -52,6 +55,7 @@ export default function FileUploader({
 
   const uploadFile = async (file: File) => {
     setUploading(true);
+    setUploadPercent(0);
     setError(null);
 
     try {
@@ -59,21 +63,21 @@ export default function FileUploader({
       formData.append('file', file);
       formData.append('type', type);
 
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      const { ok, data } = await uploadFormDataWithProgress('/api/upload', formData, setUploadPercent);
 
-      const data = await response.json();
+      if (!ok) {
+        throw new Error((data.error as string) || 'Ошибка загрузки файла');
+      }
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Ошибка загрузки файла');
+      const url = data.url as string | undefined;
+      const path = data.path as string | undefined;
+      if (!url || !path) {
+        throw new Error('Сервер не вернул URL файла');
       }
 
       setSuccess(true);
-      onUploadComplete(data.url, data.path);
+      onUploadComplete(url, path);
 
-      // Сбрасываем success через 3 секунды
       setTimeout(() => {
         setSuccess(false);
       }, 3000);
@@ -82,6 +86,7 @@ export default function FileUploader({
       setPreview(null);
     } finally {
       setUploading(false);
+      setUploadPercent(null);
     }
   };
 
@@ -96,6 +101,13 @@ export default function FileUploader({
 
   return (
     <div className="w-full">
+      {uploading && (
+        <UploadProgressBar
+          label="Загрузка файла на сервер"
+          percent={uploadPercent}
+          className="mb-4"
+        />
+      )}
       {/* Превью загруженного изображения */}
       {preview && (
         <div className="mb-4 relative">

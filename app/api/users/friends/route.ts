@@ -229,6 +229,44 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Уведомление получателю (friend_id — кому пришёл запрос)
+      try {
+        const { data: senderProfile } = await serviceClient
+          .from('profiles')
+          .select('username, avatar_url')
+          .eq('id', user.id)
+          .single();
+
+        const senderLabel = senderProfile?.username || 'Пользователь';
+
+        const bodyText = `${senderLabel} хочет добавиться к вам в друзья`;
+        const bodyWithMeta = [
+          bodyText,
+          `sender_id:${user.id}`,
+          `sender_username:${senderProfile?.username || ''}`,
+          `sender_avatar:${senderProfile?.avatar_url || ''}`,
+        ].join('\n');
+
+        const { data: notifRow, error: notifErr } = await serviceClient
+          .from('notifications')
+          .insert({
+            user_id: friend_id,
+            title: 'Запрос в друзья',
+            body: bodyWithMeta,
+            type: 'friend_request',
+          })
+          .select('id, user_id, title, body, type, created_at')
+          .single();
+
+        if (notifErr) {
+          console.error('Ошибка уведомления о запросе в друзья:', notifErr);
+        } else if (notifRow) {
+          await publishUserNotification(friend_id, notifRow);
+        }
+      } catch (notifEx) {
+        console.error('Уведомление о запросе в друзья:', notifEx);
+      }
+
       return NextResponse.json({
         success: true,
         friendship,
@@ -285,26 +323,25 @@ export async function POST(request: NextRequest) {
 
       // Создаем уведомление для пользователя, который отправил запрос
       if (requesterProfile) {
-        const requesterName = requesterProfile.first_name && requesterProfile.last_name
-          ? `${requesterProfile.first_name} ${requesterProfile.last_name}`
-          : requesterProfile.username || 'Пользователь';
-        
         const { data: currentUserProfile } = await serviceClient
           .from('profiles')
-          .select('id, username, first_name, last_name')
+          .select('id, username, avatar_url')
           .eq('id', user.id)
           .single();
 
-        const currentUserName = currentUserProfile?.first_name && currentUserProfile?.last_name
-          ? `${currentUserProfile.first_name} ${currentUserProfile.last_name}`
-          : currentUserProfile?.username || 'Пользователь';
+        const currentUserName = currentUserProfile?.username || 'Пользователь';
+        const acceptedBody = [
+          `${currentUserName} принял(а) ваш запрос на дружбу`,
+          `sender_username:${currentUserProfile?.username || ''}`,
+          `sender_avatar:${currentUserProfile?.avatar_url || ''}`,
+        ].join('\n');
 
         const { data: friendNotif, error: notificationError } = await serviceClient
           .from('notifications')
           .insert({
             user_id: requesterId,
             title: 'Запрос на дружбу принят',
-            body: `${currentUserName} принял(а) ваш запрос на дружбу`,
+            body: acceptedBody,
             type: 'friendship',
           })
           .select('id, user_id, title, body, type, created_at')
@@ -330,6 +367,15 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      /** Уведомление отправителю: только если получатель отклонил входящую заявку (не отмена своего исходящего). */
+      const notifyRequesterOfDecline =
+        action === 'reject' &&
+        existingFriendship.status === 'pending' &&
+        existingFriendship.requested_by !== user.id;
+      const declinedRequesterId = notifyRequesterOfDecline
+        ? (existingFriendship.requested_by as string)
+        : null;
+
       const { error } = await serviceClient
         .from('user_friends')
         .delete()
@@ -341,6 +387,42 @@ export async function POST(request: NextRequest) {
           { error: 'Не удалось удалить дружбу' },
           { status: 500 }
         );
+      }
+
+      if (declinedRequesterId) {
+        try {
+          const { data: declinerProfile } = await serviceClient
+            .from('profiles')
+            .select('username, avatar_url')
+            .eq('id', user.id)
+            .single();
+
+          const declinerLabel = declinerProfile?.username || 'Пользователь';
+          const rejectedBody = [
+            `${declinerLabel} отклонил(а) ваш запрос на дружбу`,
+            `sender_username:${declinerProfile?.username || ''}`,
+            `sender_avatar:${declinerProfile?.avatar_url || ''}`,
+          ].join('\n');
+
+          const { data: declineNotif, error: declineNotifErr } = await serviceClient
+            .from('notifications')
+            .insert({
+              user_id: declinedRequesterId,
+              title: 'Запрос отклонён',
+              body: rejectedBody,
+              type: 'friendship',
+            })
+            .select('id, user_id, title, body, type, created_at')
+            .single();
+
+          if (declineNotifErr) {
+            console.error('Уведомление об отклонении запроса:', declineNotifErr);
+          } else if (declineNotif) {
+            await publishUserNotification(declinedRequesterId, declineNotif);
+          }
+        } catch (declEx) {
+          console.error('Уведомление об отклонении запроса:', declEx);
+        }
       }
 
       return NextResponse.json({

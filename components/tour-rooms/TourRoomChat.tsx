@@ -8,12 +8,21 @@ import Pusher from 'pusher-js';
 import { createClient } from '@/lib/supabase/client';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import toast from 'react-hot-toast';
+import { playNotificationSound } from '@/lib/sound/notifications';
+import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
+import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
+import { insertEmojiAtCursor } from '@/lib/chat/insert-emoji-at-cursor';
+import ReportReasonModal from '@/components/common/ReportReasonModal';
 
 interface TourRoomChatProps {
   roomId: string;
+  /** default — карточка; embedded — тёмная панель; messenger — экран как в WhatsApp/Telegram */
+  variant?: 'default' | 'embedded' | 'messenger';
 }
 
-export function TourRoomChat({ roomId }: TourRoomChatProps) {
+export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps) {
+  const embedded = variant === 'embedded';
+  const messenger = variant === 'messenger';
   const [messages, setMessages] = useState<TourRoomMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -22,14 +31,16 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedImage, setSelectedImage] = useState<{ file: File; preview: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messageTextareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<any>(null);
   const supabase = createClient();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [isUserNearBottom, setIsUserNearBottom] = useState(true);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const nearBottomRef = useRef(true);
+  const autoScrollNextRef = useRef(true);
+  const [reportMessageId, setReportMessageId] = useState<string | null>(null);
+  const [reportSending, setReportSending] = useState(false);
 
   // Получаем текущего пользователя
   useEffect(() => {
@@ -92,10 +103,13 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
       setMessages((prev) => {
         const exists = prev.some((msg) => msg.id === data.message.id);
         if (exists) return prev;
-        // Добавляем новое сообщение в конец массива (внизу списка)
-        const newMessages = [...prev, data.message];
-        // НЕ прокручиваем автоматически - пользователь сам решит, нужно ли прокручивать
-        return newMessages;
+        if (data.message.user_id !== currentUserId) {
+          playNotificationSound('message');
+        }
+        if (nearBottomRef.current || data.message.user_id === currentUserId) {
+          autoScrollNextRef.current = true;
+        }
+        return [...prev, data.message];
       });
     });
 
@@ -106,88 +120,49 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
 
     // Очистка при размонтировании
     return () => {
-      // Очистка канала
-      if (channelRef.current) {
-        try {
-          channelRef.current.unbind_all();
-          channelRef.current.unsubscribe();
-        } catch (error) {
-          // Игнорируем ошибки, если канал уже закрыт
-        }
-        channelRef.current = null;
-      }
-      
-      // Очистка Pusher
-      if (pusherRef.current) {
-        try {
-          // Проверяем состояние соединения перед отключением
-          const state = pusherRef.current.connection?.state;
-          if (state && state !== 'disconnected' && state !== 'disconnecting') {
-            pusherRef.current.disconnect();
-          }
-        } catch (error) {
-          // Игнорируем ошибки, если соединение уже закрыто
-        }
-        pusherRef.current = null;
-      }
+      disconnectPusherSafely(pusherRef.current, [channelRef.current]);
+      channelRef.current = null;
+      pusherRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId, supabase]);
 
-  // Проверяем, находится ли пользователь внизу чата
   useEffect(() => {
     const container = messagesContainerRef.current;
     if (!container) return;
-
-    const checkIfNearBottom = () => {
-      const { scrollTop, scrollHeight, clientHeight } = container;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
-      setIsUserNearBottom(distanceFromBottom < 100); // 100px от низа считается "внизу"
+    const onScroll = () => {
+      const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
+      nearBottomRef.current = distance <= 120;
     };
-
-    container.addEventListener('scroll', checkIfNearBottom);
-    checkIfNearBottom(); // Проверяем при монтировании
-
-    return () => {
-      container.removeEventListener('scroll', checkIfNearBottom);
-    };
+    onScroll();
+    container.addEventListener('scroll', onScroll);
+    return () => container.removeEventListener('scroll', onScroll);
   }, []);
 
-  // Убеждаемся, что при загрузке страницы мы остаемся сверху
   useEffect(() => {
-    // При первой загрузке принудительно остаемся сверху
-    if (isInitialLoad && !loading && messages.length > 0) {
-      setIsInitialLoad(false);
-      // Принудительно устанавливаем скролл наверх
-      setTimeout(() => {
+    if (!messages.length) return;
+    if (autoScrollNextRef.current || nearBottomRef.current) {
+      autoScrollNextRef.current = false;
+      requestAnimationFrame(() => {
         const container = messagesContainerRef.current;
-        if (container) {
-          container.scrollTop = 0;
-        }
-      }, 0);
-      return;
+        if (!container) return;
+        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+      });
     }
-  }, [messages, loading, isInitialLoad]);
+  }, [messages]);
 
   const loadMessages = async () => {
     try {
       setLoading(true);
-      setIsInitialLoad(true); // Помечаем как начальную загрузку
+      autoScrollNextRef.current = true;
       const response = await fetch(`/api/tour-rooms/${roomId}/messages?limit=100`);
       const data = await response.json();
       
       if (data.success) {
-        // Переворачиваем массив, чтобы старые сообщения были сверху, новые внизу
-        const messagesArray = data.messages || [];
-        const reversedMessages = [...messagesArray].reverse();
-        setMessages(reversedMessages);
-        // Принудительно устанавливаем скролл наверх после загрузки
-        setTimeout(() => {
-          const container = messagesContainerRef.current;
-          if (container) {
-            container.scrollTop = 0;
-          }
-        }, 0);
+        setMessages(data.messages || []);
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('notifications:update'));
+        }
       }
     } catch (error) {
       console.error('Ошибка загрузки сообщений:', error);
@@ -296,6 +271,7 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
           setSelectedImage({ file: selectedImage.file, preview: selectedImage.preview });
         }
       }
+      playNotificationSound('message');
     } catch (error) {
       console.error('Ошибка отправки сообщения:', error);
       toast.error('Ошибка отправки сообщения');
@@ -357,9 +333,11 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
     }
   };
 
-  const reportMessage = async (messageId: string) => {
+  const submitMessageReport = async (reason: string) => {
+    if (!reportMessageId) return;
+    const messageId = reportMessageId;
     try {
-      const reason = prompt('Причина жалобы (необязательно):') || '';
+      setReportSending(true);
       const response = await fetch(`/api/tour-rooms/${roomId}/messages/${messageId}/report`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -370,14 +348,12 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
         throw new Error(data.error || 'Не удалось отправить жалобу');
       }
       toast.success('Жалоба отправлена');
-    } catch (error: any) {
-      toast.error(error.message || 'Не удалось отправить жалобу');
+      setReportMessageId(null);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Не удалось отправить жалобу');
+    } finally {
+      setReportSending(false);
     }
-  };
-
-  const scrollToBottom = () => {
-    // Функция для ручной прокрутки вниз (только по запросу пользователя)
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   const formatTime = (dateString: string) => {
@@ -409,52 +385,104 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
   };
 
   return (
-    <div className="flex flex-col h-full bg-white rounded-xl shadow-lg overflow-hidden">
-      {/* Шапка чата с индикатором подключения */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
-            <Send className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h3 className="text-white font-semibold text-lg">Чат тура</h3>
-            <div className="flex items-center gap-2">
-              {connected ? (
-                <>
-                  <Wifi className="w-3 h-3 text-emerald-200" />
-                  <span className="text-xs text-emerald-100">Подключено</span>
-                </>
-              ) : (
-                <>
-                  <WifiOff className="w-3 h-3 text-yellow-200" />
-                  <span className="text-xs text-yellow-100">Подключение...</span>
-                </>
-              )}
+    <div
+      className={`flex min-h-0 flex-col overflow-hidden ${
+        messenger
+          ? 'h-full min-h-0 flex-1 bg-transparent'
+          : embedded
+            ? 'h-full min-h-0 bg-transparent'
+            : 'h-full min-h-0 rounded-xl bg-white shadow-lg'
+      }`}
+    >
+      {!messenger && (
+        <div
+          className={`flex items-center justify-between px-4 py-3 sm:px-5 ${
+            embedded
+              ? 'border-b border-white/10 bg-gradient-to-r from-emerald-950/80 via-[#0a1412] to-teal-950/70'
+              : 'bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-4'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div
+              className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                embedded ? 'bg-emerald-500/25 ring-1 ring-emerald-400/30' : 'bg-white/20'
+              }`}
+            >
+              <Send className={`h-5 w-5 ${embedded ? 'text-emerald-200' : 'text-white'}`} />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-white">Чат тура</h3>
+              <div className="flex items-center gap-2">
+                {connected ? (
+                  <>
+                    <Wifi className={`h-3 w-3 ${embedded ? 'text-emerald-400' : 'text-emerald-200'}`} />
+                    <span className={`text-xs ${embedded ? 'text-emerald-200/90' : 'text-emerald-100'}`}>
+                      Онлайн
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className={`h-3 w-3 ${embedded ? 'text-amber-400' : 'text-yellow-200'}`} />
+                    <span className={`text-xs ${embedded ? 'text-amber-100/90' : 'text-yellow-100'}`}>
+                      Подключение…
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Область сообщений */}
-      <div 
+      <div
         ref={messagesContainerRef}
-        className="flex-1 overflow-y-auto chat-scroll bg-gradient-to-b from-gray-50 to-white p-6 space-y-4"
+        className={`chat-scroll min-h-0 flex-1 space-y-3 overflow-y-auto ${
+          messenger
+            ? 'px-3 py-3 sm:px-5'
+            : embedded
+              ? 'bg-[linear-gradient(180deg,#060908_0%,#0a100e_50%,#060908_100%)] p-4 sm:p-5'
+              : 'bg-gradient-to-b from-gray-50 to-white p-4 sm:p-6'
+        }`}
+        style={
+          messenger
+            ? {
+                backgroundColor: '#e9edef',
+                backgroundImage:
+                  'radial-gradient(circle at 1px 1px, rgba(15,23,42,0.075) 1px, transparent 0)',
+                backgroundSize: '18px 18px',
+              }
+            : undefined
+        }
       >
         {loading ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex h-full items-center justify-center">
             <div className="text-center">
-              <Loader2 className="w-8 h-8 animate-spin text-emerald-600 mx-auto mb-2" />
-              <p className="text-gray-500 text-sm">Загрузка сообщений...</p>
+              <Loader2
+                className={`mx-auto mb-2 h-8 w-8 animate-spin ${embedded ? 'text-emerald-400' : messenger ? 'text-emerald-600' : 'text-emerald-600'}`}
+              />
+              <p className={`text-sm ${embedded ? 'text-stone-500' : 'text-gray-500'}`}>
+                Загрузка сообщений...
+              </p>
             </div>
           </div>
         ) : messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
+          <div className="flex h-full items-center justify-center">
             <div className="text-center">
-              <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-4">
-                <Send className="w-8 h-8 text-emerald-600" />
+              <div
+                className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center ${
+                  embedded
+                    ? 'rounded-2xl bg-emerald-500/15 ring-1 ring-emerald-500/30'
+                    : 'rounded-full bg-white shadow-sm ring-1 ring-gray-200'
+                }`}
+              >
+                <Send className={`h-8 w-8 ${embedded ? 'text-emerald-400' : 'text-emerald-600'}`} />
               </div>
-              <h4 className="text-gray-900 font-semibold mb-1">Пока нет сообщений</h4>
-              <p className="text-gray-500 text-sm">Начните общение первым!</p>
+              <h4 className={`mb-1 font-semibold ${embedded ? 'text-stone-100' : 'text-gray-800'}`}>
+                Пока нет сообщений
+              </h4>
+              <p className={`text-sm ${embedded ? 'text-stone-500' : 'text-gray-600'}`}>
+                Напишите первое сообщение группе
+              </p>
             </div>
           </div>
         ) : (
@@ -467,7 +495,7 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
             return (
               <div
                 key={message.id}
-                className={`flex gap-3 group ${isMine ? 'flex-row-reverse' : ''}`}
+                className={`group flex gap-2 sm:gap-3 ${isMine ? 'flex-row-reverse' : ''}`}
               >
                 {/* Аватар (только для чужих сообщений и если нужно показать) */}
                 {!isMine && showAvatar ? (
@@ -476,10 +504,16 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
                       <img
                         src={message.user.avatar_url}
                         alt={getUserName(message)}
-                        className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-md"
+                        className={`h-10 w-10 rounded-full border-2 object-cover shadow-md ${
+                          messenger ? 'border-gray-200' : embedded ? 'border-white/15' : 'border-white'
+                        }`}
                       />
                     ) : (
-                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-semibold text-sm shadow-md border-2 border-white">
+                      <div
+                        className={`flex h-10 w-10 items-center justify-center rounded-full border-2 bg-gradient-to-br from-emerald-500 to-teal-600 text-sm font-semibold text-white shadow-md ${
+                          messenger ? 'border-gray-200' : embedded ? 'border-emerald-400/30' : 'border-white'
+                        }`}
+                      >
                         {getUserInitials(message)}
                       </div>
                     )}
@@ -489,17 +523,27 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
                 ) : null}
 
                 {/* Сообщение */}
-                <div className={`flex flex-col max-w-[70%] ${isMine ? 'items-end' : 'items-start'}`}>
+                <div className={`flex max-w-[85%] flex-col sm:max-w-[78%] ${isMine ? 'items-end' : 'items-start'}`}>
                   {!isMine && showAvatar && (
-                    <span className="text-xs text-gray-600 mb-1 px-2 font-medium">
+                    <span
+                      className={`mb-0.5 px-1 text-xs font-medium ${embedded ? 'text-stone-400' : 'text-gray-600'}`}
+                    >
                       {escapeHtml(getUserName(message))}
                     </span>
                   )}
                   <div
-                    className={`relative px-4 py-3 rounded-2xl shadow-sm ${
-                      isMine
-                        ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-br-md'
-                        : 'bg-white text-gray-900 rounded-bl-md border border-gray-100'
+                    className={`relative px-3 py-2 shadow-sm sm:px-3.5 sm:py-2.5 ${
+                      messenger
+                        ? isMine
+                          ? 'rounded-lg rounded-br-sm bg-[#d9fdd3] text-gray-900'
+                          : 'rounded-lg rounded-bl-sm border border-gray-200/80 bg-white text-gray-900'
+                        : isMine
+                          ? embedded
+                            ? 'rounded-2xl rounded-br-md bg-gradient-to-br from-emerald-600 to-teal-700 text-white ring-1 ring-white/10'
+                            : 'rounded-2xl rounded-br-md bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
+                          : embedded
+                            ? 'rounded-2xl rounded-bl-md border border-white/10 bg-white/[0.07] text-stone-100 ring-1 ring-white/5'
+                            : 'rounded-2xl rounded-bl-md border border-gray-100 bg-white text-gray-900'
                     }`}
                   >
                     {/* Изображение */}
@@ -516,7 +560,17 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
                     
                     {/* Текст сообщения */}
                     {message.message && (
-                      <p className={`whitespace-pre-wrap break-words ${isMine ? 'text-white' : 'text-gray-800'}`}>
+                      <p
+                        className={`whitespace-pre-wrap break-words text-[15px] leading-snug ${
+                          messenger
+                            ? 'text-gray-900'
+                            : isMine
+                              ? 'text-white'
+                              : embedded
+                                ? 'text-stone-100'
+                                : 'text-gray-800'
+                        }`}
+                      >
                         {message.message.split('\n').map((line, i, arr) => (
                           <span key={i}>
                             {escapeHtml(line)}
@@ -538,17 +592,25 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
                     )}
                     {!isMine && (
                       <button
-                        onClick={() => reportMessage(message.id)}
-                        className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-full p-1.5 shadow-lg"
+                        onClick={() => setReportMessageId(message.id)}
+                        className={`absolute -right-2 -top-2 rounded-full p-1.5 opacity-0 shadow-lg transition-opacity group-hover:opacity-100 ${
+                          messenger
+                            ? 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                            : embedded
+                              ? 'bg-white/10 text-stone-300 hover:bg-white/20'
+                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
                         title="Пожаловаться"
                       >
-                        <Flag className="w-3 h-3" />
+                        <Flag className="h-3 w-3" />
                       </button>
                     )}
                   </div>
                   
                   {showTime && (
-                    <span className={`text-xs text-gray-400 mt-1 px-2 ${isMine ? 'text-right' : 'text-left'}`}>
+                    <span
+                      className={`mt-0.5 px-1 text-[11px] ${messenger ? 'text-gray-500' : embedded ? 'text-stone-600' : 'text-gray-400'} ${isMine ? 'text-right' : 'text-left'}`}
+                    >
                       {formatTime(message.created_at)}
                     </span>
                   )}
@@ -559,8 +621,15 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
         )}
       </div>
 
-      {/* Форма отправки - закреплена внизу */}
-      <div className="border-t border-gray-200 bg-white p-4">
+      <div
+        className={`shrink-0 border-t p-2 sm:p-3 ${
+          messenger
+            ? 'border-gray-300/80 bg-[#f0f2f5]'
+            : embedded
+              ? 'border-white/10 bg-[#0c1210]/95 backdrop-blur-md'
+              : 'border-gray-200 bg-white'
+        }`}
+      >
         {/* Превью выбранного изображения */}
         {selectedImage && (
           <div className="mb-3 relative inline-block">
@@ -581,13 +650,18 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
           </div>
         )}
         
-        <div className="flex items-end gap-3">
-          {/* Кнопка загрузки фото */}
+        <div className={`flex items-end gap-2 ${messenger ? 'sm:gap-2' : 'gap-3'}`}>
           <button
             onClick={() => fileInputRef.current?.click()}
             type="button"
             disabled={sending || !connected || uploadingImage}
-            className="flex-shrink-0 w-12 h-12 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"
+            className={`flex h-11 w-11 flex-shrink-0 items-center justify-center transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+              messenger
+                ? 'rounded-full bg-white text-gray-600 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50'
+                : embedded
+                  ? 'rounded-xl bg-white/10 text-stone-200 hover:bg-white/15'
+                  : 'rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
             title="Прикрепить фото"
           >
             {uploadingImage ? (
@@ -596,6 +670,19 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
               <ImageIcon className="w-5 h-5" />
             )}
           </button>
+          <ChatEmojiPicker
+            disabled={sending || !connected || uploadingImage}
+            buttonClassName={
+              messenger
+                ? 'flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-white text-gray-600 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50'
+                : embedded
+                  ? 'flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-white/10 text-stone-200 transition-colors hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50'
+                  : 'flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-600 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50'
+            }
+            onEmojiSelect={(emoji) =>
+              insertEmojiAtCursor(emoji, newMessage, setNewMessage, messageTextareaRef)
+            }
+          />
           <input
             ref={fileInputRef}
             type="file"
@@ -604,8 +691,9 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
             className="hidden"
           />
           
-          <div className="flex-1 relative">
+          <div className="relative min-w-0 flex-1">
             <textarea
+              ref={messageTextareaRef}
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               onKeyDown={(e) => {
@@ -614,15 +702,21 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
                   sendMessage();
                 }
               }}
-              placeholder={connected ? "Напишите сообщение..." : "Подключение к чату..."}
+              placeholder={connected ? 'Сообщение' : 'Подключение…'}
               rows={1}
-              className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent resize-none bg-gray-50 text-gray-900 placeholder-gray-400"
+              className={`w-full resize-none border px-4 py-2.5 pr-10 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-emerald-500/40 ${
+                messenger
+                  ? 'rounded-3xl border-gray-200 bg-white text-[15px] text-gray-900 shadow-sm placeholder:text-gray-400'
+                  : embedded
+                    ? 'rounded-xl border-white/15 bg-white/[0.06] text-stone-100 placeholder:text-stone-500'
+                    : 'rounded-xl border-gray-300 bg-gray-50 text-gray-900 placeholder-gray-400'
+              }`}
               disabled={sending || !connected || uploadingImage}
-              style={{ minHeight: '48px', maxHeight: '120px' }}
+              style={{ minHeight: '44px', maxHeight: '120px' }}
             />
             {!connected && (
               <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                <Loader2 className="w-4 h-4 animate-spin text-gray-400" />
+                <Loader2 className={`h-4 w-4 animate-spin ${embedded ? 'text-stone-500' : 'text-gray-400'}`} />
               </div>
             )}
           </div>
@@ -630,23 +724,44 @@ export function TourRoomChat({ roomId }: TourRoomChatProps) {
             onClick={sendMessage}
             type="button"
             disabled={(!newMessage.trim() && !selectedImage) || sending || !connected || uploadingImage}
-            className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-emerald-500 to-emerald-600 text-white rounded-xl hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:transform-none"
-            title="Отправить сообщение"
+            className={`flex h-11 w-11 flex-shrink-0 items-center justify-center text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+              messenger
+                ? 'rounded-full bg-emerald-600 shadow-sm hover:bg-emerald-700'
+                : 'rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 shadow-lg hover:from-emerald-600 hover:to-emerald-700 hover:shadow-xl hover:scale-105 disabled:transform-none'
+            }`}
+            title="Отправить"
           >
             {sending || uploadingImage ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-5 h-5 animate-spin text-white" />
             ) : (
-              <Send className="w-5 h-5" />
+              <Send className="w-5 h-5 text-white" strokeWidth={2} />
             )}
           </button>
         </div>
-        {!connected && (
-          <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
-            <WifiOff className="w-3 h-3" />
-            Ожидание подключения к серверу...
-          </p>
-        )}
+        <div
+          className={`mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] ${
+            messenger ? 'text-gray-500' : embedded ? 'text-amber-200/80' : 'text-amber-600'
+          }`}
+        >
+          {!connected && (
+            <span className="inline-flex items-center gap-1">
+              <WifiOff className="h-3 w-3" />
+              Ожидание подключения…
+            </span>
+          )}
+        </div>
       </div>
+
+      <ReportReasonModal
+        open={reportMessageId !== null}
+        title="Жалоба на сообщение"
+        subtitle="Расскажите, что не так (необязательно). Модераторы увидят жалобу вместе с сообщением."
+        busy={reportSending}
+        onCancel={() => {
+          if (!reportSending) setReportMessageId(null);
+        }}
+        onSubmit={(reason) => void submitMessageReport(reason)}
+      />
     </div>
   );
 }

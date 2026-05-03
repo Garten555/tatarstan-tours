@@ -33,7 +33,6 @@ export default async function AwardAchievementsPage() {
     redirect('/');
   }
 
-  // Загружаем комнаты где пользователь является гидом
   const { data: roomsData } = await serviceClient
     .from('tour_rooms')
     .select(`
@@ -46,13 +45,14 @@ export default async function AwardAchievementsPage() {
         title,
         start_date,
         end_date,
+        cover_image,
         city:cities(name)
-      )
+      ),
+      participants:tour_room_participants(count)
     `)
     .eq('guide_id', user.id)
     .order('created_at', { ascending: false });
 
-  // Преобразуем данные для соответствия типу Room
   interface RoomData {
     id: unknown;
     tour_id: unknown;
@@ -63,27 +63,47 @@ export default async function AwardAchievementsPage() {
       title: unknown;
       start_date: unknown;
       end_date: unknown;
+      cover_image?: unknown;
       city?: { name: unknown } | { name: unknown }[] | null;
     } | {
       id: unknown;
       title: unknown;
       start_date: unknown;
       end_date: unknown;
+      cover_image?: unknown;
       city?: { name: unknown } | { name: unknown }[] | null;
     }[] | null;
+    participants?: { count?: unknown }[] | null;
   }
+
+  const participantCountFromEmbed = (raw: RoomData['participants']): number => {
+    if (!Array.isArray(raw) || raw.length === 0) return 0;
+    const n = raw[0]?.count;
+    if (typeof n === 'number' && !Number.isNaN(n)) return n;
+    if (typeof n === 'string') {
+      const parsed = parseInt(n, 10);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  };
+
   const rooms = (roomsData || [])
     .map((room: RoomData) => {
-      const tour = Array.isArray(room.tour) && room.tour.length > 0 
-        ? room.tour[0] 
-        : (room.tour && !Array.isArray(room.tour) ? room.tour : null);
-      
+      const tour =
+        Array.isArray(room.tour) && room.tour.length > 0
+          ? room.tour[0]
+          : room.tour && !Array.isArray(room.tour)
+            ? room.tour
+            : null;
+
       if (!tour) return null;
-      
-      const city = tour.city 
-        ? (Array.isArray(tour.city) && tour.city.length > 0 
-            ? { name: String(tour.city[0].name) }
-            : (!Array.isArray(tour.city) ? { name: String(tour.city.name) } : undefined))
+
+      const city = tour.city
+        ? Array.isArray(tour.city) && tour.city.length > 0
+          ? { name: String(tour.city[0].name) }
+          : !Array.isArray(tour.city)
+            ? { name: String(tour.city.name) }
+            : undefined
         : undefined;
 
       return {
@@ -91,11 +111,13 @@ export default async function AwardAchievementsPage() {
         tour_id: String(room.tour_id),
         is_active: Boolean(room.is_active),
         created_at: String(room.created_at),
+        participants_count: participantCountFromEmbed(room.participants),
         tour: {
           id: String(tour.id),
           title: String(tour.title),
           start_date: String(tour.start_date),
           end_date: tour.end_date ? String(tour.end_date) : null,
+          cover_image: tour.cover_image ? String(tour.cover_image) : null,
           city,
         },
       };

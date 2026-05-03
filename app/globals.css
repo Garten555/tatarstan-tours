@@ -38,6 +38,21 @@ body {
   }
 }
 
+/* Индикатор упаковки ZIP в галерее комнаты тура */
+@keyframes gallery-zip-shuttle {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(280%);
+  }
+}
+
+.animate-gallery-zip-shuttle {
+  width: 38%;
+  animation: gallery-zip-shuttle 1.15s ease-in-out infinite alternate;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -724,20 +739,20 @@ html {
 }
 
 .header-user-dropdown-item-emerald {
-  color: #059669 !important; /* Зеленый цвет для emerald элементов */
+  color: #1f2937 !important; /* Текст как у остальных пунктов; акцент — только иконка */
 }
 
 .header-user-dropdown-item-emerald:hover {
-  background: linear-gradient(135deg, rgba(5, 150, 105, 0.1) 0%, rgba(5, 150, 105, 0.15) 100%);
+  background: linear-gradient(135deg, rgba(5, 150, 105, 0.06) 0%, rgba(5, 150, 105, 0.1) 100%);
 }
 
 .header-user-dropdown-item-admin {
-  color: #059669 !important; /* Зеленый цвет для админ элементов */
+  color: #1f2937 !important;
   font-weight: 600;
 }
 
 .header-user-dropdown-item-admin:hover {
-  background: linear-gradient(135deg, rgba(5, 150, 105, 0.1) 0%, rgba(5, 150, 105, 0.15) 100%);
+  background: linear-gradient(135deg, rgba(5, 150, 105, 0.06) 0%, rgba(5, 150, 105, 0.1) 100%);
 }
 
 .header-user-dropdown-item-danger {
@@ -765,12 +780,14 @@ html {
 }
 
 .header-user-dropdown-icon-wrapper-emerald {
-  background: rgba(5, 150, 105, 0.1);
+  background: #f1f5f9;
+  border: 1px solid rgba(226, 232, 240, 0.95);
 }
 
 .header-user-dropdown-item-emerald:hover .header-user-dropdown-icon-wrapper-emerald,
 .header-user-dropdown-item-admin:hover .header-user-dropdown-icon-wrapper-emerald {
-  background: rgba(5, 150, 105, 0.2);
+  background: #ecfdf5;
+  border-color: rgba(16, 185, 129, 0.35);
   transform: scale(1.05);
 }
 
@@ -1062,6 +1079,13 @@ html {
   min-height: calc(100vh - 4.5rem);
 }
 
+/* Полноэкранная комната тура: без отступов под fixed-панель */
+.main-tour-room-shell {
+  margin: 0;
+  padding: 0;
+  min-height: 0;
+}
+
 @media (min-width: 1024px) {
   .main-with-sidebar {
     margin-top: 0;
@@ -1300,8 +1324,8 @@ button[class*="bg-emerald"][class*="text-white"] {
   color: inherit !important;
 }
 
-/* Улучшение видимости кнопок */
-button:not(.bg-emerald-600):not(.bg-blue-600):not(.bg-red-500):not(.bg-gray-300) {
+/* Улучшение видимости кнопок (исключаем зелёные CTA: bg-emerald-500 и т.д.) */
+button:not(.bg-emerald-500):not(.bg-emerald-600):not(.bg-emerald-700):not(.bg-blue-600):not(.bg-red-500):not(.bg-gray-300) {
   color: rgb(17 24 39) !important;
 }
 

@@ -76,10 +76,6 @@ export async function DELETE(
     // Удаляем файл из S3
     try {
       await deleteFileFromS3(media.media_path);
-      // Если есть превью - удаляем и его
-      if (media.media_path.includes('/videos/')) {
-        // TODO: Удаление превью если есть
-      }
     } catch (s3Error) {
       console.error('Ошибка удаления файла из S3:', s3Error);
       // Продолжаем удаление из БД даже если S3 ошибка

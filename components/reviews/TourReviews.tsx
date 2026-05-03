@@ -3,8 +3,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { Star } from 'lucide-react';
+import toast from 'react-hot-toast';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
 import ReviewReactions from '@/components/reviews/ReviewReactions';
+import ReportReasonModal from '@/components/common/ReportReasonModal';
+
+type ReportTarget =
+  | null
+  | { kind: 'review'; reviewId: string }
+  | { kind: 'comment'; commentId: string };
 
 type ReviewMedia = {
   media_type: 'image' | 'video';
@@ -41,6 +48,49 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
   const [localComments, setLocalComments] = useState<
     Record<string, { id: string; message: string; user_name: string; user_avatar: string | null; created_at: string }[]>
   >({});
+  const [reportTarget, setReportTarget] = useState<ReportTarget>(null);
+  const [reportBusy, setReportBusy] = useState(false);
+
+  const submitReviewReport = async (reason: string) => {
+    if (!reportTarget) return;
+    setReportBusy(true);
+    try {
+      if (reportTarget.kind === 'review') {
+        const response = await fetch(`/api/reviews/${reportTarget.reviewId}/report`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason }),
+        });
+        const data = await response.json();
+        if (response.status === 401) {
+          toast.error('Нужна авторизация, чтобы пожаловаться.');
+          return;
+        }
+        if (!response.ok) throw new Error(data.error || 'Не удалось отправить жалобу');
+        toast.success('Жалоба отправлена');
+        setReportTarget(null);
+        return;
+      }
+
+      const response = await fetch(`/api/reviews/comments/${reportTarget.commentId}/report`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      });
+      const data = await response.json();
+      if (response.status === 401) {
+        toast.error('Нужна авторизация, чтобы пожаловаться.');
+        return;
+      }
+      if (!response.ok) throw new Error(data.error || 'Не удалось отправить жалобу');
+      toast.success('Жалоба отправлена');
+      setReportTarget(null);
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : 'Не удалось отправить жалобу');
+    } finally {
+      setReportBusy(false);
+    }
+  };
 
   const openViewer = (images: string[], index: number) => {
     setViewerImages(images);
@@ -163,27 +213,7 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
                 <div className="mt-4">
                   <button
                     type="button"
-                    onClick={async () => {
-                      const reason = prompt('Причина жалобы (необязательно):') || '';
-                      try {
-                        const response = await fetch(`/api/reviews/${review.id}/report`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ reason }),
-                        });
-                        const data = await response.json();
-                        if (response.status === 401) {
-                          alert('Нужна авторизация, чтобы пожаловаться.');
-                          return;
-                        }
-                        if (!response.ok) {
-                          throw new Error(data.error || 'Не удалось отправить жалобу');
-                        }
-                        alert('Жалоба отправлена');
-                      } catch (error: any) {
-                        alert(error.message || 'Не удалось отправить жалобу');
-                      }
-                    }}
+                    onClick={() => setReportTarget({ kind: 'review', reviewId: review.id })}
                     className="text-sm text-gray-500 hover:text-rose-600 font-semibold transition-colors"
                   >
                     Пожаловаться на отзыв
@@ -247,27 +277,7 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
                             </div>
                             <button
                               type="button"
-                              onClick={async () => {
-                                const reason = prompt('Причина жалобы (необязательно):') || '';
-                                try {
-                                  const response = await fetch(`/api/reviews/comments/${comment.id}/report`, {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ reason }),
-                                  });
-                                  const data = await response.json();
-                                  if (response.status === 401) {
-                                    alert('Нужна авторизация, чтобы пожаловаться.');
-                                    return;
-                                  }
-                                  if (!response.ok) {
-                                    throw new Error(data.error || 'Не удалось отправить жалобу');
-                                  }
-                                  alert('Жалоба отправлена');
-                                } catch (error: any) {
-                                  alert(error.message || 'Не удалось отправить жалобу');
-                                }
-                              }}
+                              onClick={() => setReportTarget({ kind: 'comment', commentId: comment.id })}
                               className="mt-2 text-sm text-gray-500 hover:text-rose-600 font-semibold transition-colors"
                             >
                               Пожаловаться
@@ -381,6 +391,16 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
         images={viewerImages}
         initialIndex={viewerIndex}
         onClose={() => setViewerOpen(false)}
+      />
+
+      <ReportReasonModal
+        open={reportTarget !== null}
+        title={reportTarget?.kind === 'comment' ? 'Жалоба на комментарий' : 'Жалоба на отзыв'}
+        busy={reportBusy}
+        onCancel={() => {
+          if (!reportBusy) setReportTarget(null);
+        }}
+        onSubmit={(reason) => void submitReviewReport(reason)}
       />
     </div>
   );

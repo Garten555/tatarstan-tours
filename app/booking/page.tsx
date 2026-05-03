@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import type { TourSessionRow } from '@/lib/types/tour-session';
 import BookingForm from '@/components/booking/BookingForm';
 
 export const metadata = {
@@ -8,11 +9,11 @@ export const metadata = {
 };
 
 interface BookingPageProps {
-  searchParams: Promise<{ tour?: string }>;
+  searchParams: Promise<{ tour?: string; session?: string }>;
 }
 
 export default async function BookingPage({ searchParams }: BookingPageProps) {
-  const { tour: tourId } = await searchParams;
+  const { tour: tourId, session: sessionIdFromQuery } = await searchParams;
   const supabase = await createClient();
   const serviceClient = await createServiceClient();
 
@@ -22,9 +23,12 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    const bookingPath = tourId
-      ? `/booking?tour=${encodeURIComponent(tourId)}`
-      : '/booking';
+    const bookingPath =
+      tourId && sessionIdFromQuery
+        ? `/booking?tour=${encodeURIComponent(tourId)}&session=${encodeURIComponent(sessionIdFromQuery)}`
+        : tourId
+          ? `/booking?tour=${encodeURIComponent(tourId)}`
+          : '/booking';
     redirect(`/auth?redirect=${encodeURIComponent(bookingPath)}`);
   }
 
@@ -47,19 +51,57 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
     redirect('/tours');
   }
 
-  // Проверяем даты тура
   const now = new Date();
-  const startDate = new Date((tour as any).start_date);
-  const endDate = (tour as any).end_date ? new Date((tour as any).end_date) : null;
 
-  // Тур закончился - редирект
-  if (endDate && endDate <= now) {
-    redirect(`/tours/${(tour as any).slug}?error=expired`);
-  }
+  let sessionRow: TourSessionRow | null = null;
 
-  const availableSpots = (tour as any).max_participants - ((tour as any).current_participants || 0);
-  if (availableSpots <= 0) {
-    redirect(`/tours/${(tour as any).slug}?error=full`);
+  const sessionProbe = await serviceClient
+    .from('tour_sessions')
+    .select('id')
+    .eq('tour_id', tourId)
+    .limit(1);
+  const tourHasSessions =
+    !sessionProbe.error &&
+    Array.isArray(sessionProbe.data) &&
+    sessionProbe.data.length > 0;
+
+  if (tourHasSessions) {
+    if (!sessionIdFromQuery) {
+      redirect(`/tours/${(tour as any).slug}?error=pick_session`);
+    }
+    const { data: srow, error: sErr } = await serviceClient
+      .from('tour_sessions')
+      .select('id, start_at, end_at, max_participants, current_participants, status')
+      .eq('id', sessionIdFromQuery)
+      .eq('tour_id', tourId)
+      .single();
+    if (sErr || !srow || (srow as any).status !== 'active') {
+      redirect(`/tours/${(tour as any).slug}?error=session`);
+    }
+    sessionRow = srow as TourSessionRow;
+    const endS = sessionRow.end_at ? new Date(sessionRow.end_at) : null;
+    const startS = new Date(sessionRow.start_at);
+    if (endS && endS <= now) {
+      redirect(`/tours/${(tour as any).slug}?error=expired`);
+    }
+    if (!endS && startS <= now) {
+      redirect(`/tours/${(tour as any).slug}?error=expired`);
+    }
+    const spots =
+      sessionRow.max_participants - (sessionRow.current_participants ?? 0);
+    if (spots <= 0) {
+      redirect(`/tours/${(tour as any).slug}?error=full`);
+    }
+  } else {
+    const endDate = (tour as any).end_date ? new Date((tour as any).end_date) : null;
+    if (endDate && endDate <= now) {
+      redirect(`/tours/${(tour as any).slug}?error=expired`);
+    }
+    const availableSpots =
+      (tour as any).max_participants - ((tour as any).current_participants || 0);
+    if (availableSpots <= 0) {
+      redirect(`/tours/${(tour as any).slug}?error=full`);
+    }
   }
 
   // Загружаем сохраненные карты пользователя
@@ -80,8 +122,9 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
       </div>
       
       <div className="relative z-10 container mx-auto px-4">
-        <BookingForm 
-          tour={tour as any} 
+        <BookingForm
+          tour={tour as any}
+          session={sessionRow}
           user={user}
           savedCards={savedCards || []}
         />

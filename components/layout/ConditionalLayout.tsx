@@ -15,6 +15,7 @@ export default function ConditionalLayout({
   const isAdminRoute = pathname?.startsWith('/admin');
   const isMaintenanceRoute = pathname === '/maintenance';
   const isBannedRoute = pathname === '/banned';
+  const isTourRoomRoute = pathname?.startsWith('/tour-rooms');
 
   if (isAdminRoute || isMaintenanceRoute || isBannedRoute) {
     // Для админки и страницы бана только контент
@@ -25,10 +26,10 @@ export default function ConditionalLayout({
   return (
     <>
       <Header />
-      <main className="main-with-sidebar">
+      <main className={isTourRoomRoute ? 'main-tour-room-shell' : 'main-with-sidebar'}>
         {children}
       </main>
-      <Footer />
+      {!isTourRoomRoute && <Footer />}
     </>
   );
 }

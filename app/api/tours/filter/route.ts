@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
+import { dedupeTourRowsForCatalog } from '@/lib/tours/listing-dedupe';
 
 // Динамический роут (использует searchParams)
 export const dynamic = 'force-dynamic';
@@ -43,6 +44,7 @@ export async function GET(request: NextRequest) {
         tour_type,
         category,
         status,
+        city_id,
         city:cities(id, name),
         created_at
       `)
@@ -142,8 +144,8 @@ export async function GET(request: NextRequest) {
     const sortField = validSortFields.includes(sortBy) ? sortBy : 'created_at';
     query = query.order(sortField, { ascending: sortOrder === 'asc' });
 
-    // Пагинация
-    query = query.range(offset, offset + limit - 1);
+    // Без range: нужна полная выборка для склейки дубликатов одного продукта (одно название + город)
+    query = query.limit(8000);
 
     const { data: tours, error } = await query;
 
@@ -166,71 +168,17 @@ export async function GET(request: NextRequest) {
       return endDate >= currentTime;
     });
 
+    const catalogTours = dedupeTourRowsForCatalog(activeTours);
+    const total = catalogTours.length;
+    const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
+    const pageSlice = catalogTours.slice(offset, offset + limit);
+
     // Вычисляем доступные места
-    const toursWithAvailability = activeTours.map((tour: any) => ({
+    const toursWithAvailability = pageSlice.map((tour: any) => ({
       ...tour,
       available_spots: Math.max(0, tour.max_participants - (tour.current_participants || 0)),
       is_available: (tour.current_participants || 0) < tour.max_participants,
     }));
-
-    // Подсчитываем общее количество туров для пагинации
-    // Создаем запрос для подсчета без пагинации
-    let countQuery = supabase
-      .from('tours')
-      .select('id', { count: 'exact', head: true })
-      .eq('status', 'active')
-      .or(`end_date.is.null,end_date.gte.${now}`);
-
-    // Применяем те же фильтры что и к основному запросу
-    if (search) {
-      const escapedSearch = search.replace(/%/g, '\\%').replace(/_/g, '\\_');
-      const citiesPromise = supabase
-        .from('cities')
-        .select('id')
-        .ilike('name', `%${escapedSearch}%`)
-        .limit(50);
-      
-      const textToursPromise = supabase
-        .from('tours')
-        .select('id, city_id')
-        .eq('status', 'active')
-        .or(`end_date.is.null,end_date.gte.${now}`)
-        .or(`title.ilike.%${escapedSearch}%,short_desc.ilike.%${escapedSearch}%,description.ilike.%${escapedSearch}%`);
-      
-      const [citiesResult, textToursResult] = await Promise.all([citiesPromise, textToursPromise]);
-      const cityIds = citiesResult.data?.map(c => c.id) || [];
-      const textTourIds = textToursResult.data?.map(t => t.id) || [];
-      
-      let cityTourIds: string[] = [];
-      if (cityIds.length > 0) {
-        const cityToursResult = await supabase
-          .from('tours')
-          .select('id')
-          .eq('status', 'active')
-          .or(`end_date.is.null,end_date.gte.${now}`)
-          .in('city_id', cityIds);
-        cityTourIds = cityToursResult.data?.map(t => t.id) || [];
-      }
-      
-      const allTourIds = [...new Set([...textTourIds, ...cityTourIds])];
-      if (allTourIds.length > 0) {
-        countQuery = countQuery.in('id', allTourIds);
-      } else {
-        countQuery = countQuery.eq('id', '00000000-0000-0000-0000-000000000000');
-      }
-    }
-
-    if (tourType) countQuery = countQuery.eq('tour_type', tourType);
-    if (category) countQuery = countQuery.eq('category', category);
-    if (cityId) countQuery = countQuery.eq('city_id', cityId);
-    if (minPrice !== null && minPrice >= 0) countQuery = countQuery.gte('price_per_person', minPrice);
-    if (maxPrice !== null && maxPrice > 0) countQuery = countQuery.lte('price_per_person', maxPrice);
-    if (startDate) countQuery = countQuery.gte('start_date', startDate);
-    if (endDate) countQuery = countQuery.lte('end_date', endDate);
-
-    const { count } = await countQuery;
-    const total = count || 0;
-    const totalPages = Math.ceil(total / limit);
 
     return NextResponse.json({
       tours: toursWithAvailability,

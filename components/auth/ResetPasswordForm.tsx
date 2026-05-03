@@ -1,15 +1,16 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { Loader2 } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react';
+import { validateEmail, validatePassword } from '@/lib/validation/auth';
+import PasswordStrengthIndicator from './PasswordStrengthIndicator';
 
 type Step = 'email' | 'code' | 'password';
 
 export default function ResetPasswordForm() {
   const supabase = createClient();
-  const router = useRouter();
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState(['', '', '', '', '', '']); // 6 отдельных полей для кода
@@ -23,6 +24,16 @@ export default function ResetPasswordForm() {
   const [error, setError] = useState<string | null>(null);
   const [isAlreadyLoggedIn, setIsAlreadyLoggedIn] = useState<boolean | null>(true);
   const [verifiedEmail, setVerifiedEmail] = useState<string | null>(null);
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [confirmPasswordError, setConfirmPasswordError] = useState<string | null>(null);
+  const [passwordValidation, setPasswordValidation] = useState({
+    strength: 'weak' as 'weak' | 'medium' | 'strong',
+    percentage: 0,
+    valid: false,
+  });
 
   useEffect(() => {
     // Проверяем авторизацию через API (БД на сервере)
@@ -50,6 +61,31 @@ export default function ResetPasswordForm() {
 
     checkAuth();
   }, []);
+
+  useEffect(() => {
+    if (!password) {
+      setPasswordValidation({ strength: 'weak', percentage: 0, valid: false });
+      setPasswordError(null);
+      return;
+    }
+    const v = validatePassword(password);
+    setPasswordValidation({
+      strength: v.strength,
+      percentage: v.strengthPercentage,
+      valid: v.valid,
+    });
+    setPasswordError(!v.valid && v.error ? v.error : null);
+  }, [password]);
+
+  useEffect(() => {
+    if (!confirm) {
+      setConfirmPasswordError(null);
+      return;
+    }
+    setConfirmPasswordError(
+      confirm !== password ? 'Пароли не совпадают' : null
+    );
+  }, [confirm, password]);
 
   // Автоматический фокус на первое поле кода при переходе на шаг code
   useEffect(() => {
@@ -80,14 +116,21 @@ export default function ResetPasswordForm() {
   }, [code, step, verifying]);
 
   const sendResetCode = async () => {
-    if (!email.trim()) {
-      setError('Введите email');
+    const trimmed = email.trim();
+    if (!trimmed) {
+      setEmailError('Введите email');
       return;
     }
-    
+    const ev = validateEmail(trimmed);
+    if (!ev.valid) {
+      setEmailError(ev.error ?? 'Некорректный email');
+      return;
+    }
+
     setSending(true);
     setError(null);
     setMessage(null);
+    setEmailError(null);
     
     try {
       // Добавляем таймаут для запроса (30 секунд)
@@ -219,17 +262,18 @@ export default function ResetPasswordForm() {
 
   const updatePassword = async () => {
     setError(null);
-    
-    if (password.length < 6) {
-      setError('Пароль должен быть не короче 6 символов');
+
+    const pv = validatePassword(password);
+    if (!pv.valid) {
+      setPasswordError(pv.error || 'Некорректный пароль');
       return;
     }
-    
+
     if (password !== confirm) {
-      setError('Пароли не совпадают');
+      setConfirmPasswordError('Пароли не совпадают');
       return;
     }
-    
+
     if (!verifiedEmail) {
       setError('Email не подтвержден. Начните заново.');
       return;
@@ -397,19 +441,63 @@ export default function ResetPasswordForm() {
           {/* Шаг 1: Ввод email */}
           {step === 'email' && (
             <div className="space-y-4">
-              <div>
-                <label className="block text-base font-bold text-gray-900 mb-2.5">
-                  Адрес электронной почты
+              <div className="space-y-2">
+                <label
+                  htmlFor="reset-email"
+                  className="flex items-center gap-2 text-sm sm:text-base font-black text-gray-900"
+                >
+                  <Mail className="w-4 h-4 text-emerald-600" />
+                  Email <span className="text-red-500">*</span>
                 </label>
-                <input
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  type="email"
-                  className="w-full px-4 py-3.5 rounded-xl border-2 border-gray-300 bg-white shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-gray-900 placeholder:text-gray-500 text-base font-medium"
-                  placeholder="example@mail.ru"
-                  disabled={sending}
-                />
-                <p className="mt-2 text-sm text-gray-700 font-medium">
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                    <Mail className="w-5 h-5" />
+                  </div>
+                  <input
+                    id="reset-email"
+                    value={email}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setEmail(v);
+                      setError(null);
+                      if (v) {
+                        const r = validateEmail(v);
+                        setEmailError(r.valid ? null : (r.error ?? null));
+                      } else {
+                        setEmailError(null);
+                      }
+                    }}
+                    type="email"
+                    className={`w-full pl-12 pr-4 py-4 text-base sm:text-lg border-2 rounded-xl shadow-sm focus:ring-2 focus:border-transparent outline-none transition-all text-gray-900 placeholder:text-gray-400 font-medium ${
+                      emailError
+                        ? 'border-red-300 focus:ring-red-500 bg-red-50/50'
+                        : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 hover:bg-white'
+                    }`}
+                    placeholder="ivan@yandex.ru"
+                    disabled={sending}
+                  />
+                </div>
+                {emailError && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="mt-2 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
+                  >
+                    <span className="text-red-500 font-black">⚠</span>
+                    <span>{emailError}</span>
+                  </motion.div>
+                )}
+                {!emailError && email.trim() && validateEmail(email.trim()).valid && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="mt-2 bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
+                  >
+                    <span className="text-emerald-500 font-black">✓</span>
+                    <span>Email корректен</span>
+                  </motion.div>
+                )}
+                <p className="text-sm text-gray-600 font-medium">
                   Код восстановления будет отправлен на указанный email
                 </p>
               </div>
@@ -511,42 +599,119 @@ export default function ResetPasswordForm() {
                   Теперь задайте новый пароль для <span className="font-bold">{verifiedEmail}</span>
                 </p>
               </div>
-              
-              <div>
-                <label className="block text-base font-bold text-gray-900 mb-2.5">
-                  Новый пароль
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="reset-password"
+                  className="flex items-center gap-2 text-sm sm:text-base font-black text-gray-900"
+                >
+                  <Lock className="w-4 h-4 text-emerald-600" />
+                  Новый пароль <span className="text-red-500">*</span>
                 </label>
-                <input
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  type="password"
-                  className="w-full px-4 py-3.5 rounded-xl border-2 border-gray-300 bg-white shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-gray-900 placeholder:text-gray-500 text-base font-medium"
-                  placeholder="Минимум 6 символов"
-                  disabled={saving}
-                />
-                <p className="mt-2 text-sm text-gray-700 font-medium">
-                  Используйте комбинацию букв, цифр и символов
-                </p>
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <input
+                    id="reset-password"
+                    value={password}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      setError(null);
+                    }}
+                    type={showPassword ? 'text' : 'password'}
+                    className={`w-full pl-12 pr-12 py-4 text-base sm:text-lg border-2 rounded-xl shadow-sm focus:ring-2 focus:border-transparent outline-none transition-all text-gray-900 placeholder:text-gray-400 font-medium ${
+                      password && !passwordValidation.valid
+                        ? 'border-red-300 focus:ring-red-500 bg-red-50/50'
+                        : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 hover:bg-white'
+                    }`}
+                    placeholder="Введите пароль"
+                    disabled={saving}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5 sm:w-6 sm:h-6" />
+                    ) : (
+                      <Eye className="w-5 h-5 sm:w-6 sm:h-6" />
+                    )}
+                  </button>
+                </div>
+
+                {passwordError && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="mt-2 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
+                  >
+                    <span className="text-red-500 font-black">⚠</span>
+                    <span>{passwordError}</span>
+                  </motion.div>
+                )}
+
+                {!passwordError && (
+                  <PasswordStrengthIndicator
+                    strength={passwordValidation.strength}
+                    percentage={passwordValidation.percentage}
+                    show={!!password}
+                  />
+                )}
               </div>
-              
-              <div>
-                <label className="block text-base font-bold text-gray-900 mb-2.5">
-                  Подтверждение пароля
+
+              <div className="space-y-2">
+                <label
+                  htmlFor="reset-confirm-password"
+                  className="flex items-center gap-2 text-sm sm:text-base font-black text-gray-900"
+                >
+                  <Lock className="w-4 h-4 text-emerald-600" />
+                  Подтвердите пароль <span className="text-red-500">*</span>
                 </label>
-                <input
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  type="password"
-                  className="w-full px-4 py-3.5 rounded-xl border-2 border-gray-300 bg-white shadow-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-gray-900 placeholder:text-gray-500 text-base font-medium"
-                  placeholder="Повторите пароль"
-                  disabled={saving}
-                />
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                    <Lock className="w-5 h-5" />
+                  </div>
+                  <input
+                    id="reset-confirm-password"
+                    value={confirm}
+                    onChange={(e) => {
+                      setConfirm(e.target.value);
+                      setError(null);
+                    }}
+                    type={showPassword ? 'text' : 'password'}
+                    className={`w-full pl-12 pr-4 py-4 text-base sm:text-lg border-2 rounded-xl shadow-sm focus:ring-2 focus:border-transparent outline-none transition-all text-gray-900 placeholder:text-gray-400 font-medium ${
+                      confirmPasswordError
+                        ? 'border-red-300 focus:ring-red-500 bg-red-50/50'
+                        : 'border-gray-200 focus:ring-emerald-500 focus:border-emerald-500 bg-gray-50/50 hover:bg-white'
+                    }`}
+                    placeholder="Повторите пароль"
+                    disabled={saving}
+                  />
+                </div>
+                {confirmPasswordError && (
+                  <motion.div
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    className="mt-2 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm font-semibold flex items-center gap-2"
+                  >
+                    <span className="text-red-500 font-black">⚠</span>
+                    <span>{confirmPasswordError}</span>
+                  </motion.div>
+                )}
               </div>
-              
+
               <button
                 onClick={updatePassword}
-                disabled={saving}
-                className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:from-emerald-300 disabled:to-emerald-400 !text-white font-semibold py-3.5 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-xl hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                disabled={
+                  saving ||
+                  !password.trim() ||
+                  !confirm.trim() ||
+                  !passwordValidation.valid ||
+                  password !== confirm
+                }
+                className="w-full bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-700 hover:to-emerald-800 disabled:from-emerald-400 disabled:to-emerald-500 !text-white font-black text-base sm:text-lg py-4 px-6 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 shadow-xl hover:shadow-2xl hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:scale-100"
               >
                 {saving ? (
                   <>

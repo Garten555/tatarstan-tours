@@ -331,20 +331,9 @@ export default function UserGallery({ media, userId, isOwner, username, showView
                         className="w-full h-full block"
                         aria-label="Открыть видео"
                       >
-                        {video.thumbnail_url ? (
-                          <Image
-                            src={video.thumbnail_url}
-                            alt="Превью видео"
-                            fill
-                            className="object-cover group-hover:scale-105 transition-transform duration-300"
-                            sizes="(max-width: 640px) 50vw, (max-width: 768px) 33vw, 25vw"
-                            unoptimized={video.thumbnail_url?.includes('s3.twcstorage.ru')}
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-                            <Play className="w-12 h-12 text-white" />
-                          </div>
-                        )}
+                        <div className="w-full h-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                          <Play className="w-12 h-12 text-white" />
+                        </div>
                         <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/40 transition-colors">
                           <div className="w-14 h-14 rounded-full bg-white/90 flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg">
                             <Play className="w-7 h-7 text-emerald-600 ml-1" fill="currentColor" />

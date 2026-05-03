@@ -17,6 +17,9 @@ export default async function MyBlogPage() {
     .eq('id', user.id)
     .single();
 
-  const username = profile?.username || user.id;
-  redirect(`/users/${username}`);
+  if (!profile?.username?.trim()) {
+    redirect('/set-username?redirect=/my-blog');
+  }
+
+  redirect(`/users/${profile.username}`);
 }

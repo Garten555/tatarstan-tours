@@ -1,7 +1,18 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Ban, CheckCircle, Loader2, X, Shield, AlertTriangle, Clock, Calendar } from 'lucide-react';
+
+/** Фрагмент profiles после бана/разбана (ответ API) */
+export interface BanProfileUpdate {
+  id: string;
+  role: string;
+  is_banned: boolean;
+  banned_at: string | null;
+  ban_reason: string | null;
+  ban_until: string | null;
+}
 
 interface BanUserButtonProps {
   userId: string;
@@ -10,7 +21,8 @@ interface BanUserButtonProps {
   bannedAt?: string | null;
   banUntil?: string | null;
   userRole?: string;
-  onBanChange?: () => void;
+  /** Если передан — обновляем список без перезагрузки; иначе лёгкий router.refresh() */
+  onBanChange?: (profile: BanProfileUpdate) => void;
 }
 
 // Предопределенные причины бана
@@ -34,6 +46,7 @@ export default function BanUserButton({
   userRole,
   onBanChange 
 }: BanUserButtonProps) {
+  const router = useRouter();
   const [banModalOpen, setBanModalOpen] = useState(false);
   const [banReasonInput, setBanReasonInput] = useState('');
   const [selectedBanReason, setSelectedBanReason] = useState<string>('');
@@ -88,13 +101,12 @@ export default function BanUserButton({
       setBanPermanent(false);
       setBanDurationDays(0);
       setBanDurationHours(0);
-      
-      // Немедленная перезагрузка для обновления данных
-      if (onBanChange) {
-        onBanChange();
+
+      const profile = data.profile as BanProfileUpdate | undefined;
+      if (profile?.id && onBanChange) {
+        onBanChange(profile);
       } else {
-        // Если нет callback, перезагружаем напрямую
-        window.location.reload();
+        router.refresh();
       }
     } catch (error: any) {
       setBanMessage({ type: 'error', text: error.message });
@@ -125,14 +137,13 @@ export default function BanUserButton({
       }
 
       setBanMessage({ type: 'success', text: 'Пользователь успешно разбанен!' });
-      
-      if (onBanChange) {
-        onBanChange();
+
+      const profile = data.profile as BanProfileUpdate | undefined;
+      if (profile?.id && onBanChange) {
+        onBanChange(profile);
+      } else {
+        router.refresh();
       }
-      
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
     } catch (error: any) {
       setBanMessage({ type: 'error', text: error.message });
     } finally {

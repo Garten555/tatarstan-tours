@@ -38,7 +38,7 @@ import {
 import Image from 'next/image';
 import toast from 'react-hot-toast';
 import { CreateDiaryRequest, UpdateDiaryRequest, TravelDiary, DiaryMediaItem } from '@/types';
-import { escapeHtml } from '@/lib/utils/sanitize';
+import { escapeHtml, sanitizeRichHtml } from '@/lib/utils/sanitize';
 import RichTextEditor from '@/components/admin/RichTextEditor';
 
 interface DiaryEditorProps {
@@ -366,15 +366,27 @@ export function UniqueDiaryEditor({ diary, tourId, bookingId, onSave, onCancel }
     loadTourData();
   }, [tourId, bookingId, isEditMode, tourDataLoaded]);
 
-  // Автоматическое определение локации из EXIF фото
+  // Автоматическое определение локации из GPS в EXIF (JPEG и др.)
   const extractLocationFromImage = async (file: File): Promise<{ name: string; coordinates?: [number, number] } | null> => {
-    if (!autoDetectLocations) return null;
-    
+    if (!autoDetectLocations || !file.type.startsWith('image/')) return null;
+
     try {
-      // Читаем EXIF данные (упрощенная версия)
-      // В реальности нужна библиотека exif-js или similar
-      return null; // Пока заглушка
-    } catch (error) {
+      const exifr = (await import('exifr')).default;
+      const gps = await exifr.gps(file);
+      if (
+        !gps ||
+        typeof (gps as { latitude?: unknown }).latitude !== 'number' ||
+        typeof (gps as { longitude?: unknown }).longitude !== 'number'
+      ) {
+        return null;
+      }
+      const lat = (gps as { latitude: number }).latitude;
+      const lon = (gps as { longitude: number }).longitude;
+      return {
+        name: `${lat.toFixed(5)}, ${lon.toFixed(5)}`,
+        coordinates: [lat, lon],
+      };
+    } catch {
       return null;
     }
   };
@@ -1456,7 +1468,7 @@ export function UniqueDiaryEditor({ diary, tourId, bookingId, onSave, onCancel }
             <div className="prose max-w-none">
               {contentBlocks.map(block => {
                 if (block.type === 'text') {
-                  return <div key={block.id} dangerouslySetInnerHTML={{ __html: block.content }} />;
+                  return <div key={block.id} dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(block.content) }} />;
                 }
                 if (block.type === 'image' && block.url) {
                   return (

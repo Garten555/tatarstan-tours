@@ -7,6 +7,8 @@ import { User, Mail, Phone, Calendar, Shield, Upload, Loader2, CreditCard, Trash
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import UserBookings from './UserBookings';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
+import UploadProgressBar from '@/components/common/UploadProgressBar';
+import { uploadFormDataWithProgress } from '@/lib/http/upload-form-progress';
 
 interface ProfileContentProps {
   profile: any;
@@ -23,6 +25,7 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
       : profile?.avatar_url || user.user_metadata?.avatar_url
   );
   const [isUploading, setIsUploading] = useState(false);
+  const [avatarUploadPercent, setAvatarUploadPercent] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -86,6 +89,7 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
     }
 
     setIsUploading(true);
+    setAvatarUploadPercent(0);
     setUploadError(null);
     setUploadSuccess(false);
 
@@ -93,50 +97,26 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/profile/avatar', {
-        method: 'POST',
-        body: formData,
-      });
+      const { ok, data } = await uploadFormDataWithProgress('/api/profile/avatar', formData, setAvatarUploadPercent);
 
-      if (!response.ok) {
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const data = await response.json();
-          throw new Error(data.error || 'Не удалось загрузить аватар');
-        }
-        throw new Error('Не удалось загрузить аватар');
+      if (!ok) {
+        throw new Error((data.error as string) || 'Не удалось загрузить аватар');
       }
 
-      const contentType = response.headers.get('content-type');
-      let data: { url: string } | null = null;
-      if (contentType && contentType.includes('application/json')) {
-        data = await response.json();
-        // Обновляем аватар в состоянии
-        if (data && data.url) {
-          // Проверяем, что URL валидный
-          const url = data.url;
-          if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
-            setAvatarUrl(url);
-            setUploadSuccess(true);
-          } else {
-            throw new Error('Получен некорректный URL аватара');
-          }
-        }
+      const url = data.url as string | undefined;
+      if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+        setAvatarUrl(url);
+        setUploadSuccess(true);
       } else {
-        throw new Error('Неверный формат ответа');
+        throw new Error('Получен некорректный URL аватара');
       }
-      
-      // Очищаем input для возможности повторной загрузки того же файла
+
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
 
-      // Отправляем событие для обновления UserMenu
-      if (data) {
-        window.dispatchEvent(new CustomEvent('avatarUpdated', { detail: { url: data.url } }));
-      }
+      window.dispatchEvent(new CustomEvent('avatarUpdated', { detail: { url } }));
 
-      // Скрываем сообщение об успехе через 3 секунды
       setTimeout(() => {
         setUploadSuccess(false);
       }, 3000);
@@ -145,6 +125,7 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
       setUploadError(error instanceof Error ? error.message : 'Не удалось загрузить аватар');
     } finally {
       setIsUploading(false);
+      setAvatarUploadPercent(null);
     }
   };
 
@@ -581,7 +562,11 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
 
         <div className="grid md:grid-cols-2 gap-6 md:gap-8">
           {/* Аватар */}
-          <div className="md:col-span-2 flex flex-col sm:flex-row items-start sm:items-center gap-6 md:gap-8 p-6 md:p-8 bg-emerald-50/50 rounded-2xl border-2 border-emerald-100">
+          <div className="md:col-span-2 flex flex-col gap-4 p-6 md:p-8 bg-emerald-50/50 rounded-2xl border-2 border-emerald-100 sm:gap-6 md:gap-8">
+            {!isViewMode && isUploading && (
+              <UploadProgressBar label="Загрузка аватара" percent={avatarUploadPercent} />
+            )}
+            <div className="flex flex-col items-start gap-6 sm:flex-row sm:items-center md:gap-8">
             <div className="relative group">
               {avatarUrl ? (
                 <button
@@ -661,6 +646,7 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
                   <p className="text-emerald-600 text-base font-black">✓ Аватар успешно загружен!</p>
                 </div>
               )}
+            </div>
             </div>
           </div>
 

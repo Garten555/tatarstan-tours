@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Shield, Mail, Calendar, Check, X, Search, User as UserIcon, ExternalLink, BookOpen, Ban } from 'lucide-react';
 import Link from 'next/link';
 import BanUserButton from './BanUserButton';
@@ -29,6 +29,12 @@ interface UserListProps {
 export default function UserList({ users, currentUserId, currentUserRole = 'user' }: UserListProps) {
   const canChangeRoles = currentUserRole === 'super_admin';
   const canBanUsers = currentUserRole === 'super_admin' || currentUserRole === 'support_admin';
+  const [rows, setRows] = useState<User[]>(users);
+
+  useEffect(() => {
+    setRows(users);
+  }, [users]);
+
   const [loadingUserId, setLoadingUserId] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,12 +63,20 @@ export default function UserList({ users, currentUserId, currentUserRole = 'user
         throw new Error(data.error || 'Не удалось обновить роль');
       }
 
+      const updated = data.data as User | undefined;
+      if (updated?.id) {
+        setRows((prev) =>
+          prev.map((u) =>
+            u.id === updated.id ? { ...u, ...updated, role: updated.role ?? newRole } : u
+          )
+        );
+      } else {
+        setRows((prev) =>
+          prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
+        );
+      }
+
       setMessage({ type: 'success', text: 'Роль успешно обновлена!' });
-      
-      // Перезагружаем страницу через 1 секунду
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
     } catch (error: any) {
       setMessage({ type: 'error', text: error.message });
     } finally {
@@ -89,7 +103,7 @@ export default function UserList({ users, currentUserId, currentUserRole = 'user
 
   const filteredUsers = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    return users.filter((user) => {
+    return rows.filter((user) => {
       const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim().toLowerCase();
       const email = (user.email || '').toLowerCase();
       const matchesQuery =
@@ -97,7 +111,7 @@ export default function UserList({ users, currentUserId, currentUserRole = 'user
       const matchesRole = roleFilter === 'all' || user.role === roleFilter;
       return matchesQuery && matchesRole;
     });
-  }, [users, searchQuery, roleFilter]);
+  }, [rows, searchQuery, roleFilter]);
 
   const getInitials = (user: User) => {
     const first = user.first_name?.[0] || '';
@@ -270,9 +284,12 @@ export default function UserList({ users, currentUserId, currentUserRole = 'user
                               bannedAt={user.banned_at}
                               banUntil={user.ban_until}
                               userRole={user.role}
-                              onBanChange={() => {
-                                // Немедленная перезагрузка для обновления роли
-                                window.location.reload();
+                              onBanChange={(profile) => {
+                                setRows((prev) =>
+                                  prev.map((u) =>
+                                    u.id === profile.id ? { ...u, ...profile } : u
+                                  )
+                                );
                               }}
                             />
                           </div>
@@ -315,7 +332,7 @@ export default function UserList({ users, currentUserId, currentUserRole = 'user
       {/* Footer */}
       <div className="px-6 py-5 bg-gray-50 border-t-2 border-gray-200">
         <p className="text-base font-bold text-gray-700">
-          Всего пользователей: <span className="text-xl font-black text-emerald-700">{users.length}</span>
+          Всего пользователей: <span className="text-xl font-black text-emerald-700">{rows.length}</span>
         </p>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { publishAdminSync } from '@/lib/pusher/user-notification';
 
 // PUT /api/admin/users/role - изменить роль пользователя
 export async function PUT(request: NextRequest) {
@@ -74,6 +75,8 @@ export async function PUT(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    await publishAdminSync(userId, { kind: 'profile_role', role: newRole });
 
     return NextResponse.json({
       success: true,

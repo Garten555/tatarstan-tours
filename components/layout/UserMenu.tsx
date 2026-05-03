@@ -4,9 +4,14 @@ import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { User, LogOut, Settings, Calendar, Shield, Crown, MessageSquare, BookOpen, Compass, Search, Users, Home, Mail, DoorOpen } from 'lucide-react';
+import {
+  PUSHER_BRIDGE_EVENT,
+  type PusherBridgeDetail,
+} from '@/lib/pusher/user-bridge-events';
+import { User, LogOut, Settings, Calendar, Shield, Crown, MessageSquare, BookOpen, Compass, Search, Users, Home, Mail, DoorOpen, Volume2, VolumeX } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { useDialog } from '@/hooks/useDialog';
+import { isSoundEnabled, setSoundEnabled } from '@/lib/sound/notifications';
 
 export default function UserMenu() {
   const router = useRouter();
@@ -18,8 +23,11 @@ export default function UserMenu() {
   const [isOpen, setIsOpen] = useState(false);
   const [authResolved, setAuthResolved] = useState(false); // чтобы не мигала кнопка "Вход"
   const [isGuide, setIsGuide] = useState(false); // Является ли пользователь гидом
+  const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
+  const [unreadTourRoomsCount, setUnreadTourRoomsCount] = useState(0);
+  const [soundEnabled, setSoundEnabledState] = useState(true);
   const guideCheckedRef = useRef<string | null>(null); // ID пользователя, для которого уже проверено
-  
+
   // Диагностика: единый префикс для логов
   const logPrefix = '[МенюПользователя]';
 
@@ -44,6 +52,38 @@ export default function UserMenu() {
     const isAdmin = isAdminByRole || isAdminByEmail;
     // Логирование отключено для производительности
   }, [profile?.role, user?.email]);
+
+  const loadUnreadMessagesCount = async () => {
+    if (!user) {
+      setUnreadMessagesCount(0);
+      return;
+    }
+    try {
+      const response = await fetch('/api/users/messages?summary=unread');
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!data?.success) return;
+      setUnreadMessagesCount(Number(data.unread_count || 0));
+    } catch {
+      // ignore
+    }
+  };
+
+  const loadUnreadTourRoomsCount = async () => {
+    if (!user) {
+      setUnreadTourRoomsCount(0);
+      return;
+    }
+    try {
+      const response = await fetch('/api/notifications?mode=summary');
+      if (!response.ok) return;
+      const data = await response.json();
+      if (!data?.success) return;
+      setUnreadTourRoomsCount(Number(data?.summary?.tour_room_message || 0));
+    } catch {
+      // ignore
+    }
+  };
 
   // Хелперы кэша
   const readCachedProfile = (): any | null => {
@@ -363,6 +403,44 @@ export default function UserMenu() {
     };
   }, [supabase, user?.id]); // Зависимость только от user.id
 
+  useEffect(() => {
+    setSoundEnabledState(isSoundEnabled());
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setUnreadMessagesCount(0);
+      setUnreadTourRoomsCount(0);
+      return;
+    }
+
+    loadUnreadMessagesCount();
+    loadUnreadTourRoomsCount();
+
+    const handleRefresh = () => {
+      loadUnreadMessagesCount();
+      loadUnreadTourRoomsCount();
+    };
+    window.addEventListener('messages:update', handleRefresh);
+    window.addEventListener('notifications:update', handleRefresh);
+    window.addEventListener('focus', handleRefresh);
+
+    const onPusherBridge = (ev: Event) => {
+      const d = (ev as CustomEvent<PusherBridgeDetail>).detail;
+      if (!d) return;
+      if (d.channel === 'user' && d.event === 'new-message') handleRefresh();
+      if (d.channel === 'notifications' && d.event === 'new-notification') handleRefresh();
+    };
+    window.addEventListener(PUSHER_BRIDGE_EVENT, onPusherBridge);
+
+    return () => {
+      window.removeEventListener('messages:update', handleRefresh);
+      window.removeEventListener('notifications:update', handleRefresh);
+      window.removeEventListener('focus', handleRefresh);
+      window.removeEventListener(PUSHER_BRIDGE_EVENT, onPusherBridge);
+    };
+  }, [user?.id]);
+
   const handleSignOut = async () => {
     try {
       setIsOpen(false); // Закрываем меню
@@ -399,6 +477,12 @@ export default function UserMenu() {
       console.error('Ошибка выхода:', error);
       await alert('Ошибка при выходе. Попробуйте обновить страницу.', 'Ошибка', 'error');
     }
+  };
+
+  const toggleSound = () => {
+    const next = !soundEnabled;
+    setSoundEnabledState(next);
+    setSoundEnabled(next);
   };
 
   // Пока не знаем состояние (и нет кэша) — ничего не показываем, чтобы не мигал "Вход"
@@ -482,7 +566,11 @@ export default function UserMenu() {
             <div className="header-user-dropdown-section">
               <div className="header-user-dropdown-section-title">Социальные</div>
               <Link
-                href={`/users/${profile?.username || user?.id}`}
+                href={
+                  profile?.username?.trim()
+                    ? `/users/${profile.username}`
+                    : `/set-username?redirect=${encodeURIComponent('/passport')}`
+                }
                 prefetch={true}
                 onClick={() => setIsOpen(false)}
                 className="header-user-dropdown-item header-user-dropdown-item-emerald"
@@ -491,6 +579,18 @@ export default function UserMenu() {
                   <BookOpen className="header-user-dropdown-icon header-user-dropdown-icon-emerald" />
                 </div>
                 <span className="header-user-dropdown-text">Мой туристический паспорт</span>
+              </Link>
+              
+              <Link
+                href="/feed"
+                prefetch={true}
+                onClick={() => setIsOpen(false)}
+                className="header-user-dropdown-item header-user-dropdown-item-emerald"
+              >
+                <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
+                  <MessageSquare className="header-user-dropdown-icon header-user-dropdown-icon-emerald" />
+                </div>
+                <span className="header-user-dropdown-text">Лента</span>
               </Link>
               
               <Link
@@ -503,6 +603,11 @@ export default function UserMenu() {
                   <Mail className="header-user-dropdown-icon header-user-dropdown-icon-emerald" />
                 </div>
                 <span className="header-user-dropdown-text">Мессенджер</span>
+                {unreadMessagesCount > 0 && (
+                  <span className="ml-auto inline-flex min-w-6 h-6 px-2 items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold">
+                    {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+                  </span>
+                )}
               </Link>
               
               <Link
@@ -527,12 +632,34 @@ export default function UserMenu() {
                   <DoorOpen className="header-user-dropdown-icon header-user-dropdown-icon-emerald" />
                 </div>
                 <span className="header-user-dropdown-text">Мои комнаты</span>
+                {unreadTourRoomsCount > 0 && (
+                  <span className="ml-auto inline-flex min-w-6 h-6 px-2 items-center justify-center rounded-full bg-red-500 text-white text-xs font-bold">
+                    {unreadTourRoomsCount > 99 ? '99+' : unreadTourRoomsCount}
+                  </span>
+                )}
               </Link>
             </div>
 
             {/* Бронирования и настройки */}
             <div className="header-user-dropdown-section">
               <div className="header-user-dropdown-section-title">Управление</div>
+              <button
+                type="button"
+                onClick={toggleSound}
+                className="header-user-dropdown-item"
+              >
+                <div className="header-user-dropdown-icon-wrapper">
+                  {soundEnabled ? (
+                    <Volume2 className="header-user-dropdown-icon" />
+                  ) : (
+                    <VolumeX className="header-user-dropdown-icon" />
+                  )}
+                </div>
+                <span className="header-user-dropdown-text">
+                  {soundEnabled ? 'Звуки: включены' : 'Звуки: выключены'}
+                </span>
+              </button>
+
               <Link
                 href="/profile/bookings"
                 prefetch={true}

@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { Share2, CheckCircle2, Users } from 'lucide-react';
 
@@ -7,6 +8,12 @@ type TourBookingCardProps = {
   maxParticipants: number;
   isFullyBooked: boolean;
   bookingHref: string;
+  /** Выбор даты/слота и подсказки — между ценой и блоком мест (несколько выездов) */
+  beforeAvailability?: ReactNode;
+  /** Текст главной кнопки (например при нескольких датах) */
+  bookingCtaLabel?: string;
+  /** Подписи «Шаг 1/2» при нескольких датах */
+  bookingFlowSteps?: boolean;
 };
 
 export default function TourBookingCard({
@@ -15,6 +22,9 @@ export default function TourBookingCard({
   maxParticipants,
   isFullyBooked,
   bookingHref,
+  beforeAvailability,
+  bookingCtaLabel = 'Забронировать',
+  bookingFlowSteps = false,
 }: TourBookingCardProps) {
   const availabilityPercentage = (availableSpots / maxParticipants) * 100;
 
@@ -34,12 +44,26 @@ export default function TourBookingCard({
           </div>
         </div>
 
+        {beforeAvailability ? (
+          <div className="w-full min-w-0 -mt-1">{beforeAvailability}</div>
+        ) : null}
+
+        {beforeAvailability && bookingFlowSteps ? (
+          <p className="text-[11px] font-black uppercase tracking-wide text-gray-500 px-0.5 -mb-2 sm:-mb-1">
+            Шаг 2 — места на выбранную дату
+          </p>
+        ) : null}
+
         {/* Блок с доступными местами */}
         <div className="bg-gradient-to-br from-gray-50 to-white rounded-lg sm:rounded-xl md:rounded-xl lg:rounded-2xl p-4 sm:p-5 md:p-5 lg:p-6 border-2 border-gray-200 shadow-sm">
           <div className="flex flex-col xs:flex-row xs:items-center xs:justify-between gap-2 xs:gap-0 mb-3 sm:mb-3.5 md:mb-4 lg:mb-4">
             <div className="flex items-center gap-2 sm:gap-2 md:gap-2.5">
               <Users className="w-4 h-4 sm:w-5 sm:h-5 md:w-5 md:h-5 text-gray-600 flex-shrink-0" />
-              <span className="text-sm sm:text-base md:text-base lg:text-lg text-gray-700 font-bold whitespace-nowrap">Доступно мест:</span>
+              <span className="text-sm sm:text-base md:text-base lg:text-lg text-gray-700 font-bold break-words xs:whitespace-nowrap">
+                {beforeAvailability && bookingFlowSteps
+                  ? 'Мест на выбранную дату:'
+                  : 'Доступно мест:'}
+              </span>
             </div>
             <span className="text-lg sm:text-xl md:text-xl lg:text-2xl font-black text-gray-900 whitespace-nowrap">
               {availableSpots} / {maxParticipants}
@@ -73,9 +97,9 @@ export default function TourBookingCard({
         ) : (
           <Link
             href={bookingHref}
-            className="w-full py-3 sm:py-3.5 md:py-4 lg:py-4 xl:py-5 rounded-lg sm:rounded-xl md:rounded-xl lg:rounded-2xl font-black text-base sm:text-lg md:text-lg lg:text-xl xl:text-xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-600 text-white hover:from-emerald-600 hover:via-emerald-700 hover:to-emerald-700 transition-all duration-300 text-center shadow-xl hover:shadow-2xl transform hover:-translate-y-1 border-2 border-emerald-400/30 active:scale-95"
+            className="w-full py-3 sm:py-3.5 md:py-4 lg:py-4 xl:py-5 rounded-lg sm:rounded-xl md:rounded-xl lg:rounded-2xl font-black text-base sm:text-lg md:text-lg lg:text-xl xl:text-xl bg-gradient-to-r from-emerald-500 via-emerald-600 to-emerald-600 text-white hover:from-emerald-600 hover:via-emerald-700 hover:to-emerald-700 transition-all duration-300 text-center shadow-xl hover:shadow-2xl transform hover:-translate-y-1 border-2 border-emerald-400/30 active:scale-95 leading-snug px-2"
           >
-            Забронировать
+            {bookingCtaLabel}
           </Link>
         )}
 

@@ -59,6 +59,10 @@ export default async function PassportPage() {
     redirect('/banned');
   }
 
+  if (!profile.username?.trim()) {
+    redirect('/set-username?redirect=/passport');
+  }
+
   // Если есть username и публичный профиль включен - редиректим на публичный профиль
   if (profile.username && profile.public_profile_enabled) {
     redirect(`/users/${profile.username}#passport`);

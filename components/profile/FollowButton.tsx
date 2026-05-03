@@ -8,9 +8,16 @@ interface FollowButtonProps {
   username: string;
   isFollowing: boolean;
   userId: string;
+  /** Компактный вид для строки кнопок на профиле */
+  compact?: boolean;
 }
 
-export function FollowButton({ username, isFollowing: initialIsFollowing, userId }: FollowButtonProps) {
+export function FollowButton({
+  username,
+  isFollowing: initialIsFollowing,
+  userId,
+  compact,
+}: FollowButtonProps) {
   const [isFollowing, setIsFollowing] = useState(initialIsFollowing);
   const [loading, setLoading] = useState(false);
 
@@ -50,26 +57,30 @@ export function FollowButton({ username, isFollowing: initialIsFollowing, userId
     }
   };
 
+  const sz = compact
+    ? 'px-4 py-2 rounded-lg text-sm gap-1.5 [&_svg]:w-4 [&_svg]:h-4'
+    : 'px-6 py-3 rounded-xl gap-2';
+
   return (
     <button
       onClick={handleFollow}
       disabled={loading}
-      className={`px-6 py-3 rounded-xl font-medium transition-all flex items-center gap-2 ${
+      className={`${sz} font-medium transition-all flex items-center ${
         isFollowing
           ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           : 'bg-emerald-600 text-white hover:bg-emerald-700'
       } disabled:opacity-50 disabled:cursor-not-allowed`}
     >
       {loading ? (
-        <Loader2 className="w-5 h-5 animate-spin" />
+        <Loader2 className={compact ? 'w-4 h-4 animate-spin' : 'w-5 h-5 animate-spin'} />
       ) : isFollowing ? (
         <>
-          <UserMinus className="w-5 h-5" />
+          <UserMinus className={compact ? 'w-4 h-4' : 'w-5 h-5'} />
           <span>Отписаться</span>
         </>
       ) : (
         <>
-          <UserPlus className="w-5 h-5" />
+          <UserPlus className={compact ? 'w-4 h-4' : 'w-5 h-5'} />
           <span>Подписаться</span>
         </>
       )}

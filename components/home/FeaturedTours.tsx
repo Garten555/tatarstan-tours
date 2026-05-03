@@ -1,5 +1,9 @@
 import { createServiceClient } from '@/lib/supabase/server';
 import TourCard from '@/components/tours/TourCard';
+import {
+  dedupeTourRowsForCatalog,
+  type TourRowForDedupe,
+} from '@/lib/tours/listing-dedupe';
 import Link from 'next/link';
 import { ArrowRight, Sparkles } from 'lucide-react';
 
@@ -26,15 +30,20 @@ export async function FeaturedTours() {
         max_participants,
         current_participants,
         tour_type,
-        category
+        category,
+        city_id,
+        created_at
       `)
       .eq('status', 'active')
       .or(`end_date.is.null,end_date.gte.${now}`)
       .order('created_at', { ascending: false })
-      .limit(6);
+      .limit(48);
     
-    tours = result.data;
+    const raw = result.data;
     error = result.error;
+    tours = raw
+      ? dedupeTourRowsForCatalog(raw as TourRowForDedupe[]).slice(0, 6)
+      : null;
   } catch (err) {
     console.error('Error fetching tours (catch):', err);
     error = err as any;

@@ -1,41 +1,69 @@
 'use client';
 
-// Главный компонент комнаты тура - полностью переделанный дизайн
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { TourRoom as TourRoomType } from '@/types';
 import { TourRoomChat } from './TourRoomChat';
 import { TourRoomGallery } from './TourRoomGallery';
 import { TourRoomParticipants } from './TourRoomParticipants';
-import { 
-  MessageSquare, 
-  Image, 
-  Users, 
-  ArrowLeft,
-  Calendar,
-  MapPin,
-  Crown,
-  Loader2
-} from 'lucide-react';
-import { sanitizeText, escapeHtml } from '@/lib/utils/sanitize';
+import { MessageSquare, Image, Users, ArrowLeft, Loader2 } from 'lucide-react';
+import { escapeHtml } from '@/lib/utils/sanitize';
 import toast from 'react-hot-toast';
 
 interface TourRoomProps {
   roomId: string;
   initialRoom?: TourRoomType;
+  viewerUserId?: string;
+  galleryCanModerate?: boolean;
 }
 
 type TabType = 'chat' | 'gallery' | 'participants';
 
-export function TourRoom({ roomId, initialRoom }: TourRoomProps) {
-  // Проверяем параметр tab из URL
+const NAV: { id: TabType; label: string; short: string; icon: typeof MessageSquare }[] = [
+  { id: 'chat', label: 'Чат', short: 'Чат', icon: MessageSquare },
+  { id: 'gallery', label: 'Медиа', short: 'Медиа', icon: Image },
+  { id: 'participants', label: 'Участники', short: 'Люди', icon: Users },
+];
+
+function NavButton({
+  active,
+  onClick,
+  label,
+  caption,
+  Icon,
+}: {
+  active: boolean;
+  onClick: () => void;
+  /** Полное название (подсказка) */
+  label: string;
+  /** Короткая подпись в боковой колонке — помещается в узкую полосу */
+  caption: string;
+  Icon: typeof MessageSquare;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      aria-current={active ? 'page' : undefined}
+      className={`flex w-full min-w-0 flex-col items-center gap-1 rounded-xl px-1.5 py-2.5 text-[10px] font-semibold leading-tight transition md:py-2.5 ${
+        active
+          ? 'bg-emerald-600 text-white shadow-md shadow-emerald-900/20'
+          : 'text-gray-600 hover:bg-gray-200/90 hover:text-gray-900'
+      }`}
+    >
+      <Icon className="h-6 w-6 shrink-0" strokeWidth={active ? 2.25 : 2} />
+      <span className="hidden max-w-full text-center md:block md:break-words">{caption}</span>
+    </button>
+  );
+}
+
+export function TourRoom({ roomId, initialRoom, viewerUserId, galleryCanModerate = false }: TourRoomProps) {
   const getInitialTab = (): TabType => {
     if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const tab = params.get('tab');
-      if (tab === 'participants' || tab === 'gallery' || tab === 'chat') {
-        return tab as TabType;
-      }
+      const tab = new URLSearchParams(window.location.search).get('tab');
+      if (tab === 'participants' || tab === 'gallery' || tab === 'chat') return tab as TabType;
     }
     return 'chat';
   };
@@ -44,38 +72,32 @@ export function TourRoom({ roomId, initialRoom }: TourRoomProps) {
   const [room, setRoom] = useState<TourRoomType | null>(initialRoom || null);
   const [loading, setLoading] = useState(!initialRoom);
 
-  // Загружаем данные комнаты если не переданы
   useEffect(() => {
-    if (!initialRoom) {
-      loadRoom();
-    }
-    // Обновляем вкладку при изменении URL параметра
-    const handlePopState = () => {
-      setActiveTab(getInitialTab());
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    if (!initialRoom) loadRoom();
+    const onPop = () => setActiveTab(getInitialTab());
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roomId]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', activeTab);
+    window.history.replaceState({}, '', `${url.pathname}?${url.searchParams.toString()}`);
+  }, [activeTab]);
 
   const loadRoom = async () => {
     try {
       setLoading(true);
       const response = await fetch(`/api/tour-rooms/${roomId}`);
       const data = await response.json();
-      
-      if (data.success) {
-        setRoom(data.room);
-      } else {
-        if (response.status === 403) {
-          toast.error(data.error || 'У вас нет доступа к этой комнате');
-        } else {
-          console.error('Ошибка загрузки комнаты:', data.error);
-        }
-      }
-    } catch (error) {
-      console.error('Ошибка загрузки комнаты:', error);
-      toast.error('Ошибка загрузки комнаты. Попробуйте обновить страницу.');
+      if (data.success) setRoom(data.room);
+      else if (response.status === 403) toast.error(data.error || 'Нет доступа');
+      else console.error('Комната:', data.error);
+    } catch (e) {
+      console.error(e);
+      toast.error('Не удалось загрузить комнату');
     } finally {
       setLoading(false);
     }
@@ -83,14 +105,10 @@ export function TourRoom({ roomId, initialRoom }: TourRoomProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-24 pb-12">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <Loader2 className="w-12 h-12 animate-spin text-emerald-600 mx-auto mb-4" />
-              <p className="text-gray-600">Загрузка комнаты...</p>
-            </div>
-          </div>
+      <div className="fixed inset-x-0 bottom-0 top-14 z-40 flex items-center justify-center bg-[#e8eef2] sm:top-16 lg:top-20">
+        <div className="rounded-2xl bg-white px-10 py-12 text-center shadow-md">
+          <Loader2 className="mx-auto mb-3 h-9 w-9 animate-spin text-emerald-600" />
+          <p className="text-sm text-gray-600">Загрузка комнаты…</p>
         </div>
       </div>
     );
@@ -98,202 +116,139 @@ export function TourRoom({ roomId, initialRoom }: TourRoomProps) {
 
   if (!room) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-24 pb-12">
-        <div className="container mx-auto px-4">
-          <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
-            <p className="text-red-500 text-lg">Комната не найдена</p>
-            <Link
-              href="/my-rooms"
-              className="inline-flex items-center gap-2 mt-4 text-emerald-600 hover:text-emerald-700 font-medium"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Вернуться к моим комнатам
-            </Link>
-          </div>
-        </div>
+      <div className="fixed inset-x-0 bottom-0 top-14 z-40 flex flex-col items-center justify-center bg-[#e8eef2] px-4 sm:top-16 lg:top-20">
+        <p className="mb-4 text-gray-700">Комната не найдена</p>
+        <Link
+          href="/my-rooms"
+          className="rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+        >
+          К моим комнатам
+        </Link>
       </div>
     );
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ru-RU', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
-  };
+  const formatDate = (d: string) =>
+    new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
 
-  const isGuide = (room as any).guide_id && (room as any).guide_id === (room as any).current_user_id;
+  const participantCount = Array.isArray((room as any).participants) ? (room as any).participants.length : 0;
+
+  const subtitleParts: string[] = [];
+  if (room.tour?.city?.name) subtitleParts.push(escapeHtml(room.tour.city.name));
+  if (room.tour) {
+    subtitleParts.push(
+      `${formatDate(room.tour.start_date)}${room.tour.end_date ? ` — ${formatDate(room.tour.end_date)}` : ''}`
+    );
+  }
+  if (participantCount > 0) subtitleParts.push(`${participantCount} в группе`);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-teal-50 pt-20 pb-12">
-      <div className="container mx-auto px-4 max-w-7xl">
-        {/* Кнопка назад */}
-        <Link
-          href="/my-rooms"
-          className="inline-flex items-center gap-2 text-gray-600 hover:text-emerald-600 mb-6 transition-colors group"
-        >
-          <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-          <span className="font-medium">Мои комнаты</span>
-        </Link>
+    <div className="fixed inset-x-0 bottom-0 top-14 z-40 flex min-h-0 flex-col bg-[#bfcbd4] sm:top-16 md:flex-row lg:top-20">
+      {/* Левая колонка вкладок — только desktop; ширина под короткие подписи */}
+      <aside className="hidden shrink-0 flex-col items-stretch gap-1.5 border-r border-gray-400/30 bg-[#dce4ea] px-2 py-3 md:flex md:w-[108px] lg:w-[118px]">
+        <div className="mb-1 px-0.5 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-gray-600">
+          Меню
+        </div>
+        {NAV.map(({ id, label, short, icon: Icon }) => (
+          <NavButton
+            key={id}
+            active={activeTab === id}
+            onClick={() => setActiveTab(id)}
+            label={label}
+            caption={short}
+            Icon={Icon}
+          />
+        ))}
+      </aside>
 
-        {/* Шапка комнаты - улучшенный дизайн */}
-        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden mb-8 border border-gray-100">
-          {/* Обложка тура */}
+      {/* Основная колонка: шапка диалога + контент на всю высоту */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="flex shrink-0 items-start gap-2 border-b border-gray-300/80 bg-white px-2 py-2.5 shadow-sm sm:items-center sm:gap-3 sm:px-4">
+          <Link
+            href="/my-rooms"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-gray-700 transition hover:bg-gray-100 sm:mt-0"
+            aria-label="Назад к комнатам"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+
           {room.tour?.cover_image ? (
-            <div className="relative h-72 md:h-96 overflow-hidden group">
-              <img
-                src={room.tour.cover_image}
-                alt={room.tour.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/20" />
-              <div className="absolute bottom-0 left-0 right-0 p-8 md:p-10 text-white">
-                <div className="max-w-4xl">
-                  <h1 className="text-4xl md:text-5xl font-extrabold mb-4 drop-shadow-lg">
-                    {escapeHtml(room.tour.title)}
-                  </h1>
-                  <div className="flex flex-wrap items-center gap-4 text-lg">
-                    {room.tour.city && (
-                      <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full">
-                        <MapPin className="w-5 h-5 text-emerald-300" />
-                        <span className="font-medium">{escapeHtml(room.tour.city.name)}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2 bg-white/20 backdrop-blur-sm px-4 py-2 rounded-full">
-                      <Calendar className="w-5 h-5 text-emerald-300" />
-                      <span className="font-medium">
-                        {formatDate(room.tour.start_date)}
-                        {room.tour.end_date && ` - ${formatDate(room.tour.end_date)}`}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <img
+              src={room.tour.cover_image}
+              alt=""
+              className="mt-0.5 h-10 w-10 shrink-0 rounded-full object-cover ring-2 ring-gray-100 sm:mt-0 sm:h-11 sm:w-11"
+            />
           ) : (
-            <div className="relative h-64 md:h-80 bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
-              <div className="text-center text-white p-6 md:p-8">
-                <h1 className="text-3xl md:text-4xl font-bold mb-2">{room.tour?.title ? escapeHtml(room.tour.title) : 'Комната тура'}</h1>
-                {room.tour?.city && (
-                  <div className="flex items-center justify-center gap-2 text-emerald-100 mb-2">
-                    <MapPin className="w-5 h-5" />
-                    <span className="text-lg">{escapeHtml(room.tour.city.name)}</span>
-                  </div>
-                )}
-                {room.tour && (
-                  <div className="flex items-center justify-center gap-2 text-emerald-100">
-                    <Calendar className="w-5 h-5" />
-                    <span className="text-lg">
-                      {formatDate(room.tour.start_date)}
-                      {room.tour.end_date && ` - ${formatDate(room.tour.end_date)}`}
-                    </span>
-                  </div>
-                )}
-              </div>
+            <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-base font-bold text-emerald-700 ring-2 ring-gray-100 sm:mt-0 sm:h-11 sm:w-11 sm:text-lg">
+              {(room.tour?.title || 'Т')[0]}
             </div>
           )}
 
-          {/* Информация о гиде */}
-          {room.guide && (
-            <div className="p-6 border-b border-gray-100">
-              <div className="flex items-center gap-4">
-                {room.guide.avatar_url ? (
-                  <img
-                    src={room.guide.avatar_url}
-                    alt={
-                      (room.guide as any)?.first_name && (room.guide as any)?.last_name
-                        ? `${(room.guide as any).first_name} ${(room.guide as any).last_name}`
-                        : room.guide.full_name || 'Гид'
-                    }
-                    className="w-16 h-16 rounded-full object-cover border-4 border-emerald-100"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white text-xl font-bold border-4 border-emerald-100">
-                    {(room.guide as any)?.first_name?.[0] || 'Г'}
-                  </div>
-                )}
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-lg font-semibold text-gray-900">
-                      {(room.guide as any)?.first_name && (room.guide as any)?.last_name
-                        ? escapeHtml(`${(room.guide as any).first_name} ${(room.guide as any).last_name}`)
-                        : escapeHtml(room.guide.full_name || 'Гид')}
-                    </span>
-                    <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full text-xs font-semibold flex items-center gap-1">
-                      <Crown className="w-3 h-3" />
-                      Гид
-                    </span>
-                  </div>
-                  <p className="text-gray-600 text-sm">Ваш гид по туру</p>
-                </div>
+          <div className="min-w-0 flex-1 py-0.5 sm:py-0">
+            <h1 className="break-words text-[15px] font-semibold leading-snug text-gray-900 line-clamp-3 sm:text-[17px] sm:leading-tight lg:line-clamp-2">
+              {room.tour?.title ? escapeHtml(room.tour.title) : 'Комната тура'}
+            </h1>
+            <p className="mt-0.5 break-words text-xs leading-snug text-gray-500 line-clamp-3 sm:line-clamp-2">
+              {subtitleParts.length > 0 ? subtitleParts.join(' · ') : 'Групповой чат'}
+            </p>
+          </div>
+        </header>
+
+        {/* Контент: flex-1 + min-h-0 чтобы лента чата растягивалась, поле ввода — внизу */}
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#e9edef]">
+          {activeTab === 'chat' && (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <TourRoomChat roomId={room.id} variant="messenger" />
+            </div>
+          )}
+          {activeTab === 'gallery' && (
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-white">
+              <div className="mx-auto w-full max-w-4xl flex-1 p-4">
+                <TourRoomGallery
+                  roomId={room.id}
+                  tourEndDate={room.tour?.end_date || null}
+                  viewerUserId={viewerUserId}
+                  canModerateGallery={galleryCanModerate}
+                />
+              </div>
+            </div>
+          )}
+          {activeTab === 'participants' && (
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-white">
+              <div className="mx-auto w-full max-w-4xl flex-1 p-4">
+                <TourRoomParticipants roomId={room.id} guideId={room.guide_id} />
               </div>
             </div>
           )}
         </div>
 
-        {/* Вкладки - улучшенный дизайн */}
-        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
-          <div className="border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-            <div className="flex">
-              <button
-                onClick={() => setActiveTab('chat')}
-                className={`flex-1 px-6 py-5 text-sm font-bold transition-all duration-300 relative ${
-                  activeTab === 'chat'
-                    ? 'text-emerald-600 bg-white'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2.5">
-                  <MessageSquare className={`w-5 h-5 ${activeTab === 'chat' ? 'text-emerald-600' : ''}`} />
-                  <span>Чат</span>
-                </div>
-                {activeTab === 'chat' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab('gallery')}
-                className={`flex-1 px-6 py-5 text-sm font-bold transition-all duration-300 relative ${
-                  activeTab === 'gallery'
-                    ? 'text-emerald-600 bg-white'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2.5">
-                  <Image className={`w-5 h-5 ${activeTab === 'gallery' ? 'text-emerald-600' : ''}`} />
-                  <span>Галерея</span>
-                </div>
-                {activeTab === 'gallery' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab('participants')}
-                className={`flex-1 px-6 py-5 text-sm font-bold transition-all duration-300 relative ${
-                  activeTab === 'participants'
-                    ? 'text-emerald-600 bg-white'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-2.5">
-                  <Users className={`w-5 h-5 ${activeTab === 'participants' ? 'text-emerald-600' : ''}`} />
-                  <span>Участники</span>
-                </div>
-                {activeTab === 'participants' && (
-                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-500" />
-                )}
-              </button>
-            </div>
+        {/* Нижние вкладки — только телефон (на ПК разделы слева) */}
+        <nav className="shrink-0 border-t border-gray-300/90 bg-white pb-[env(safe-area-inset-bottom)] pt-1 md:hidden">
+          <div className="flex justify-around px-1">
+            {NAV.map(({ id, label, short, icon: Icon }) => {
+              const on = activeTab === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setActiveTab(id)}
+                  className={`flex min-w-0 flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-semibold ${
+                    on ? 'text-emerald-600' : 'text-gray-500'
+                  }`}
+                >
+                  <span
+                    className={`flex h-10 w-14 max-w-[90%] items-center justify-center rounded-2xl transition ${
+                      on ? 'bg-emerald-100 text-emerald-700' : 'bg-transparent'
+                    }`}
+                  >
+                    <Icon className="h-6 w-6" strokeWidth={on ? 2.25 : 2} />
+                  </span>
+                  <span className="truncate">{short}</span>
+                </button>
+              );
+            })}
           </div>
-
-          {/* Контент вкладок */}
-          <div className={activeTab === 'chat' ? 'p-0 h-[calc(100vh-500px)] min-h-[700px]' : 'p-6 md:p-8'}>
-            {activeTab === 'chat' && <TourRoomChat roomId={room.id} />}
-            {activeTab === 'gallery' && <TourRoomGallery roomId={room.id} tourEndDate={room.tour?.end_date || null} />}
-            {activeTab === 'participants' && <TourRoomParticipants roomId={room.id} guideId={room.guide_id} />}
-          </div>
-        </div>
+        </nav>
       </div>
     </div>
   );

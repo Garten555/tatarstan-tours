@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import Pusher from 'pusher';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
+import { publishUserNotification } from '@/lib/pusher/user-notification';
+import { rateLimit } from '@/lib/security/rate-limit';
 
 const pusher = new Pusher({
   appId: process.env.PUSHER_APP_ID!,
@@ -14,6 +16,14 @@ const pusher = new Pusher({
 
 export async function POST(request: NextRequest) {
   try {
+    const limiter = rateLimit(request, { windowMs: 60_000, maxRequests: 50 });
+    if (!limiter.success) {
+      return NextResponse.json(
+        { error: 'Слишком много запросов. Попробуйте позже.' },
+        { status: 429, headers: { 'Retry-After': Math.ceil((limiter.resetTime - Date.now()) / 1000).toString() } }
+      );
+    }
+
     console.log('[Pusher Trigger] Starting message creation...');
     const supabase = await createClient();
     const serviceClient = await createServiceClient();
@@ -124,7 +134,7 @@ export async function POST(request: NextRequest) {
           image_path,
           created_at,
           deleted_at,
-          user:profiles(id, first_name, last_name, avatar_url)
+          user:profiles!tour_room_messages_user_id_fkey(id, first_name, last_name, avatar_url)
         `)
         .single();
       
@@ -160,6 +170,75 @@ export async function POST(request: NextRequest) {
       );
     }
     console.log('[Pusher Trigger] Message created successfully:', newMessage.id);
+
+    // Уведомляем остальных участников комнаты о новом сообщении
+    try {
+      const { data: senderProfile } = await serviceClient
+        .from('profiles')
+        .select('username, first_name, last_name, avatar_url')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      const senderLabel =
+        senderProfile?.username ||
+        [senderProfile?.first_name, senderProfile?.last_name].filter(Boolean).join(' ') ||
+        'Пользователь';
+
+      const previewBase = imageUrl ? 'Отправил(а) изображение' : sanitizedMessage || 'Новое сообщение';
+      const preview = previewBase.length > 100 ? `${previewBase.slice(0, 100)}...` : previewBase;
+
+      const [participantsResult, roomResult] = await Promise.all([
+        serviceClient
+          .from('tour_room_participants')
+          .select('user_id')
+          .eq('room_id', roomId),
+        serviceClient
+          .from('tour_rooms')
+          .select('guide_id')
+          .eq('id', roomId)
+          .maybeSingle(),
+      ]);
+
+      const recipientIds = new Set<string>();
+      for (const row of participantsResult.data || []) {
+        const uid = (row as { user_id?: string }).user_id;
+        if (uid && uid !== user.id) recipientIds.add(uid);
+      }
+      const guideId = (roomResult.data as { guide_id?: string | null } | null)?.guide_id;
+      if (guideId && guideId !== user.id) recipientIds.add(guideId);
+
+      const recipients = Array.from(recipientIds);
+      if (recipients.length > 0) {
+        const body = [
+          `${senderLabel}: ${preview}`,
+          `sender_username:${senderProfile?.username || senderLabel}`,
+          `sender_avatar:${senderProfile?.avatar_url || ''}`,
+          `room_id:${roomId}`,
+        ].join('\n');
+
+        const { data: notifRows, error: notifErr } = await serviceClient
+          .from('notifications')
+          .insert(
+            recipients.map((uid) => ({
+              user_id: uid,
+              title: 'Новое сообщение в комнате тура',
+              body,
+              type: 'tour_room_message',
+            }))
+          )
+          .select('id, user_id, title, body, type, created_at');
+
+        if (notifErr) {
+          console.error('[Pusher Trigger] Notification insert error:', notifErr);
+        } else if (notifRows?.length) {
+          await Promise.all(
+            notifRows.map((row: any) => publishUserNotification(row.user_id, row))
+          );
+        }
+      }
+    } catch (notifError) {
+      console.error('[Pusher Trigger] Tour room notification error:', notifError);
+    }
 
     // Отправляем событие через Pusher (публичный канал)
     console.log('[Pusher Trigger] Triggering Pusher event...');

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { sendEmail, getBanNotificationEmail } from '@/lib/email/send-email';
+import { publishAdminSync } from '@/lib/pusher/user-notification';
 
 const ADMIN_ROLES = ['super_admin', 'support_admin', 'tour_admin'];
 
@@ -131,6 +132,11 @@ export async function PATCH(
         // Не прерываем выполнение, если email не отправился
       });
     }
+
+    await publishAdminSync(id, {
+      kind: 'forced_reload',
+      reason: action === 'ban' ? 'banned' : 'unban',
+    });
 
     return NextResponse.json({ success: true, profile: updated });
   } catch (error) {

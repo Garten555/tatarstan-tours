@@ -16,7 +16,8 @@ import {
   DoorOpen,
   Crown,
   Award,
-  AlertCircle
+  AlertCircle,
+  Flag,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -87,6 +88,12 @@ export default function AdminSidebar({ userRole, userName, avatarUrl }: AdminSid
       name: 'Комнаты туров',
       href: '/admin/tour-rooms',
       icon: DoorOpen,
+      roles: ['super_admin', 'tour_admin', 'support_admin'],
+    },
+    {
+      name: 'Жалобы в чатах туров',
+      href: '/admin/tour-room-reports',
+      icon: Flag,
       roles: ['super_admin', 'tour_admin', 'support_admin'],
     },
     {
@@ -169,11 +176,40 @@ export default function AdminSidebar({ userRole, userName, avatarUrl }: AdminSid
         {/* Header with Logo */}
         <div className="border-b border-gray-800/50 flex-shrink-0 relative bg-gradient-to-r from-gray-900 to-gray-800/50 backdrop-blur-sm">
           <div className="relative h-full">
-            {/* Logo */}
-            {!isCollapsed && (
+            {isCollapsed ? (
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                className="flex w-full flex-col items-center gap-1 border-0 bg-transparent px-2 py-3 text-center transition-colors hover:bg-gray-800/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900"
+                aria-label="Развернуть сайдбар"
+                title="Развернуть сайдбар"
+              >
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt=""
+                    className="h-10 w-10 shrink-0 rounded-xl border-2 border-emerald-500/80 object-cover shadow-lg"
+                  />
+                ) : (
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-emerald-400/80 bg-gradient-to-br from-emerald-500 to-emerald-600 text-xs font-black text-white shadow-lg">
+                    {userName
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .slice(0, 2)}
+                  </div>
+                )}
+                <ChevronRight className="h-4 w-4 shrink-0 text-emerald-400" aria-hidden />
+                <span className="max-w-full truncate px-0.5 text-[9px] font-bold uppercase tracking-tight text-gray-400">
+                  Меню
+                </span>
+              </button>
+            ) : (
               <div className="p-4 sm:p-6">
                 <h1 className="text-xl sm:text-2xl font-black text-white">Админ панель</h1>
-                <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 font-bold uppercase tracking-wider">Туры по Татарстану</p>
+                <p className="text-[10px] sm:text-xs text-gray-400 mt-0.5 font-bold uppercase tracking-wider">
+                  Туры по Татарстану
+                </p>
               </div>
             )}
           </div>
@@ -218,21 +254,28 @@ export default function AdminSidebar({ userRole, userName, avatarUrl }: AdminSid
       <nav className={`flex-1 p-2 sm:p-3 md:p-4 space-y-1.5 sm:space-y-2 admin-sidebar-nav overflow-y-auto overflow-x-hidden relative z-0 ${isCollapsed ? 'px-2 sm:px-2.5' : ''}`}>
         {filteredNavigation.map((item) => {
           const isActive = pathname === item.href;
+          const linkColor = isActive ? '#ffffff' : '#d1d5db';
           return (
             <Link
               key={item.name}
               href={item.href}
-              className={`flex items-center gap-2 sm:gap-3 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3.5 rounded-lg sm:rounded-xl transition-all duration-200 relative group no-underline ${
+              prefetch
+              className={`flex items-center gap-2 sm:gap-3 px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3.5 rounded-lg sm:rounded-xl transition-[background-color,transform,box-shadow] duration-150 relative group no-underline outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/80 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 ${
                 isActive
                   ? 'bg-gradient-to-r from-emerald-600 to-emerald-500 text-white shadow-lg shadow-emerald-500/30 scale-[1.02]'
                   : 'text-gray-300 hover:bg-gray-800/50 hover:text-white hover:scale-[1.01]'
               } ${isCollapsed ? 'justify-center w-full' : ''}`}
-              style={!isActive ? { color: 'rgb(209 213 219)' } : undefined}
+              style={{ color: linkColor, textDecoration: 'none' }}
               title={isCollapsed ? item.name : ''}
             >
-              <item.icon className={`w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 transition-transform duration-200 ${isActive ? 'text-white scale-110' : 'text-gray-300 group-hover:text-white group-hover:scale-110'}`} style={!isActive ? { color: 'rgb(209 213 219)' } : undefined} />
+              <item.icon
+                className={`w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 transition-transform duration-150 ${isActive ? 'scale-110' : 'group-hover:text-white group-hover:scale-110'}`}
+                style={{ color: linkColor }}
+              />
               {!isCollapsed && (
-                <span className="text-xs sm:text-sm font-bold truncate flex-1" style={!isActive ? { color: 'rgb(209 213 219)' } : undefined}>{item.name}</span>
+                <span className="text-xs sm:text-sm font-bold truncate flex-1" style={{ color: linkColor }}>
+                  {item.name}
+                </span>
               )}
               
               {/* Активный индикатор */}
@@ -256,9 +299,11 @@ export default function AdminSidebar({ userRole, userName, avatarUrl }: AdminSid
       <div className={`p-2 sm:p-3 md:p-4 border-t-2 border-gray-800/50 space-y-2 sm:space-y-2.5 flex-shrink-0 bg-gradient-to-t from-gray-900/95 to-gray-900/80 backdrop-blur-sm ${isCollapsed ? 'px-2 sm:px-2.5' : ''}`}>
         <Link
           href="/"
-          className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-blue-600/90 to-blue-700/90 hover:from-blue-600 hover:to-blue-700 text-white transition-all duration-200 relative group hover:scale-[1.02] no-underline border-2 border-blue-500/50 hover:border-blue-400 shadow-lg hover:shadow-xl font-bold ${
+          prefetch
+          className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-blue-600/90 to-blue-700/90 hover:from-blue-600 hover:to-blue-700 text-white transition-[background-color,transform,box-shadow] duration-150 relative group hover:scale-[1.02] no-underline border-2 border-blue-500/50 hover:border-blue-400 shadow-lg hover:shadow-xl font-bold outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 ${
             isCollapsed ? 'justify-center w-full' : ''
           }`}
+          style={{ color: '#ffffff', textDecoration: 'none' }}
           title={isCollapsed ? 'На главную' : ''}
         >
           <Home className="w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 transition-transform duration-200 group-hover:scale-110" style={{ color: 'white' }} />

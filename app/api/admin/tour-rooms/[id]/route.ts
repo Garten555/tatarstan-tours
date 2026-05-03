@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { publishAdminSync } from '@/lib/pusher/user-notification';
 
 // DELETE /api/admin/tour-rooms/[id] - удаление комнаты тура
 export async function DELETE(
@@ -43,7 +44,7 @@ export async function DELETE(
     // Проверяем существование комнаты
     const { data: room, error: roomError } = await serviceClient
       .from('tour_rooms')
-      .select('id, tour_id')
+      .select('id, tour_id, guide_id')
       .eq('id', id)
       .single();
 
@@ -66,6 +67,15 @@ export async function DELETE(
         { error: 'Не удалось удалить комнату' },
         { status: 500 }
       );
+    }
+
+    const guideId = (room as { guide_id?: string | null }).guide_id;
+    if (guideId) {
+      await publishAdminSync(guideId, {
+        kind: 'guide_rooms',
+        reason: 'room_deleted',
+        roomId: id,
+      });
     }
 
     return NextResponse.json({

@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useState, type ChangeEvent } from 'react';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import Image from 'next/image';
 import Link from 'next/link';
 import { 
@@ -15,10 +16,11 @@ import {
   X,
 } from 'lucide-react';
 import { escapeHtml } from '@/lib/utils/sanitize';
-import { FollowButton } from './FollowButton';
-import { FriendButton } from './FriendButton';
-import { MessageButton } from './MessageButton';
+import { formatLastSeen } from '@/lib/utils/presence';
+import { ProfileSocialActions } from './ProfileSocialActions';
 import BanUserButton from '@/components/admin/BanUserButton';
+import UploadProgressBar from '@/components/common/UploadProgressBar';
+import { uploadFormDataWithProgress } from '@/lib/http/upload-form-progress';
 
 interface ProfileHeaderProps {
   profileData: {
@@ -33,6 +35,7 @@ interface ProfileHeaderProps {
     banned_at: string | null;
     ban_reason: string | null;
     ban_until: string | null;
+    last_activity_at?: string | null;
   };
   stats: {
     blog_posts_count: number;
@@ -78,10 +81,13 @@ export default function ProfileHeader({
   roleLabel,
   profileCoverUrl,
 }: ProfileHeaderProps) {
+  const seen = formatLastSeen(profileData.last_activity_at || null);
   const [coverUrl, setCoverUrl] = useState(profileCoverUrl || null);
   const [avatarUrl, setAvatarUrl] = useState(profileData.avatar_url || null);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [profileMediaUploadKind, setProfileMediaUploadKind] = useState<'cover' | 'avatar' | null>(null);
+  const [profileMediaUploadPercent, setProfileMediaUploadPercent] = useState<number | null>(null);
   const [coverError, setCoverError] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -93,6 +99,7 @@ export default function ProfileHeader({
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const isOwner = Boolean(currentUser && currentUser.id === profileData.id);
+  useBodyScrollLock(isOwner && isEditorOpen);
 
   const handleCoverUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -118,24 +125,24 @@ export default function ProfileHeader({
 
     try {
       setIsUploadingCover(true);
+      setProfileMediaUploadKind('cover');
+      setProfileMediaUploadPercent(0);
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/profile/cover', {
-        method: 'POST',
-        body: formData,
-      });
+      const { ok, data } = await uploadFormDataWithProgress('/api/profile/cover', formData, setProfileMediaUploadPercent);
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Не удалось загрузить шапку');
+      if (!ok) {
+        throw new Error((data.error as string) || 'Не удалось загрузить шапку');
       }
 
-      setCoverUrl(data.url || null);
+      setCoverUrl((data.url as string) || null);
     } catch (error) {
       setCoverError(error instanceof Error ? error.message : 'Ошибка загрузки шапки');
     } finally {
       setIsUploadingCover(false);
+      setProfileMediaUploadKind(null);
+      setProfileMediaUploadPercent(null);
       if (coverInputRef.current) {
         coverInputRef.current.value = '';
       }
@@ -166,24 +173,24 @@ export default function ProfileHeader({
 
     try {
       setIsUploadingAvatar(true);
+      setProfileMediaUploadKind('avatar');
+      setProfileMediaUploadPercent(0);
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch('/api/profile/avatar', {
-        method: 'POST',
-        body: formData,
-      });
+      const { ok, data } = await uploadFormDataWithProgress('/api/profile/avatar', formData, setProfileMediaUploadPercent);
 
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Не удалось загрузить аватар');
+      if (!ok) {
+        throw new Error((data.error as string) || 'Не удалось загрузить аватар');
       }
 
-      setAvatarUrl(data.url || null);
+      setAvatarUrl((data.url as string) || null);
     } catch (error) {
       setCoverError(error instanceof Error ? error.message : 'Ошибка загрузки аватара');
     } finally {
       setIsUploadingAvatar(false);
+      setProfileMediaUploadKind(null);
+      setProfileMediaUploadPercent(null);
       if (avatarInputRef.current) {
         avatarInputRef.current.value = '';
       }
@@ -354,12 +361,31 @@ export default function ProfileHeader({
             </div>
           )}
 
+          {isOwner && profileMediaUploadKind && (
+            <div className="mt-3 max-w-xl">
+              <UploadProgressBar
+                label={
+                  profileMediaUploadKind === 'cover'
+                    ? 'Загрузка шапки профиля'
+                    : 'Загрузка аватара'
+                }
+                percent={profileMediaUploadPercent}
+              />
+            </div>
+          )}
+
           {/* Информация о пользователе */}
           <div className="mt-4">
             <div className="flex flex-wrap items-center gap-3 mb-2">
               <h1 className="text-3xl md:text-4xl font-black text-gray-900">
                 {escapeHtml(profileData.username || 'Пользователь')}
               </h1>
+              {!isBanned && currentUser && currentUser.id !== profileData.id && (
+                <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${seen.online ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
+                  {seen.online ? '● ' : ''}
+                  {seen.label}
+                </span>
+              )}
               {!isBanned && isAdmin && roleLabel && (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg font-bold text-sm shadow-lg">
                   <CheckCircle2 className="w-4 h-4" />
@@ -395,34 +421,23 @@ export default function ProfileHeader({
 
             {/* Кнопки действий */}
             {!isBanned && currentUser && currentUser.id !== profileData.id && (() => {
-              const canFollow = isFollowing || (!privacySettings || 
+              const canFollow = isFollowing || (!areFriends && (!privacySettings || 
                 privacySettings.who_can_follow === 'everyone' || 
-                (privacySettings.who_can_follow === 'friends' && areFriends));
+                (privacySettings.who_can_follow === 'friends' && areFriends)));
               
               const canAddFriend = !privacySettings || 
                 privacySettings.who_can_add_friend === 'everyone' || 
                 (privacySettings.who_can_add_friend === 'friends' && areFriends);
 
               return (
-                <div className="mb-4 flex flex-wrap items-center gap-3">
-                  {canFollow && (
-                    <FollowButton 
-                      username={profileData.username || profileData.id}
-                      isFollowing={isFollowing}
-                      userId={profileData.id}
-                    />
-                  )}
-                  {canAddFriend && (
-                    <FriendButton 
-                      userId={profileData.id}
-                      username={cleanUsername}
-                    />
-                  )}
-                  <MessageButton 
-                    userId={profileData.id}
-                    username={cleanUsername}
-                  />
-                </div>
+                <ProfileSocialActions
+                  profileUsername={profileData.username || profileData.id}
+                  profileUserId={profileData.id}
+                  cleanUsername={cleanUsername}
+                  canFollow={canFollow}
+                  canAddFriend={canAddFriend}
+                  isFollowing={isFollowing}
+                />
               );
             })()}
 
@@ -587,7 +602,7 @@ export default function ProfileHeader({
         </div>
       </div>
       {isOwner && isEditorOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/45 p-4">
+        <div className="fixed inset-0 z-[120] flex items-center justify-center overscroll-contain bg-black/45 p-4">
           <div className="w-full max-w-3xl rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
               <h3 className="text-lg font-black text-gray-900">Сменить шапку и аватар</h3>

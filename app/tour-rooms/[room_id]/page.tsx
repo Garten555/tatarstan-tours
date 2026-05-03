@@ -40,9 +40,9 @@ export default async function TourRoomPage({ params }: TourRoomPageProps) {
 
   if (roomError || !room) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center text-red-500">
-          Комната не найдена или у вас нет доступа
+      <div className="flex min-h-[40vh] items-center justify-center bg-[#f0f2f5] px-4 py-16 pt-24">
+        <div className="max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+          <p className="text-red-600">Комната не найдена или у вас нет доступа</p>
         </div>
       </div>
     );
@@ -73,14 +73,21 @@ export default async function TourRoomPage({ params }: TourRoomPageProps) {
   // Если не участник, не гид и не админ - доступ запрещен
   if (!isParticipant && !isGuide && !isAdmin) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center text-red-500">
-          У вас нет доступа к этой комнате
+      <div className="flex min-h-[40vh] items-center justify-center bg-[#f0f2f5] px-4 py-16 pt-24">
+        <div className="max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
+          <p className="text-red-600">У вас нет доступа к этой комнате</p>
         </div>
       </div>
     );
   }
 
-  return <TourRoom roomId={room_id} initialRoom={room} />;
+  return (
+    <TourRoom
+      roomId={room_id}
+      initialRoom={room}
+      viewerUserId={user.id}
+      galleryCanModerate={isGuide || isAdmin}
+    />
+  );
 }
 

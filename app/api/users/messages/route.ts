@@ -2,6 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import Pusher from 'pusher';
+import { publishUserNotification } from '@/lib/pusher/user-notification';
+import { dismissDmNotificationsForSender } from '@/lib/notifications/dismiss-on-chat-read';
+import { rateLimit } from '@/lib/security/rate-limit';
 
 const pusher = new Pusher({
   appId: process.env.PUSHER_APP_ID!,
@@ -31,6 +34,25 @@ export async function GET(request: NextRequest) {
     }
 
     const conversationWith = searchParams.get('with'); // ID пользователя для получения сообщений конкретной беседы
+    const summary = searchParams.get('summary');
+
+    if (summary === 'unread') {
+      const { data: countsRows, error: countsError } = await serviceClient
+        .from('user_conversations')
+        .select('user1_id, user2_id, unread_count_user1, unread_count_user2')
+        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`);
+
+      if (countsError) {
+        return NextResponse.json({ error: 'Не удалось загрузить счетчик' }, { status: 500 });
+      }
+
+      const unread = (countsRows || []).reduce((sum: number, row: any) => {
+        const isUser1 = row.user1_id === user.id;
+        return sum + (isUser1 ? Number(row.unread_count_user1 || 0) : Number(row.unread_count_user2 || 0));
+      }, 0);
+
+      return NextResponse.json({ success: true, unread_count: unread });
+    }
 
     if (conversationWith) {
       // Получаем сообщения конкретной беседы
@@ -87,6 +109,9 @@ export async function GET(request: NextRequest) {
           })
           .in('id', unreadMessageIds);
       }
+
+      // Убираем записи в колокольчике: переписку открыли / сообщения помечены прочитанными
+      await dismissDmNotificationsForSender(serviceClient, user.id, conversationWith);
 
       return NextResponse.json({
         success: true,
@@ -175,6 +200,14 @@ export async function GET(request: NextRequest) {
 // POST /api/users/messages - Отправить сообщение
 export async function POST(request: NextRequest) {
   try {
+    const limiter = rateLimit(request, { windowMs: 60_000, maxRequests: 45 });
+    if (!limiter.success) {
+      return NextResponse.json(
+        { error: 'Слишком много запросов. Попробуйте позже.' },
+        { status: 429, headers: { 'Retry-After': Math.ceil((limiter.resetTime - Date.now()) / 1000).toString() } }
+      );
+    }
+
     const supabase = await createClient();
     const serviceClient = createServiceClient();
 
@@ -301,6 +334,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Создаем уведомление получателю о новом сообщении
+    try {
+      const senderUsername =
+        newMessage?.sender?.username ||
+        newMessage?.sender?.display_name ||
+        'Пользователь';
+      const messagePreview = image_url
+        ? 'Отправил(а) изображение'
+        : (message || '').trim();
+      const shortPreview =
+        messagePreview.length > 90
+          ? `${messagePreview.slice(0, 90)}...`
+          : messagePreview;
+
+      const notificationBody = [
+        `${senderUsername}: ${shortPreview || 'Новое сообщение'}`,
+        `sender_username:${newMessage?.sender?.username || senderUsername}`,
+        `sender_avatar:${newMessage?.sender?.avatar_url || ''}`,
+        `sender_id:${user.id}`,
+      ].join('\n');
+
+      const { data: msgNotif, error: msgNotifError } = await serviceClient
+        .from('notifications')
+        .insert({
+          user_id: recipient_id,
+          title: 'Новое сообщение',
+          body: notificationBody,
+          type: 'message',
+        })
+        .select('id, user_id, title, body, type, created_at')
+        .single();
+
+      if (msgNotifError) {
+        console.error('Ошибка уведомления о новом сообщении:', msgNotifError);
+      } else if (msgNotif) {
+        await publishUserNotification(recipient_id, msgNotif);
+      }
+    } catch (notifErr) {
+      console.error('Ошибка создания уведомления о сообщении:', notifErr);
+    }
+
     // Отправляем через Pusher получателю
     try {
       await pusher.trigger(`user-${recipient_id}`, 'new-message', {
@@ -398,6 +472,8 @@ export async function PATCH(request: NextRequest) {
           { status: 500 }
         );
       }
+
+      await dismissDmNotificationsForSender(serviceClient, user.id, message.sender_id as string);
 
       return NextResponse.json({
         success: true,

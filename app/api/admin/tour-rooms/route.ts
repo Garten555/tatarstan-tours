@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
           title,
           start_date,
           end_date,
+          cover_image,
           city:cities(name)
         ),
         guide:profiles!tour_rooms_guide_id_fkey(
@@ -156,7 +157,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { tour_id } = body;
+    const { tour_id, tour_session_id } = body as {
+      tour_id?: string;
+      tour_session_id?: string | null;
+    };
 
     if (!tour_id) {
       return NextResponse.json(
@@ -179,18 +183,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Проверяем, не существует ли уже комната для этого тура
-    const { data: existingRoom } = await serviceClient
-      .from('tour_rooms')
-      .select('id')
-      .eq('tour_id', tour_id)
-      .maybeSingle();
+    if (typeof tour_session_id === 'string' && tour_session_id.length > 0) {
+      const { data: sRow } = await serviceClient
+        .from('tour_sessions')
+        .select('id')
+        .eq('id', tour_session_id)
+        .eq('tour_id', tour_id)
+        .maybeSingle();
+      if (!sRow) {
+        return NextResponse.json({ error: 'Слот тура не найден' }, { status: 400 });
+      }
+      const { data: existingSlotRoom } = await serviceClient
+        .from('tour_rooms')
+        .select('id')
+        .eq('tour_session_id', tour_session_id)
+        .maybeSingle();
+      if (existingSlotRoom) {
+        return NextResponse.json(
+          { error: 'Комната для этого выезда уже существует' },
+          { status: 400 }
+        );
+      }
+    } else {
+      const { data: existingLegacy } = await serviceClient
+        .from('tour_rooms')
+        .select('id')
+        .eq('tour_id', tour_id)
+        .is('tour_session_id', null)
+        .maybeSingle();
 
-    if (existingRoom) {
-      return NextResponse.json(
-        { error: 'Комната для этого тура уже существует' },
-        { status: 400 }
-      );
+      if (existingLegacy) {
+        return NextResponse.json(
+          { error: 'Общая комната для этого тура уже существует; укажите tour_session_id для нового выезда' },
+          { status: 400 }
+        );
+      }
     }
 
     // Создаем комнату
@@ -198,6 +225,9 @@ export async function POST(request: NextRequest) {
       .from('tour_rooms')
       .insert({
         tour_id: tour_id,
+        ...(typeof tour_session_id === 'string' && tour_session_id.length > 0
+          ? { tour_session_id }
+          : {}),
         created_by: user.id,
       })
       .select(`
@@ -207,6 +237,7 @@ export async function POST(request: NextRequest) {
           title,
           start_date,
           end_date,
+          cover_image,
           city:cities(name)
         ),
         guide:profiles!tour_rooms_guide_id_fkey(

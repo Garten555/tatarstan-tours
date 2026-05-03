@@ -297,12 +297,8 @@ export async function POST(
       throw s3Error;
     }
 
-    // Генерируем превью для видео (пока просто null, можно добавить генерацию)
-    let thumbnailUrl = null;
-    if (isVideo) {
-      // TODO: Генерация превью для видео
-      thumbnailUrl = null;
-    }
+    // Превью для видео не используем — только иконка в сетке галереи
+    const thumbnailUrl = null;
 
     // Сохраняем в БД
     console.log('[Media Upload] Saving to database...');

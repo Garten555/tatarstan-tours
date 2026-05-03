@@ -27,7 +27,7 @@ import {
 import Image from 'next/image';
 import toast from 'react-hot-toast';
 import { CreateDiaryRequest, UpdateDiaryRequest, TravelDiary, DiaryMediaItem } from '@/types';
-import { escapeHtml } from '@/lib/utils/sanitize';
+import { escapeHtml, sanitizeRichHtml } from '@/lib/utils/sanitize';
 import RichTextEditor from '@/components/admin/RichTextEditor';
 
 interface DiaryEditorProps {
@@ -893,7 +893,7 @@ export function InteractiveDiaryEditor({ diary, tourId, bookingId, onSave, onCan
             <div className="prose max-w-none">
               {contentBlocks.map(block => {
                 if (block.type === 'text') {
-                  return <div key={block.id} dangerouslySetInnerHTML={{ __html: block.content }} />;
+                  return <div key={block.id} dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(block.content) }} />;
                 }
                 if (block.type === 'image' && block.url) {
                   return (

@@ -45,6 +45,7 @@ export default async function MyToursPage() {
         title,
         start_date,
         end_date,
+        cover_image,
         city:cities(name)
       ),
       participants:tour_room_participants(count)
@@ -63,32 +64,47 @@ export default async function MyToursPage() {
       title: unknown;
       start_date: unknown;
       end_date: unknown;
+      cover_image?: unknown;
       city?: { name: unknown } | { name: unknown }[] | null;
     } | {
       id: unknown;
       title: unknown;
       start_date: unknown;
       end_date: unknown;
+      cover_image?: unknown;
       city?: { name: unknown } | { name: unknown }[] | null;
     }[] | null;
-    participants?: unknown;
+    participants?: { count?: unknown }[] | null;
   }
-  const roomsWithCounts = (await Promise.all(
-    (rooms || []).map(async (room: RoomData) => {
-      const { count } = await serviceClient
-        .from('tour_room_participants')
-        .select('id', { count: 'exact', head: true })
-        .eq('room_id', String(room.id));
 
-      const tour = Array.isArray(room.tour) && room.tour.length > 0 
-        ? room.tour[0] 
-        : (room.tour && !Array.isArray(room.tour) ? room.tour : null);
+  const participantCountFromEmbed = (raw: RoomData['participants']): number => {
+    if (!Array.isArray(raw) || raw.length === 0) return 0;
+    const n = raw[0]?.count;
+    if (typeof n === 'number' && !Number.isNaN(n)) return n;
+    if (typeof n === 'string') {
+      const parsed = parseInt(n, 10);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+  };
+
+  const roomsWithCounts = (rooms || [])
+    .map((room: RoomData) => {
+      const tour =
+        Array.isArray(room.tour) && room.tour.length > 0
+          ? room.tour[0]
+          : room.tour && !Array.isArray(room.tour)
+            ? room.tour
+            : null;
 
       if (!tour) return null;
 
-      const city = Array.isArray(tour.city) && tour.city.length > 0
-        ? { name: String(tour.city[0].name) }
-        : (tour.city && !Array.isArray(tour.city) ? { name: String(tour.city.name) } : undefined);
+      const city =
+        Array.isArray(tour.city) && tour.city.length > 0
+          ? { name: String(tour.city[0].name) }
+          : tour.city && !Array.isArray(tour.city)
+            ? { name: String(tour.city.name) }
+            : undefined;
 
       return {
         id: String(room.id),
@@ -100,12 +116,13 @@ export default async function MyToursPage() {
           title: String(tour.title),
           start_date: String(tour.start_date),
           end_date: tour.end_date ? String(tour.end_date) : null,
+          cover_image: tour.cover_image ? String(tour.cover_image) : null,
           city,
         },
-        participants_count: count || 0,
+        participants_count: participantCountFromEmbed(room.participants),
       };
     })
-  )).filter((room): room is NonNullable<typeof room> => room !== null);
+    .filter((room): room is NonNullable<typeof room> => room !== null);
 
   return (
     <div className="space-y-8">

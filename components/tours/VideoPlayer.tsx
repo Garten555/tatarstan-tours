@@ -3,7 +3,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import { videoPlaybackSrc } from '@/lib/video/playback-src';
 import { bindPlyrRussianSpeedUi, type PlyrRussianUiHost } from '@/lib/video/plyr-ru-speed-ui';
-import { loadPlyrFromCdn } from '@/lib/video/load-plyr-cdn';
+import { loadPlyr } from '@/lib/video/load-plyr';
 
 interface VideoPlayerProps {
   src: string;
@@ -149,7 +149,7 @@ export default function VideoPlayer({ src, title }: VideoPlayerProps) {
       },
     };
 
-    void loadPlyrFromCdn()
+    void loadPlyr()
       .then((PlyrCtor) => {
         if (cancelled || videoRef.current !== videoEl) return;
         try {
@@ -163,7 +163,7 @@ export default function VideoPlayer({ src, title }: VideoPlayerProps) {
         }
       })
       .catch((e) => {
-        console.error('[VideoPlayer] не удалось загрузить Plyr с CDN', e);
+        console.error('[VideoPlayer] не удалось загрузить Plyr', e);
         if (!cancelled) videoEl.setAttribute('controls', '');
       });
 
@@ -180,17 +180,22 @@ export default function VideoPlayer({ src, title }: VideoPlayerProps) {
   if (!safeSrc) return null;
 
   const playback = videoPlaybackSrc(safeSrc);
+  const mimeHint =
+    /\.webm(\?|$)/i.test(safeSrc) || /\.webm(\?|$)/i.test(playback)
+      ? 'video/webm'
+      : 'video/mp4';
 
   return (
     <div key={`${safeSrc}-${playback}`} className="plyr-container relative w-full aspect-video min-h-[200px] bg-black">
       <video
         ref={videoRef}
         className="plyr h-full w-full"
-        src={playback}
         playsInline
         preload="auto"
         {...(title ? { 'aria-label': title } : {})}
-      />
+      >
+        <source src={playback} type={mimeHint} />
+      </video>
     </div>
   );
 }

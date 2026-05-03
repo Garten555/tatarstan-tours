@@ -3,6 +3,10 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { Send, Loader2, Search, MessageSquare, Menu, X, CheckCircle, Archive, AlertCircle, Trash2 } from 'lucide-react';
 import Pusher from 'pusher-js';
+import { playNotificationSound } from '@/lib/sound/notifications';
+import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
+import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
+import { insertEmojiAtCursor } from '@/lib/chat/insert-emoji-at-cursor';
 
 type Session = {
   session_id: string;
@@ -40,6 +44,9 @@ export default function SupportChatAdmin() {
   const [deletingSession, setDeletingSession] = useState(false);
   const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<any>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const nearBottomRef = useRef(true);
+  const autoScrollNextRef = useRef(true);
 
   const loadSessions = async () => {
     try {
@@ -126,25 +133,9 @@ export default function SupportChatAdmin() {
       return;
     }
 
-    // Отключаем предыдущее подключение
-    if (pusherRef.current) {
-      try {
-        const state = pusherRef.current.connection?.state;
-        if (state && state !== 'disconnected' && state !== 'disconnecting') {
-          pusherRef.current.disconnect();
-        }
-      } catch (error) {
-        // Игнорируем ошибки, если соединение уже закрыто
-      }
-    }
-    if (channelRef.current) {
-      try {
-        channelRef.current.unbind_all();
-        channelRef.current.unsubscribe();
-      } catch (error) {
-        // Игнорируем ошибки, если канал уже закрыт
-      }
-    }
+    disconnectPusherSafely(pusherRef.current, [channelRef.current]);
+    channelRef.current = null;
+    pusherRef.current = null;
 
     const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
       cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'eu',
@@ -178,36 +169,18 @@ export default function SupportChatAdmin() {
           if (prev.some((m) => m.id === data.message.id)) {
             return prev;
           }
+          if (!data.message.is_support) {
+            playNotificationSound('message');
+          }
           return [...prev, data.message];
         });
       }
     });
 
     return () => {
-      // Очистка канала
-      if (channelRef.current) {
-        try {
-          channelRef.current.unbind_all();
-          channelRef.current.unsubscribe();
-        } catch (error) {
-          // Игнорируем ошибки, если канал уже закрыт
-        }
-        channelRef.current = null;
-      }
-      
-      // Очистка Pusher
-      if (pusherRef.current) {
-        try {
-          // Проверяем состояние соединения перед отключением
-          const state = pusherRef.current.connection?.state;
-          if (state && state !== 'disconnected' && state !== 'disconnecting') {
-            pusherRef.current.disconnect();
-          }
-        } catch (error) {
-          // Игнорируем ошибки, если соединение уже закрыто
-        }
-        pusherRef.current = null;
-      }
+      disconnectPusherSafely(pusherRef.current, [channelRef.current]);
+      channelRef.current = null;
+      pusherRef.current = null;
     };
   }, [activeSession]);
 
@@ -309,6 +282,8 @@ export default function SupportChatAdmin() {
 
       const data = JSON.parse(text);
       if (data.success) {
+        playNotificationSound('message');
+        autoScrollNextRef.current = true;
         setInput('');
         // Сбрасываем высоту textarea
         if (textareaRef.current) {
@@ -324,7 +299,6 @@ export default function SupportChatAdmin() {
   };
 
   const sessionLabel = useMemo(() => activeSession?.user_label || 'Сессия', [activeSession]);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const filteredSessions = useMemo(() => {
@@ -338,7 +312,27 @@ export default function SupportChatAdmin() {
   }, [sessions, searchQuery]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const onScroll = () => {
+      const distance = container.scrollHeight - container.scrollTop - container.clientHeight;
+      nearBottomRef.current = distance <= 120;
+    };
+    onScroll();
+    container.addEventListener('scroll', onScroll);
+    return () => container.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (!messages.length) return;
+    if (autoScrollNextRef.current || nearBottomRef.current) {
+      autoScrollNextRef.current = false;
+      requestAnimationFrame(() => {
+        const container = messagesContainerRef.current;
+        if (!container) return;
+        container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+      });
+    }
   }, [messages]);
 
   // Автоподстройка высоты textarea
@@ -537,7 +531,10 @@ export default function SupportChatAdmin() {
             </div>
 
             {/* Сообщения */}
-            <div className="flex-1 overflow-y-auto chat-scroll bg-gradient-to-b from-gray-50 to-white p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4 min-h-0">
+            <div
+              ref={messagesContainerRef}
+              className="flex-1 overflow-y-auto chat-scroll bg-gradient-to-b from-gray-50 to-white p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4 min-h-0"
+            >
               {messages.length === 0 ? (
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
@@ -566,7 +563,7 @@ export default function SupportChatAdmin() {
                       </div>
                     </div>
                   ))}
-                  <div ref={messagesEndRef} />
+                  <div />
                 </>
               )}
             </div>
@@ -590,15 +587,22 @@ export default function SupportChatAdmin() {
                     className="flex-1 px-3 sm:px-4 md:px-5 py-2.5 sm:py-3 border-2 border-gray-200 rounded-lg sm:rounded-xl text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none overflow-hidden min-h-[44px] sm:min-h-[48px] max-h-[150px] sm:max-h-[200px]"
                     style={{ fontSize: '16px' }} // Предотвращает зум на iOS
                   />
+                  <ChatEmojiPicker
+                    disabled={sending}
+                    buttonClassName="flex min-h-[44px] min-w-[44px] sm:min-h-[48px] sm:min-w-[48px] flex-shrink-0 items-center justify-center rounded-lg sm:rounded-xl bg-gray-100 text-gray-600 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                    onEmojiSelect={(emoji) =>
+                      insertEmojiAtCursor(emoji, input, setInput, textareaRef)
+                    }
+                  />
                   <button
                     onClick={sendMessage}
                     disabled={sending || !input.trim()}
                     className="px-4 sm:px-5 md:px-6 py-2.5 sm:py-3 bg-blue-600 text-white rounded-lg sm:rounded-xl hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2 font-black text-sm sm:text-base transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:scale-95"
                   >
                     {sending ? (
-                      <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
+                      <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin text-white" />
                     ) : (
-                      <Send className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <Send className="w-4 h-4 sm:w-5 sm:h-5 text-white" strokeWidth={2} />
                     )}
                     <span className="hidden sm:inline">Отправить</span>
                   </button>

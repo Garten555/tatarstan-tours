@@ -2,7 +2,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
   Search, 
@@ -14,9 +13,22 @@ import {
   Loader2,
   MessageSquare,
   Trash2,
-  DoorOpen
+  DoorOpen,
+  Info,
+  Timer,
 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import toast from 'react-hot-toast';
+import { escapeHtml } from '@/lib/utils/sanitize';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
+import ConfirmModal from '@/components/common/ConfirmModal';
+
+type TourRoomsConfirm = null | {
+  title: string;
+  description: string;
+  variant?: 'default' | 'danger';
+  confirmLabel?: string;
+  action: () => Promise<void>;
+};
 
 interface TourRoom {
   id: string;
@@ -29,6 +41,7 @@ interface TourRoom {
     title: string;
     start_date: string;
     end_date: string | null;
+    cover_image?: string | null;
     city?: {
       name: string;
     };
@@ -43,10 +56,11 @@ interface TourRoom {
 }
 
 export default function TourRoomsPage() {
-  const supabase = createClient();
   const [rooms, setRooms] = useState<TourRoom[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [guideFilter, setGuideFilter] = useState<'all' | 'assigned' | 'none'>('all');
+  const [participantsFilter, setParticipantsFilter] = useState<'all' | 'with' | 'empty'>('all');
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [assigningGuide, setAssigningGuide] = useState(false);
   interface User {
@@ -54,6 +68,7 @@ export default function TourRoomsPage() {
     first_name: string;
     last_name: string;
     email: string;
+    avatar_url?: string | null;
   }
   interface Tour {
     id: string;
@@ -66,6 +81,9 @@ export default function TourRoomsPage() {
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [creatingRoom, setCreatingRoom] = useState(false);
   const [selectedTourId, setSelectedTourId] = useState<string | null>(null);
+  const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<TourRoomsConfirm>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
 
   useEffect(() => {
     // Загружаем только комнаты при монтировании
@@ -73,9 +91,22 @@ export default function TourRoomsPage() {
     loadRooms();
   }, []);
 
-  const loadRooms = async () => {
+  useBodyScrollLock(showUserSelect || showCreateRoom || confirmDialog !== null);
+
+  const handleConfirmDialog = async () => {
+    if (!confirmDialog) return;
+    setConfirmBusy(true);
     try {
-      setLoading(true);
+      await confirmDialog.action();
+    } finally {
+      setConfirmBusy(false);
+      setConfirmDialog(null);
+    }
+  };
+
+  const loadRooms = async (opts?: { silent?: boolean }) => {
+    try {
+      if (!opts?.silent) setLoading(true);
       const response = await fetch('/api/admin/tour-rooms');
       const data = await response.json();
       
@@ -85,7 +116,7 @@ export default function TourRoomsPage() {
     } catch (error) {
       console.error('Ошибка загрузки комнат:', error);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   };
 
@@ -140,7 +171,12 @@ export default function TourRoomsPage() {
       const data = await response.json();
       
       if (data.success) {
-        await loadRooms();
+        if (data.room) {
+          const nr = data.room as TourRoom;
+          setRooms((prev) => [...prev, { ...nr, participants_count: nr.participants_count ?? 0 }]);
+        } else {
+          await loadRooms({ silent: true });
+        }
         setShowCreateRoom(false);
         setSelectedTourId(null);
       } else {
@@ -167,8 +203,10 @@ export default function TourRoomsPage() {
 
       const data = await response.json();
       
-      if (data.success) {
-        await loadRooms();
+      if (data.success && data.room) {
+        setRooms((prev) =>
+          prev.map((r) => (r.id === roomId ? { ...r, ...(data.room as TourRoom) } : r))
+        );
         setSelectedRoom(null);
         setShowUserSelect(false);
       } else {
@@ -182,40 +220,89 @@ export default function TourRoomsPage() {
     }
   };
 
-  const deleteRoom = async (roomId: string) => {
-    if (!confirm('Вы уверены, что хотите удалить эту комнату? Это действие удалит все сообщения, участников и медиа этой комнаты. Это действие нельзя отменить.')) {
-      return;
-    }
+  const deleteRoom = (roomId: string) => {
+    setConfirmDialog({
+      title: 'Удалить комнату?',
+      description:
+        'Это действие удалит все сообщения, участников и медиа этой комнаты. Отменить будет нельзя.',
+      variant: 'danger',
+      confirmLabel: 'Удалить навсегда',
+      action: async () => {
+        try {
+          setDeletingRoom(roomId);
+          const response = await fetch(`/api/admin/tour-rooms/${roomId}`, {
+            method: 'DELETE',
+          });
 
-    try {
-      setDeletingRoom(roomId);
-      const response = await fetch(`/api/admin/tour-rooms/${roomId}`, {
-        method: 'DELETE',
-      });
+          const data = await response.json().catch(() => ({}));
 
-      const data = await response.json();
-      
-      if (data.success) {
-        await loadRooms();
-      } else {
-        alert(data.error || 'Не удалось удалить комнату');
-      }
-    } catch (error) {
-      console.error('Ошибка удаления комнаты:', error);
-      alert('Ошибка удаления комнаты');
-    } finally {
-      setDeletingRoom(null);
-    }
+          if (!response.ok) {
+            toast.error((data as { error?: string }).error || `Ошибка ${response.status}`);
+            return;
+          }
+
+          if ((data as { success?: boolean }).success) {
+            setRooms((prev) => prev.filter((r) => r.id !== roomId));
+            toast.success('Комната удалена');
+          } else {
+            toast.error((data as { error?: string }).error || 'Не удалось удалить комнату');
+          }
+        } catch (error) {
+          console.error('Ошибка удаления комнаты:', error);
+          toast.error('Ошибка удаления комнаты');
+        } finally {
+          setDeletingRoom(null);
+        }
+      },
+    });
+  };
+
+  /** Те же правила, что у cron: комнаты туров, у которых end_date был более 14 дней назад. */
+  const openRetentionCleanupConfirm = () => {
+    setConfirmDialog({
+      title: 'Очистить комнаты по сроку?',
+      description:
+        'Будут удалены комнаты туров, у которых дата окончания тура (end_date) была более 14 дней назад. Участники, сообщения и медиа этих комнат будут удалены.',
+      variant: 'danger',
+      confirmLabel: 'Удалить старые комнаты',
+      action: async () => {
+        try {
+          setCleanupLoading(true);
+          const res = await fetch('/api/admin/cleanup/tour-rooms', { method: 'POST' });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            toast.error((data as { error?: string }).error || `Ошибка ${res.status}`);
+            return;
+          }
+          const deleted = (data as { deleted?: number }).deleted ?? 0;
+          toast.success((data as { message?: string }).message || `Удалено комнат: ${deleted}`);
+          await loadRooms({ silent: true });
+        } catch (e) {
+          console.error(e);
+          toast.error('Не удалось выполнить очистку');
+        } finally {
+          setCleanupLoading(false);
+        }
+      },
+    });
   };
 
   const filteredRooms = rooms.filter((room) => {
-    if (!searchQuery) return true;
+    const count = room.participants_count ?? 0;
+    if (guideFilter === 'assigned' && !room.guide_id) return false;
+    if (guideFilter === 'none' && room.guide_id) return false;
+    if (participantsFilter === 'with' && count === 0) return false;
+    if (participantsFilter === 'empty' && count > 0) return false;
+
+    if (!searchQuery.trim()) return true;
     const query = searchQuery.toLowerCase();
+    const guideEmail = room.guide?.email?.toLowerCase() ?? '';
     return (
       room.tour.title.toLowerCase().includes(query) ||
-      room.tour.city?.name.toLowerCase().includes(query) ||
+      (room.tour.city?.name.toLowerCase().includes(query) ?? false) ||
       room.guide?.first_name.toLowerCase().includes(query) ||
-      room.guide?.last_name.toLowerCase().includes(query)
+      room.guide?.last_name.toLowerCase().includes(query) ||
+      guideEmail.includes(query)
     );
   });
 
@@ -257,18 +344,45 @@ export default function TourRoomsPage() {
               Управление комнатами и назначение гидов
             </p>
           </div>
-          <button
-            onClick={() => {
-              setShowCreateRoom(true);
-              if (tours.length === 0) {
-                loadTours();
-              }
-            }}
-            className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 flex items-center gap-2 font-black text-base transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-          >
-            <UserPlus className="w-5 h-5" />
-            <span>Создать комнату</span>
-          </button>
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={openRetentionCleanupConfirm}
+              disabled={cleanupLoading}
+              className="px-4 py-3 border-2 border-slate-200 bg-white text-slate-800 rounded-xl hover:bg-slate-50 flex items-center justify-center gap-2 font-bold text-sm transition-all disabled:opacity-50"
+              title="Удалить только комнаты с турами, завершёнными более 14 дней назад"
+            >
+              {cleanupLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Timer className="w-5 h-5 text-slate-600" />
+              )}
+              <span>Очистить по сроку (14 дн.)</span>
+            </button>
+            <button
+              onClick={() => {
+                setShowCreateRoom(true);
+                if (tours.length === 0) {
+                  loadTours();
+                }
+              }}
+              className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 flex items-center justify-center gap-2 font-black text-base transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+            >
+              <UserPlus className="w-5 h-5" />
+              <span>Создать комнату</span>
+            </button>
+          </div>
+        </div>
+        <div className="mt-6 rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 flex gap-3 items-start">
+          <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" aria-hidden />
+          <div className="text-sm text-slate-800 leading-relaxed">
+            <strong className="font-bold">Удаление:</strong> у каждой комнаты есть кнопка «Удалить» — срочное удаление вручную (сообщения, участники, медиа).
+            <br />
+            <strong className="font-bold">Автоочистка:</strong> комнаты с турами, у которых прошло более{' '}
+            <strong>14 дней</strong> после даты окончания тура (<code className="text-xs bg-white/80 px-1 rounded">end_date</code>
+            ), можно регулярно снимать через cron (<code className="text-xs bg-white/80 px-1 rounded">POST /api/admin/cleanup/tour-rooms</code>
+            ) или кнопкой выше.
+          </div>
         </div>
       </div>
 
@@ -277,12 +391,61 @@ export default function TourRoomsPage() {
         <div className="relative">
           <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-6 h-6" />
           <input
-            type="text"
-            placeholder="Поиск по названию тура, городу, гиду..."
+            type="search"
+            placeholder="Поиск по названию тура, городу, имени гида или email…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            autoComplete="off"
             className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-base"
           />
+        </div>
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Гид:</span>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { id: 'all' as const, label: 'Все' },
+                { id: 'assigned' as const, label: 'Назначен' },
+                { id: 'none' as const, label: 'Без гида' },
+              ]
+            ).map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setGuideFilter(id)}
+                className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition md:text-sm ${
+                  guideFilter === id
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <span className="text-xs font-bold uppercase tracking-wide text-gray-500 sm:ml-2">Участники:</span>
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                { id: 'all' as const, label: 'Любые' },
+                { id: 'with' as const, label: 'Есть в комнате' },
+                { id: 'empty' as const, label: 'Пусто (0)' },
+              ]
+            ).map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setParticipantsFilter(id)}
+                className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition md:text-sm ${
+                  participantsFilter === id
+                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/25 ring-1 ring-emerald-500/30'
+                    : 'border border-gray-200 bg-white text-gray-700 hover:border-emerald-200 hover:bg-emerald-50/80'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -292,21 +455,37 @@ export default function TourRoomsPage() {
           <div className="text-center py-12">
             <DoorOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-xl font-black text-gray-900">
-              {searchQuery ? 'Комнаты не найдены' : 'Пока нет комнат туров'}
+              {searchQuery || guideFilter !== 'all' || participantsFilter !== 'all'
+                ? 'Комнаты не найдены по фильтрам'
+                : 'Пока нет комнат туров'}
             </p>
           </div>
         ) : (
           <div className="space-y-4">
             {filteredRooms.map((room) => (
               <div key={room.id} className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm hover:shadow-xl hover:border-emerald-400 p-6 transition-all duration-200">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-3">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex min-w-0 flex-1 gap-4">
+                    <div className="relative h-28 w-full max-w-[200px] shrink-0 overflow-hidden rounded-xl bg-gray-100 sm:h-32 sm:w-40 md:h-36 md:w-44">
+                      {room.tour.cover_image ? (
+                        <img
+                          src={room.tour.cover_image}
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-emerald-100 to-teal-100 text-sm font-bold text-emerald-700">
+                          Тур
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-3 mb-3 flex-wrap">
                       <Link
                         href={`/tours/${room.tour.id}`}
                         className="tour-room-title-link text-xl md:text-2xl font-black text-gray-900 hover:text-emerald-600 transition-colors"
                       >
-                        {room.tour.title}
+                        {escapeHtml(room.tour.title)}
                       </Link>
                       {room.guide && (
                         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-100 text-yellow-800 rounded-xl text-sm font-bold">
@@ -345,9 +524,10 @@ export default function TourRoomsPage() {
                         <span className="text-gray-500 ml-2">({room.guide.email})</span>
                       </div>
                     )}
+                    </div>
                   </div>
 
-                  <div className="flex flex-col items-end gap-2">
+                  <div className="flex flex-col items-stretch sm:items-end gap-2 shrink-0">
                     <Link
                       href={`/tour-rooms/${room.id}`}
                       className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 flex items-center gap-2 font-black text-base transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
@@ -393,10 +573,23 @@ export default function TourRoomsPage() {
         )}
       </div>
 
+      <ConfirmModal
+        open={confirmDialog !== null}
+        title={confirmDialog?.title ?? ''}
+        description={confirmDialog?.description ?? ''}
+        variant={confirmDialog?.variant ?? 'default'}
+        confirmLabel={confirmDialog?.confirmLabel}
+        busy={confirmBusy}
+        onConfirm={() => void handleConfirmDialog()}
+        onCancel={() => {
+          if (!confirmBusy) setConfirmDialog(null);
+        }}
+      />
+
       {/* Модальное окно выбора гида */}
       {showUserSelect && selectedRoom && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overscroll-contain">
+          <div className="max-h-[min(90vh,560px)] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
             <h3 className="text-2xl md:text-3xl font-black text-gray-900 mb-6 flex items-center gap-3">
               <Crown className="w-7 h-7 text-emerald-600" />
               Выберите гида
@@ -411,20 +604,36 @@ export default function TourRoomsPage() {
                 <div className="font-bold text-base">Убрать гида</div>
                 <div className="text-sm text-gray-500">Оставить без гида</div>
               </button>
-              {users.map((user) => (
-                <button
-                  key={user.id}
-                  onClick={() => {
-                    assignGuide(selectedRoom, user.id);
-                  }}
-                  className="w-full text-left px-4 py-3 rounded-xl hover:bg-gray-100 border-2 border-gray-200 transition-all duration-200"
-                >
-                  <div className="font-bold text-base">
-                    {user.first_name} {user.last_name}
-                  </div>
-                  <div className="text-sm text-gray-500">{user.email}</div>
-                </button>
-              ))}
+              {users.map((user) => {
+                const initials = `${user.first_name?.[0] ?? ''}${user.last_name?.[0] ?? ''}`.trim() || user.email?.[0]?.toUpperCase() || '?';
+                return (
+                  <button
+                    key={user.id}
+                    onClick={() => {
+                      assignGuide(selectedRoom, user.id);
+                    }}
+                    className="flex w-full items-center gap-3 rounded-xl border-2 border-gray-200 px-4 py-3 text-left transition-all duration-200 hover:bg-gray-100"
+                  >
+                    {user.avatar_url ? (
+                      <img
+                        src={user.avatar_url}
+                        alt=""
+                        className="h-11 w-11 shrink-0 rounded-full border-2 border-emerald-200 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border-2 border-emerald-200 bg-gradient-to-br from-emerald-500 to-emerald-600 text-sm font-black text-white">
+                        {initials.toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-base font-bold">
+                        {user.first_name} {user.last_name}
+                      </div>
+                      <div className="truncate text-sm text-gray-500">{user.email}</div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
             <button
               onClick={() => {
@@ -441,8 +650,8 @@ export default function TourRoomsPage() {
 
       {/* Модальное окно создания комнаты */}
       {showCreateRoom && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm overscroll-contain">
+          <div className="max-h-[min(90vh,560px)] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
             <h3 className="text-2xl md:text-3xl font-black text-gray-900 mb-6 flex items-center gap-3">
               <DoorOpen className="w-7 h-7 text-emerald-600" />
               Создать комнату для тура
