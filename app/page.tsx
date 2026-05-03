@@ -13,7 +13,7 @@ export default async function Home() {
   const now = new Date().toISOString();
   const { data: popularTours } = await supabase
     .from('tours')
-    .select('title, slug, short_desc, price_per_person, start_date, end_date, current_participants')
+    .select('title, slug, price_per_person, start_date, end_date, current_participants')
     .eq('status', 'active')
     .or(`end_date.is.null,end_date.gte.${now}`)
     .order('current_participants', { ascending: false })
@@ -41,12 +41,10 @@ export default async function Home() {
         durationLabel = `${diffDays} ${diffDays === 1 ? 'день' : diffDays < 5 ? 'дня' : 'дней'}`;
       }
     }
-    const shortRaw = typeof tour.short_desc === 'string' ? tour.short_desc.trim() : '';
     return {
       title: String(tour.title ?? ''),
       slug: tour.slug ? String(tour.slug) : undefined,
       price: typeof tour.price_per_person === 'number' ? tour.price_per_person : null,
-      shortDesc: shortRaw || null,
       durationLabel,
       startDateLabel: start
         ? new Date(start).toLocaleDateString('ru-RU', {

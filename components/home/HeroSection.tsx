@@ -10,7 +10,6 @@ type PopularTour = {
   title: string;
   slug?: string;
   price?: number | null;
-  shortDesc?: string | null;
   durationLabel?: string | null;
   startDateLabel?: string | null;
 };
@@ -19,34 +18,29 @@ const FALLBACK_TOUR: PopularTour = {
   title: 'Казань + Болгар',
   slug: undefined,
   price: null,
-  shortDesc: 'Групповая экскурсия по классическому маршруту',
   durationLabel: null,
   startDateLabel: null,
 };
 
 function GlassTourCard({ tour, linked }: { tour: PopularTour; linked: boolean }) {
   const inner = (
-    <div className="relative cursor-pointer rounded-2xl border border-white/20 bg-white/10 p-6 shadow-2xl backdrop-blur-xl transition-all duration-300 group-hover/card:border-emerald-400/40 group-hover/card:bg-white/15">
-      <div className="mb-4 flex items-center gap-2">
+    <div className="relative cursor-pointer rounded-2xl border border-white/20 bg-white/10 p-7 shadow-2xl backdrop-blur-xl transition-all duration-300 group-hover/card:border-emerald-400/40 group-hover/card:bg-white/15 sm:p-8">
+      <div className="mb-6 flex items-center gap-2.5">
         <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
         <span className="text-xs font-medium uppercase tracking-[0.2em] text-white/80">Ближайший выезд</span>
       </div>
 
-      <h3 className="mb-2 text-2xl font-bold leading-tight text-white transition-colors group-hover/card:text-emerald-200">
+      <h3 className="mb-8 text-2xl font-bold leading-snug text-white transition-colors group-hover/card:text-emerald-200 sm:text-[1.65rem]">
         {tour.title}
       </h3>
 
-      <p className="mb-4 line-clamp-2 text-sm leading-relaxed text-white/75">
-        {tour.shortDesc?.trim() || 'Экскурсии и маршруты по Татарстану — с проверенными гидами.'}
-      </p>
-
       {tour.price != null && tour.price > 0 ? (
-        <div className="mb-4 text-2xl font-bold text-emerald-300">от {tour.price.toLocaleString('ru-RU')} ₽</div>
+        <div className="mb-7 text-2xl font-bold text-emerald-300">от {tour.price.toLocaleString('ru-RU')} ₽</div>
       ) : (
-        <div className="mb-4 text-lg text-white/80">Лучшие маршруты сезона</div>
+        <div className="mb-7 text-lg text-white/80">Лучшие маршруты сезона</div>
       )}
 
-      <div className="flex items-center justify-between border-t border-white/10 pt-4">
+      <div className="flex items-center justify-between border-t border-white/10 pt-6">
         <span className="text-sm text-white/70">{tour.durationLabel || 'Даты уточняются'}</span>
         <span className="text-lg font-bold text-white">{tour.startDateLabel || 'Скоро'}</span>
       </div>
