@@ -2,8 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 import {
   PUSHER_BRIDGE_EVENT,
   type PusherBridgeDetail,
@@ -14,8 +13,6 @@ import { useDialog } from '@/hooks/useDialog';
 import { isSoundEnabled, setSoundEnabled } from '@/lib/sound/notifications';
 
 export default function UserMenu() {
-  const router = useRouter();
-  const supabase = createClient();
   const { alert, DialogComponents } = useDialog();
   
   const [user, setUser] = useState<SupabaseUser | null>(null);
@@ -401,7 +398,7 @@ export default function UserMenu() {
       window.removeEventListener('focus', onVisible);
       window.removeEventListener('avatarUpdated', handleAvatarUpdate);
     };
-  }, [supabase, user?.id]); // Зависимость только от user.id
+  }, [user?.id]);
 
   useEffect(() => {
     setSoundEnabledState(isSoundEnabled());
@@ -443,36 +440,44 @@ export default function UserMenu() {
 
   const handleSignOut = async () => {
     try {
-      setIsOpen(false); // Закрываем меню
-      
-      // Очищаем кэш
+      setIsOpen(false);
+
       localStorage.removeItem('tt_profile');
       sessionStorage.removeItem('tt_profile');
       localStorage.removeItem('tt_is_guide');
       localStorage.removeItem('tt_is_guide_time');
       localStorage.removeItem('tt_is_guide_user_id');
-      
-      // Выход из Supabase
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        console.error('Ошибка выхода:', error);
-        await alert('Ошибка при выходе. Попробуйте обновить страницу.', 'Ошибка', 'error');
-        return;
+
+      // Сервер: сброс auth-cookies (клиентский signOut() к Auth API часто виснет без VPN)
+      try {
+        const ac = new AbortController();
+        const tid = setTimeout(() => ac.abort(), 8000);
+        await fetch('/api/auth/signout', {
+          method: 'POST',
+          credentials: 'include',
+          signal: ac.signal,
+        });
+        clearTimeout(tid);
+      } catch {
+        /* сеть — всё равно чистим клиент и перезагружаем */
       }
-      
-      // Сбрасываем состояние
+
+      try {
+        await Promise.race([
+          supabase.auth.signOut({ scope: 'local' }),
+          new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+        ]);
+      } catch {
+        /* ignore */
+      }
+      void supabase.auth.signOut({ scope: 'global' }).catch(() => {});
+
       setUser(null);
       setProfile(null);
       setIsGuide(false);
       guideCheckedRef.current = null;
-      
-      // Перенаправляем на главную
-      router.push('/');
-      router.refresh();
-      
-      // Принудительная перезагрузка для очистки всех данных
-      window.location.href = '/';
+
+      window.location.assign('/');
     } catch (error) {
       console.error('Ошибка выхода:', error);
       await alert('Ошибка при выходе. Попробуйте обновить страницу.', 'Ошибка', 'error');
