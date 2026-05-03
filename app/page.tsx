@@ -13,7 +13,7 @@ export default async function Home() {
   const now = new Date().toISOString();
   const { data: popularTours } = await supabase
     .from('tours')
-    .select('title, slug, price_per_person, start_date, end_date, current_participants')
+    .select('title, slug, short_desc, price_per_person, start_date, end_date, current_participants')
     .eq('status', 'active')
     .or(`end_date.is.null,end_date.gte.${now}`)
     .order('current_participants', { ascending: false })
@@ -25,17 +25,37 @@ export default async function Home() {
     data: { user },
   } = await supabaseAuth.auth.getUser();
 
-  const popularTourItems = (popularTours || []).map((tour: Record<string, unknown>) => ({
-    title: String(tour.title ?? ''),
-    slug: tour.slug ? String(tour.slug) : undefined,
-    price: typeof tour.price_per_person === 'number' ? tour.price_per_person : null,
-    startDateLabel: tour.start_date
-      ? new Date(String(tour.start_date)).toLocaleDateString('ru-RU', {
-          day: '2-digit',
-          month: 'long',
-        })
-      : null,
-  }));
+  const popularTourItems = (popularTours || []).map((tour: Record<string, unknown>) => {
+    const start = tour.start_date ? String(tour.start_date) : '';
+    const endRaw = tour.end_date != null ? String(tour.end_date) : start;
+    let durationLabel: string | null = null;
+    if (start) {
+      const s = new Date(start);
+      const e = new Date(endRaw);
+      const diffMs = Math.abs(e.getTime() - s.getTime());
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) {
+        const h = Math.ceil(diffMs / (1000 * 60 * 60));
+        durationLabel = h > 0 ? `${h} ч` : '1 день';
+      } else {
+        durationLabel = `${diffDays} ${diffDays === 1 ? 'день' : diffDays < 5 ? 'дня' : 'дней'}`;
+      }
+    }
+    const shortRaw = typeof tour.short_desc === 'string' ? tour.short_desc.trim() : '';
+    return {
+      title: String(tour.title ?? ''),
+      slug: tour.slug ? String(tour.slug) : undefined,
+      price: typeof tour.price_per_person === 'number' ? tour.price_per_person : null,
+      shortDesc: shortRaw || null,
+      durationLabel,
+      startDateLabel: start
+        ? new Date(start).toLocaleDateString('ru-RU', {
+            day: '2-digit',
+            month: 'long',
+          })
+        : null,
+    };
+  });
 
   return (
     <main>

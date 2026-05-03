@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
@@ -10,35 +10,70 @@ type PopularTour = {
   title: string;
   slug?: string;
   price?: number | null;
+  shortDesc?: string | null;
+  durationLabel?: string | null;
   startDateLabel?: string | null;
 };
 
+const FALLBACK_TOUR: PopularTour = {
+  title: 'Казань + Болгар',
+  slug: undefined,
+  price: null,
+  shortDesc: 'Групповая экскурсия по классическому маршруту',
+  durationLabel: null,
+  startDateLabel: null,
+};
+
+function GlassTourCard({ tour, linked }: { tour: PopularTour; linked: boolean }) {
+  const inner = (
+    <div className="relative cursor-pointer rounded-2xl border border-white/20 bg-white/10 p-6 shadow-2xl backdrop-blur-xl transition-all duration-300 group-hover/card:border-emerald-400/40 group-hover/card:bg-white/15">
+      <div className="mb-4 flex items-center gap-2">
+        <div className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+        <span className="text-xs font-medium uppercase tracking-[0.2em] text-white/80">Ближайший выезд</span>
+      </div>
+
+      <h3 className="mb-2 text-2xl font-bold leading-tight text-white transition-colors group-hover/card:text-emerald-200">
+        {tour.title}
+      </h3>
+
+      <p className="mb-4 line-clamp-2 text-sm leading-relaxed text-white/75">
+        {tour.shortDesc?.trim() || 'Экскурсии и маршруты по Татарстану — с проверенными гидами.'}
+      </p>
+
+      {tour.price != null && tour.price > 0 ? (
+        <div className="mb-4 text-2xl font-bold text-emerald-300">от {tour.price.toLocaleString('ru-RU')} ₽</div>
+      ) : (
+        <div className="mb-4 text-lg text-white/80">Лучшие маршруты сезона</div>
+      )}
+
+      <div className="flex items-center justify-between border-t border-white/10 pt-4">
+        <span className="text-sm text-white/70">{tour.durationLabel || 'Даты уточняются'}</span>
+        <span className="text-lg font-bold text-white">{tour.startDateLabel || 'Скоро'}</span>
+      </div>
+    </div>
+  );
+
+  if (linked && tour.slug) {
+    return (
+      <Link href={`/tours/${tour.slug}`} className="group/card block">
+        {inner}
+      </Link>
+    );
+  }
+
+  return <div className="group/card">{inner}</div>;
+}
+
 export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | null }) {
   const items = useMemo(
-    () =>
-      popularTours && popularTours.length > 0
-        ? popularTours
-        : [{ title: 'Казань + Болгар', slug: undefined, price: null, startDateLabel: 'Скоро' }],
+    () => (popularTours && popularTours.length > 0 ? popularTours : [FALLBACK_TOUR]),
     [popularTours]
   );
-  const [activeIndex, setActiveIndex] = useState(0);
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [items.length]);
-
-  useEffect(() => {
-    if (items.length <= 1) return;
-    const timer = setInterval(() => {
-      setActiveIndex((current) => (current + 1) % items.length);
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [items.length]);
-
-  const activeTour = items[activeIndex] ?? items[0];
+  const activeTour = items[0];
 
   return (
-    <section className="relative w-full h-screen min-h-[500px] sm:min-h-[600px] md:min-h-[700px] max-h-[900px] flex items-center justify-center overflow-hidden">
+    <section className="relative flex max-h-[900px] min-h-[500px] w-full items-center justify-center overflow-hidden sm:min-h-[600px] md:min-h-[700px] h-screen">
       <div className="absolute inset-0 z-0">
         <Image
           src="/hero-tatarstan.jpg"
@@ -55,62 +90,64 @@ export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | n
         <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent" />
       </div>
 
-      <div className="absolute top-0 left-0 w-full h-full z-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 -left-32 w-96 h-96 rounded-full bg-emerald-500/20 blur-3xl animate-pulse" />
+      <div className="pointer-events-none absolute left-0 top-0 z-0 h-full w-full overflow-hidden">
+        <div className="absolute -left-32 top-1/4 h-96 w-96 animate-pulse rounded-full bg-emerald-500/20 blur-3xl" />
         <div
-          className="absolute bottom-1/4 -right-32 w-96 h-96 rounded-full bg-sky-500/20 blur-3xl animate-pulse"
+          className="absolute -right-32 bottom-1/4 h-96 w-96 animate-pulse rounded-full bg-sky-500/20 blur-3xl"
           style={{ animationDelay: '1s' }}
         />
       </div>
 
-      <div className="relative z-10 w-full h-full flex items-center">
-        <div className="container mx-auto px-4 sm:px-5 md:px-6 lg:px-8 w-full">
-          <div className="max-w-5xl">
-            <div className="inline-flex items-center gap-1.5 sm:gap-2 rounded-full bg-white/10 backdrop-blur-md border border-white/20 px-3 py-1.5 sm:px-4 sm:py-2 mb-4 sm:mb-6 animate-fadeIn">
-              <span className="h-1.5 w-1.5 sm:h-2 sm:w-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" />
-              <span className="text-white text-xs sm:text-sm font-medium">Откройте для себя Татарстан</span>
+      <div className="relative z-10 flex h-full w-full items-center">
+        <div className="container relative mx-auto w-full px-4 sm:px-5 md:px-6 lg:px-8">
+          <div className="max-w-5xl xl:max-w-6xl xl:pr-[22rem] 2xl:pr-[23rem]">
+            <div className="animate-fadeIn mb-4 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 backdrop-blur-md sm:mb-6 sm:gap-2 sm:px-4 sm:py-2">
+              <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-emerald-400 sm:h-2 sm:w-2" />
+              <span className="text-xs font-medium text-white sm:text-sm">Открой для себя Татарстан</span>
             </div>
 
-            {/* Один масштаб заголовка: «Татарстану» не меньше из-за block/переноса */}
             <h1
-              className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-black leading-[1.15] mb-3 sm:mb-4 md:mb-5 animate-fadeInUp"
+              className="animate-fadeInUp mb-3 text-4xl font-black leading-[1.12] sm:mb-4 sm:text-5xl md:mb-5 md:text-6xl lg:text-6xl lg:leading-[1.1] xl:text-7xl 2xl:text-8xl"
               style={{ animationDelay: '0.1s' }}
             >
-              <span className="text-white">Путешествие по </span>
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-300 via-emerald-400 to-emerald-300">
+              <span className="block text-white">Путешествие по</span>
+              <span className="block bg-gradient-to-r from-emerald-300 via-emerald-400 to-emerald-300 bg-clip-text text-transparent">
                 Татарстану
               </span>
             </h1>
 
             <p
-              className="text-sm sm:text-base md:text-lg lg:text-xl xl:text-2xl text-gray-200 leading-relaxed mb-6 sm:mb-8 max-w-3xl animate-fadeInUp"
+              className="animate-fadeInUp mb-6 max-w-3xl text-sm leading-relaxed text-gray-200 sm:mb-8 sm:text-base md:text-lg lg:text-xl xl:text-2xl"
               style={{ animationDelay: '0.2s' }}
             >
               Экскурсии, маршруты и впечатления — всё в одном месте. Подберите тур под настроение и отправляйтесь в путь с
               проверенными гидами.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-6 sm:mb-8 animate-fadeInUp" style={{ animationDelay: '0.3s' }}>
+            <div
+              className="animate-fadeInUp mb-8 flex flex-col gap-2 sm:mb-10 sm:flex-row sm:gap-3 md:mb-12"
+              style={{ animationDelay: '0.3s' }}
+            >
               <Button
                 href="/tours"
                 variant="primary"
                 size="lg"
-                className="group shadow-2xl hover:shadow-emerald-500/50 transition-all duration-300 hover:scale-105 text-sm sm:text-base hover:!brightness-110"
+                className="group text-sm shadow-2xl transition-all duration-300 hover:scale-105 hover:!brightness-110 hover:shadow-emerald-500/50 sm:text-base"
               >
                 Посмотреть туры
-                <ArrowRight className="ml-2 w-4 h-4 sm:w-5 sm:h-5 text-white transition-transform group-hover:translate-x-1" />
+                <ArrowRight className="ml-2 h-4 w-4 text-white transition-transform group-hover:translate-x-1 sm:h-5 sm:w-5" />
               </Button>
               <Button
                 href="/about"
                 variant="outline"
                 size="lg"
-                className="group bg-white/10 backdrop-blur-md border-2 border-white/30 text-white hover:bg-white hover:text-emerald-600 transition-all duration-300 hover:scale-105 text-sm sm:text-base"
+                className="group border-2 border-white/30 bg-white/10 text-sm text-white backdrop-blur-md transition-all duration-300 hover:scale-105 hover:bg-white hover:text-emerald-600 sm:text-base"
               >
                 Узнать больше
               </Button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 animate-fadeInUp" style={{ animationDelay: '0.4s' }}>
+            <div className="animate-fadeInUp grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4" style={{ animationDelay: '0.4s' }}>
               {[
                 { icon: Users, label: 'Поддержка 24/7', value: 'Всегда на связи' },
                 { icon: MapPin, label: 'Безопасно', value: 'Проверенные гиды' },
@@ -120,92 +157,26 @@ export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | n
                 return (
                   <div
                     key={item.label}
-                    className="rounded-lg bg-white/10 backdrop-blur-md border border-white/20 p-3 sm:p-4 hover:bg-white/15 transition-all duration-300 hover:scale-105"
+                    className="rounded-lg border border-white/20 bg-white/10 p-3 backdrop-blur-md transition-all duration-300 hover:scale-105 hover:bg-white/15 sm:p-4"
                   >
-                    <div className="flex items-center gap-2 sm:gap-2.5 mb-1 sm:mb-1.5">
-                      <div className="p-1 sm:p-1.5 rounded-lg bg-emerald-500/20 flex-shrink-0">
-                        <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-300" />
+                    <div className="mb-1 flex items-center gap-2 sm:mb-1.5 sm:gap-2.5">
+                      <div className="flex-shrink-0 rounded-lg bg-emerald-500/20 p-1 sm:p-1.5">
+                        <Icon className="h-3.5 w-3.5 text-emerald-300 sm:h-4 sm:w-4" />
                       </div>
-                      <div className="text-white text-xs sm:text-sm md:text-base font-bold">{item.label}</div>
+                      <div className="text-xs font-bold text-white sm:text-sm md:text-base">{item.label}</div>
                     </div>
-                    <div className="text-gray-300 text-[10px] sm:text-xs md:text-sm ml-7 sm:ml-9">{item.value}</div>
+                    <div className="ml-7 text-[10px] text-gray-300 sm:ml-9 sm:text-xs md:text-sm">{item.value}</div>
                   </div>
                 );
               })}
             </div>
           </div>
 
-          {/* Популярный тур — стеклянная карточка (как раньше), не TourCard */}
           <div
-            className="hidden xl:block absolute right-8 top-1/2 -translate-y-1/2 w-80 animate-fadeInRight"
+            className="animate-fadeInRight absolute right-6 top-1/2 z-10 hidden w-80 max-w-[calc(100%-2rem)] -translate-y-1/2 xl:block 2xl:right-10"
             style={{ animationDelay: '0.5s' }}
           >
-            {activeTour.slug ? (
-              <Link href={`/tours/${activeTour.slug}`} className="block group/card">
-                <div className="relative rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 p-6 shadow-2xl transition-all duration-300 cursor-pointer group-hover/card:bg-white/15 group-hover/card:border-emerald-400/40">
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-white/80 text-sm font-medium uppercase tracking-wider">Популярный тур</span>
-                  </div>
-
-                  <h3 className="text-white text-2xl font-bold mb-3 leading-tight line-clamp-3 group-hover/card:text-emerald-200 transition-colors">
-                    {activeTour.title}
-                  </h3>
-
-                  <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
-                    {activeTour.price != null && activeTour.price > 0 ? (
-                      <div className="text-emerald-300 text-2xl font-bold">от {activeTour.price.toLocaleString('ru-RU')} ₽</div>
-                    ) : (
-                      <div className="text-white/70 text-lg">Лучшие маршруты сезона</div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <span className="text-white/70 text-sm">Ближайший выезд</span>
-                    <span className="text-white text-lg font-bold">{activeTour.startDateLabel || 'Скоро'}</span>
-                  </div>
-                </div>
-              </Link>
-            ) : (
-              <div className="relative rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 p-6 shadow-2xl">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-white/80 text-sm font-medium uppercase tracking-wider">Популярный тур</span>
-                </div>
-
-                <h3 className="text-white text-2xl font-bold mb-3 leading-tight line-clamp-3">{activeTour.title}</h3>
-
-                <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
-                  {activeTour.price != null && activeTour.price > 0 ? (
-                    <div className="text-emerald-300 text-2xl font-bold">от {activeTour.price.toLocaleString('ru-RU')} ₽</div>
-                  ) : (
-                    <div className="text-white/70 text-lg">Лучшие маршруты сезона</div>
-                  )}
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-white/70 text-sm">Ближайший выезд</span>
-                  <span className="text-white text-lg font-bold">{activeTour.startDateLabel || 'Скоро'}</span>
-                </div>
-              </div>
-            )}
-            {items.length > 1 ? (
-              <div className="mt-3 flex justify-center gap-2" role="tablist" aria-label="Смена популярного тура">
-                {items.map((t, i) => (
-                  <button
-                    key={`${t.title}-${i}`}
-                    type="button"
-                    role="tab"
-                    aria-selected={i === activeIndex}
-                    aria-label={`Тур ${i + 1}`}
-                    onClick={() => setActiveIndex(i)}
-                    className={`h-2.5 rounded-full transition-all ${
-                      i === activeIndex ? 'w-8 bg-emerald-400' : 'w-2.5 bg-white/35 hover:bg-white/55'
-                    }`}
-                  />
-                ))}
-              </div>
-            ) : null}
+            <GlassTourCard tour={activeTour} linked={Boolean(activeTour.slug)} />
           </div>
         </div>
       </div>
