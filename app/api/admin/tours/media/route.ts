@@ -1,10 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+
+/** Роль из profiles без обхода RLS-сбоев anon-клиента (как в /api/upload). */
+async function getTourStaffRole(userId: string, cookieSupabase: SupabaseClient): Promise<string | null> {
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const { data } = await createServiceClient()
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle();
+    const r = (data as { role?: string } | null)?.role;
+    return r?.trim() ?? null;
+  }
+  const { data } = await cookieSupabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle();
+  const r = (data as { role?: string } | null)?.role;
+  return r?.trim() ?? null;
+}
 
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const serviceClient = await createServiceClient();
+    const serviceClient = createServiceClient();
 
     // Проверка авторизации
     const {
@@ -19,14 +40,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Проверка прав (tour_admin или super_admin)
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile || (profile.role !== 'tour_admin' && profile.role !== 'super_admin')) {
+    const role = await getTourStaffRole(user.id, supabase);
+    if (!role || (role !== 'tour_admin' && role !== 'super_admin')) {
       return NextResponse.json(
         { error: 'Недостаточно прав' },
         { status: 403 }
@@ -113,7 +128,7 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const serviceClient = await createServiceClient();
+    const serviceClient = createServiceClient();
 
     const {
       data: { user },
@@ -124,9 +139,8 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: 'Необходима авторизация' }, { status: 401 });
     }
 
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-
-    if (!profile || (profile.role !== 'tour_admin' && profile.role !== 'super_admin')) {
+    const role = await getTourStaffRole(user.id, supabase);
+    if (!role || (role !== 'tour_admin' && role !== 'super_admin')) {
       return NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 });
     }
 

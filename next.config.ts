@@ -81,7 +81,12 @@ const nextConfig: NextConfig = {
     ];
   },
   async headers() {
-    const securityHeaders = [
+    /** На HTTP браузер всё равно игнорирует COOP/CORP и спамит в консоль — отдаём только на HTTPS. */
+    const useHttps =
+      process.env.NEXT_PUBLIC_APP_URL?.startsWith('https://') === true ||
+      process.env.NEXT_PUBLIC_SITE_URL?.startsWith('https://') === true;
+
+    const securityHeaders: { key: string; value: string }[] = [
       { key: 'X-DNS-Prefetch-Control', value: 'off' },
       { key: 'X-Frame-Options', value: 'DENY' },
       { key: 'X-Content-Type-Options', value: 'nosniff' },
@@ -90,20 +95,23 @@ const nextConfig: NextConfig = {
       { key: 'Origin-Agent-Cluster', value: '?1' },
       { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
       { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()' },
-      { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
-      { key: 'Cross-Origin-Resource-Policy', value: 'same-site' },
-      {
-        key: 'Content-Security-Policy',
-        value: buildContentSecurityPolicy(),
-      },
     ];
 
-    if (process.env.NEXT_PUBLIC_APP_URL?.startsWith('https://')) {
-      securityHeaders.splice(8, 0, {
-        key: 'Strict-Transport-Security',
-        value: 'max-age=31536000; includeSubDomains; preload',
-      });
+    if (useHttps) {
+      securityHeaders.push(
+        { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+        { key: 'Cross-Origin-Resource-Policy', value: 'same-site' },
+        {
+          key: 'Strict-Transport-Security',
+          value: 'max-age=31536000; includeSubDomains; preload',
+        }
+      );
     }
+
+    securityHeaders.push({
+      key: 'Content-Security-Policy',
+      value: buildContentSecurityPolicy(),
+    });
 
     return [
       {
