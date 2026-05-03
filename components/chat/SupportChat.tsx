@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Send, Loader2, MessageSquare, Bot, MessageCircle, Trash2, X } from 'lucide-react';
 import Pusher from 'pusher-js';
 import toast from 'react-hot-toast';
-import { createClient } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 import { getUserFromSession, resolveAuthUserForSupportChat } from '@/lib/supabase/auth-quick-client';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { playNotificationSound } from '@/lib/sound/notifications';
@@ -43,19 +43,24 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
   const isInitializingRef = useRef(false);
   const [clearConfirm, setClearConfirm] = useState<null | 'ai' | 'support'>(null);
 
-  // Авторизация: getSession (локально) + при необходимости getUser с таймаутом — без вечного зависания без VPN
+  // Один браузерный клиент (singleton): несколько createClient() давали параллельный refresh и «вторую» вечную проверку.
   useEffect(() => {
     let cancelled = false;
-    const supabase = createClient();
+    let resolveGeneration = 0;
 
     void (async () => {
+      const gen = ++resolveGeneration;
       const user = await resolveAuthUserForSupportChat(supabase);
-      if (!cancelled) setIsAuthenticated(!!user);
+      if (cancelled || gen !== resolveGeneration) return;
+      setIsAuthenticated(!!user);
     })();
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (cancelled) return;
+      // Обновление токена не меняет факт входа — повторная синхронизация давала гонки и зависание UI
+      if (event === 'TOKEN_REFRESHED') return;
       setIsAuthenticated(!!session?.user);
     });
 
@@ -86,7 +91,6 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
           setSessionStatus('active');
         }
       } else {
-        const supabase = createClient();
         const user = await getUserFromSession(supabase);
         if (user) setSessionStatus(null);
       }
@@ -169,7 +173,6 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
         channelRef.current = null;
         pusherRef.current = null;
 
-        const supabase = createClient();
         const user = await getUserFromSession(supabase);
         const userId = user?.id;
         if (!userId) {
@@ -297,7 +300,6 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
     if (!input.trim() || sending) return;
     
     // Проверяем авторизацию
-    const supabase = createClient();
     const user = await resolveAuthUserForSupportChat(supabase);
     if (!user) {
       toast.error('Для отправки сообщений необходимо войти в аккаунт');

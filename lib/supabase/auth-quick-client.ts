@@ -32,11 +32,18 @@ export async function resolveAuthUserForUi(client: SupabaseClient): Promise<User
   return result.data.user ?? null;
 }
 
-/** Виджет поддержки: для гостя короткий таймаут — быстрее показать «войдите», без ожидания полных 6 с */
+/** Виджет поддержки: для гостя короткий таймаут — быстрее показать «войдите» */
 const SUPPORT_CHAT_NETWORK_MS = 1200;
+/** Несколько экземпляров клиента + refresh могут зависнуть на getSession — верхняя граница ожидания */
+const SUPPORT_CHAT_SESSION_WAIT_MS = 8000;
 
 export async function resolveAuthUserForSupportChat(client: SupabaseClient): Promise<User | null> {
-  const local = await getUserFromSession(client);
+  const local = await Promise.race([
+    getUserFromSession(client),
+    new Promise<User | null>((resolve) =>
+      setTimeout(() => resolve(null), SUPPORT_CHAT_SESSION_WAIT_MS),
+    ),
+  ]);
   if (local) return local;
 
   const result = await Promise.race([
