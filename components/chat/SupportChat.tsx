@@ -59,6 +59,31 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
 
   const fetchOpts: RequestInit = { cache: 'no-store', credentials: 'include' };
 
+  /** Не блокировать UI: session-status иногда долго отвечает или сбрасывается — иначе вечный спиннер */
+  const refreshSessionStatus = async () => {
+    if (mode !== 'support') return;
+    try {
+      const sessionResponse = await fetch(`/api/support/session-status`, fetchOpts);
+      if (!sessionResponse.ok) return;
+      const sessionData = await sessionResponse.json();
+      if (sessionData.session) {
+        if (sessionData.session.status === 'closed' || sessionData.session.status === 'archived') {
+          setSessionStatus('closed');
+        } else {
+          setSessionStatus('active');
+        }
+      } else {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user) setSessionStatus(null);
+      }
+    } catch (error) {
+      console.error('Ошибка проверки статуса сессии:', error);
+    }
+  };
+
   const loadMessages = async () => {
     try {
       const response = await fetch(`/api/support/messages?mode=${mode}`, fetchOpts);
@@ -69,14 +94,12 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
           console.error('Ошибка загрузки сообщений:', response.status, response.statusText);
         }
         setMessages([]);
-        setLoading(false);
         return;
       }
 
       const text = await response.text();
       if (!text) {
         setMessages([]);
-        setLoading(false);
         return;
       }
 
@@ -86,39 +109,15 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       } else {
         setMessages([]);
       }
-
-      // Проверяем статус сессии (только для режима поддержки)
-      if (mode === 'support') {
-        try {
-          const sessionResponse = await fetch(`/api/support/session-status`, fetchOpts);
-          if (sessionResponse.ok) {
-            const sessionData = await sessionResponse.json();
-            if (sessionData.session) {
-              if (sessionData.session.status === 'closed' || sessionData.session.status === 'archived') {
-                setSessionStatus('closed');
-              } else {
-                setSessionStatus('active');
-              }
-            } else {
-              // Активной сессии нет - проверяем, есть ли вообще сессии
-              const supabase = createClient();
-              const { data: { user } } = await supabase.auth.getUser();
-              if (user) {
-                // Если нет активной сессии, но есть закрытые - значит сессия закрыта
-                // Если вообще нет сессий - значит удалена или еще не создана
-                setSessionStatus(null); // Нет сессии, можно создать новую
-              }
-            }
-          }
-        } catch (error) {
-          console.error('Ошибка проверки статуса сессии:', error);
-        }
-      }
     } catch (error) {
       console.error('Ошибка парсинга сообщений:', error);
       setMessages([]);
     } finally {
       setLoading(false);
+    }
+
+    if (mode === 'support') {
+      void refreshSessionStatus();
     }
   };
 
@@ -169,7 +168,6 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
 
         const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
           cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'eu',
-          enabledTransports: ['ws', 'wss'],
         });
 
         pusherRef.current = pusher;
@@ -180,6 +178,11 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
 
         channel.bind('pusher:subscription_succeeded', () => {
           console.log('[SupportChat] Pusher subscribed to channel:', channelName);
+          isInitializingRef.current = false;
+        });
+
+        channel.bind('pusher:subscription_error', (status: unknown) => {
+          console.error('[SupportChat] Pusher subscription_error:', channelName, status);
           isInitializingRef.current = false;
         });
 
@@ -679,10 +682,18 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
           isWidget ? 'p-2 sm:p-2.5' : 'p-3 sm:p-4 md:p-5'
         }`}
       >
-        {!isAuthenticated ? (
+        {isAuthenticated === null ? (
+          <div className="flex items-center justify-center gap-2 py-4 text-gray-600 text-sm">
+            <Loader2 className="h-5 w-5 animate-spin text-emerald-600" aria-hidden />
+            <span>Проверка входа…</span>
+          </div>
+        ) : isAuthenticated === false ? (
           <div className="text-center py-3 sm:py-4 px-4 sm:px-5 bg-yellow-50 border-2 border-yellow-200 rounded-xl">
             <p className="text-sm sm:text-base md:text-lg text-yellow-800 font-semibold">
-              Для отправки сообщений необходимо <a href="/auth/login" className="text-emerald-600 hover:underline font-bold">войти в аккаунт</a>
+              Для отправки сообщений необходимо{' '}
+              <a href="/auth" className="text-emerald-600 hover:underline font-bold">
+                войти в аккаунт
+              </a>
             </p>
           </div>
         ) : (
@@ -705,7 +716,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
                 }
                 rows={1}
                 disabled={
-                  !isAuthenticated ||
+                  isAuthenticated !== true ||
                   (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
                 }
                 className={`w-full border-2 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all resize-none overflow-hidden shadow-sm ${
@@ -713,16 +724,22 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
                     ? 'px-3 py-2 pr-10 text-sm rounded-xl min-h-[44px] max-h-[112px]'
                     : 'px-4 sm:px-5 md:px-6 py-3 sm:py-3.5 md:py-4 pr-12 sm:pr-14 md:pr-16 rounded-xl sm:rounded-2xl text-sm sm:text-base md:text-lg min-h-[52px] sm:min-h-[56px] md:min-h-[60px] max-h-[120px] sm:max-h-[140px] md:max-h-[160px]'
                 } ${
-                  !isAuthenticated || (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
+                  isAuthenticated !== true || (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
                     ? 'bg-gray-100 border-gray-300 cursor-not-allowed text-gray-600 placeholder:text-gray-500'
                     : 'bg-white border-gray-300 hover:border-emerald-400 text-gray-900 placeholder:text-gray-500'
                 }`}
-                style={{ fontSize: 'clamp(14px, 1rem, 18px)', color: (!isAuthenticated || (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))) ? '#4b5563' : '#111827' }} // Адаптивный размер шрифта с clamp
+                style={{
+                  fontSize: 'clamp(14px, 1rem, 18px)',
+                  color:
+                    isAuthenticated !== true || (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
+                      ? '#4b5563'
+                      : '#111827',
+                }}
               />
             </div>
             <ChatEmojiPicker
               disabled={
-                !isAuthenticated ||
+                isAuthenticated !== true ||
                 (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
               }
               buttonClassName={`flex-shrink-0 inline-flex items-center justify-center rounded-xl bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
@@ -735,7 +752,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
             <button
               onClick={sendMessage}
               disabled={
-                !isAuthenticated ||
+                isAuthenticated !== true ||
                 sending || 
                 !input.trim() || 
                 (mode === 'support' && (sessionStatus === 'closed' || sessionStatus === 'deleted'))
