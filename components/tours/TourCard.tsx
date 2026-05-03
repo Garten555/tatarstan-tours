@@ -85,8 +85,8 @@ export default function TourCard({
   return (
     <Link href={`/tours/${slug}`} prefetch={true} className="group">
       <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm hover:shadow-2xl transition-all duration-300 overflow-hidden h-full flex flex-col min-w-0">
-        {/* Изображение */}
-        <div className="relative h-48 sm:h-56 md:h-60 overflow-hidden min-w-0">
+        {/* Фото + градиент: высота растёт вместе с полным заголовком (без line-clamp на названии) */}
+        <div className="relative isolate min-w-0 overflow-hidden">
           <Image
             src={cover_image}
             alt={titleSingleLine}
@@ -96,27 +96,19 @@ export default function TourCard({
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-          
-          {/* Статус бронирования */}
+
           {isFullyBooked && (
-            <div className="absolute top-2 sm:top-3 md:top-4 right-2 sm:right-3 md:right-4">
+            <div className="absolute top-2 sm:top-3 md:top-4 right-2 sm:right-3 md:right-4 z-20">
               <span className="px-2 py-1 sm:px-2.5 sm:py-1 md:px-3 md:py-1.5 bg-red-500 text-white text-xs sm:text-sm font-bold rounded-full shadow-sm">
                 Мест нет
               </span>
             </div>
           )}
 
-          {/* Название: крупный адаптивный текст + hover на зелёный; min-height выравнивает карточки без жёсткого max-height */}
-          <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 md:p-5 min-w-0">
-            <div className="min-h-[2.75rem] overflow-hidden sm:min-h-[3.25rem] md:min-h-[3.75rem] lg:min-h-[4.25rem]">
-              <ClampedText
-                as="h3"
-                lines={2}
-                className="text-lg font-black leading-tight text-white drop-shadow-lg transition-colors duration-300 group-hover:text-emerald-300 sm:text-xl md:text-2xl lg:text-3xl"
-              >
-                {titleSingleLine}
-              </ClampedText>
-            </div>
+          <div className="relative z-10 flex min-h-[11rem] min-w-0 flex-col justify-end p-3 sm:min-h-[12rem] sm:p-4 md:min-h-[13rem] md:p-5 lg:min-h-[14rem]">
+            <h3 className="text-lg font-black leading-tight text-white drop-shadow-lg transition-colors duration-300 group-hover:text-emerald-300 [overflow-wrap:anywhere] break-words sm:text-xl md:text-2xl lg:text-3xl">
+              {titleSingleLine}
+            </h3>
           </div>
         </div>
 
@@ -134,10 +126,10 @@ export default function TourCard({
             </span>
           </div>
 
-          {/* Описание: крупнее на md+, лёгкий зелёный оттенок при hover по всей карточке */}
-          <div className="mb-3 min-h-[2.85rem] overflow-hidden sm:mb-4 sm:min-h-[3.1rem] md:mb-5 md:min-h-[3.45rem]">
+          {/* Краткое описание — только здесь многоточие; название на обложке полностью */}
+          <div className="mb-3 min-h-[4.1rem] overflow-hidden sm:mb-4 sm:min-h-[4.5rem] md:mb-5 md:min-h-[5rem]">
             <ClampedText
-              lines={2}
+              lines={3}
               className="text-sm leading-relaxed text-gray-600 transition-colors duration-300 group-hover:text-emerald-900/90 sm:text-base md:text-lg"
             >
               {descSingleLine}
