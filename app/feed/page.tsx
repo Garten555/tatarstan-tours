@@ -165,7 +165,9 @@ export default function FeedPage() {
                   {item.type === 'post' && (() => {
                     const slug = item.payload.slug ? String(item.payload.slug) : '';
                     const blogBase = item.actor.username || item.actor.id;
-                    const postHref = slug ? `/users/${blogBase}/blog/${slug}` : null;
+                    const postHref = slug
+                      ? `/users/${encodeURIComponent(String(blogBase))}/blog/${encodeURIComponent(String(slug))}`
+                      : null;
                     const cover = item.payload.cover_image_url
                       ? String(item.payload.cover_image_url)
                       : '';

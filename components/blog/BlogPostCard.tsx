@@ -54,9 +54,11 @@ export default function BlogPostCard({ post }: BlogPostCardProps) {
   const displayDate = post.published_at || post.created_at;
 
   const authorUsername = post.user?.username || post.user?.id;
-  
+
   return (
-    <Link href={`/users/${authorUsername}/blog/${post.slug}`}>
+    <Link
+      href={`/users/${encodeURIComponent(String(authorUsername))}/blog/${encodeURIComponent(String(post.slug))}`}
+    >
       <article className="bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300 group h-full flex flex-col">
         {/* Обложка */}
         {post.cover_image_url ? (

@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -17,6 +17,10 @@ import {
 import { escapeHtml, sanitizeRichHtml } from '@/lib/utils/sanitize';
 import BlogLikeButton from '@/components/blog/BlogLikeButton';
 import BlogComments from '@/components/blog/BlogComments';
+import {
+  pathSegmentLooksLikeUuid,
+  resolveAuthorIdFromPathSegment,
+} from '@/lib/blog/resolveAuthorFromPathSegment';
 
 interface BlogPostPageProps {
   params: Promise<{ username: string; slug: string }>;
@@ -29,12 +33,9 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
 
   const { data: { user } } = await supabase.auth.getUser();
 
-  // Находим пользователя по username или id
-  const { data: author } = await serviceClient
-    .from('profiles')
-    .select('id')
-    .or(`username.eq.${username},id.eq.${username}`)
-    .maybeSingle();
+  const slugDecoded = decodeURIComponent(String(slug).trim());
+
+  const author = await resolveAuthorIdFromPathSegment(serviceClient, String(username));
 
   if (!author) {
     notFound();
@@ -50,11 +51,20 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
       tour:tours(id, title, slug, cover_image)
     `)
     .eq('user_id', author.id)
-    .eq('slug', slug)
+    .eq('slug', slugDecoded)
     .maybeSingle();
 
   if (error || !post) {
     notFound();
+  }
+
+  const rowUser = post.user as { id?: string; username?: string | null } | null;
+  const canonicalUsername = rowUser?.username?.trim();
+  if (canonicalUsername) {
+    const pathSeg = decodeURIComponent(String(username).trim().replace(/^@/, ''));
+    if (pathSegmentLooksLikeUuid(username) || pathSeg !== canonicalUsername) {
+      redirect(`/users/${encodeURIComponent(canonicalUsername)}/blog/${encodeURIComponent(slugDecoded)}`);
+    }
   }
 
   // Проверка доступа

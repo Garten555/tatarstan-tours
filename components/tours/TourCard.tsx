@@ -106,13 +106,13 @@ export default function TourCard({
             </div>
           )}
 
-          {/* Название: фикс. размер шрифта + «полка» 2 строки — при масштабе не появляется «лишний» текст */}
+          {/* Название: крупный адаптивный текст + hover на зелёный; min-height выравнивает карточки без жёсткого max-height */}
           <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 md:p-5 min-w-0">
-            <div className="max-h-[2.8125rem] min-h-[2.8125rem] overflow-hidden">
+            <div className="min-h-[2.75rem] overflow-hidden sm:min-h-[3.25rem] md:min-h-[3.75rem] lg:min-h-[4.25rem]">
               <ClampedText
                 as="h3"
                 lines={2}
-                className="text-lg font-black leading-tight text-white drop-shadow-lg"
+                className="text-lg font-black leading-tight text-white drop-shadow-lg transition-colors duration-300 group-hover:text-emerald-300 sm:text-xl md:text-2xl lg:text-3xl"
               >
                 {titleSingleLine}
               </ClampedText>
@@ -134,9 +134,12 @@ export default function TourCard({
             </span>
           </div>
 
-          {/* Описание: без flex-1 и без скачков text-sm/md:lg — ровно 2 строки в фиксированной высоте */}
-          <div className="mb-3 min-h-[2.84375rem] max-h-[2.84375rem] overflow-hidden sm:mb-4 md:mb-5">
-            <ClampedText lines={2} className="text-sm leading-relaxed text-gray-600">
+          {/* Описание: крупнее на md+, лёгкий зелёный оттенок при hover по всей карточке */}
+          <div className="mb-3 min-h-[2.85rem] overflow-hidden sm:mb-4 sm:min-h-[3.1rem] md:mb-5 md:min-h-[3.45rem]">
+            <ClampedText
+              lines={2}
+              className="text-sm leading-relaxed text-gray-600 transition-colors duration-300 group-hover:text-emerald-900/90 sm:text-base md:text-lg"
+            >
               {descSingleLine}
             </ClampedText>
           </div>
