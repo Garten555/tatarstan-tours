@@ -106,15 +106,17 @@ export default function TourCard({
             </div>
           )}
 
-          {/* Название на изображении */}
+          {/* Название: фикс. размер шрифта + «полка» 2 строки — при масштабе не появляется «лишний» текст */}
           <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 md:p-5 min-w-0">
-            <ClampedText
-              as="h3"
-              lines={2}
-              className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-black text-white mb-2 sm:mb-3 group-hover:text-emerald-300 transition-colors leading-tight drop-shadow-lg"
-            >
-              {titleSingleLine}
-            </ClampedText>
+            <div className="max-h-[2.8125rem] min-h-[2.8125rem] overflow-hidden">
+              <ClampedText
+                as="h3"
+                lines={2}
+                className="text-lg font-black leading-tight text-white drop-shadow-lg"
+              >
+                {titleSingleLine}
+              </ClampedText>
+            </div>
           </div>
         </div>
 
@@ -132,13 +134,12 @@ export default function TourCard({
             </span>
           </div>
 
-          {/* Описание */}
-          <ClampedText
-            lines={2}
-            className="text-gray-600 text-sm sm:text-base md:text-lg mb-3 sm:mb-4 md:mb-5 flex-1 leading-relaxed"
-          >
-            {descSingleLine}
-          </ClampedText>
+          {/* Описание: без flex-1 и без скачков text-sm/md:lg — ровно 2 строки в фиксированной высоте */}
+          <div className="mb-3 min-h-[2.84375rem] max-h-[2.84375rem] overflow-hidden sm:mb-4 md:mb-5">
+            <ClampedText lines={2} className="text-sm leading-relaxed text-gray-600">
+              {descSingleLine}
+            </ClampedText>
+          </div>
 
           {/* Метаданные */}
           <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-5">
