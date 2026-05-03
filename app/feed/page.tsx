@@ -6,6 +6,8 @@ import { Bell, ChevronRight, Loader2, Newspaper } from 'lucide-react';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import ClampedText from '@/components/ui/ClampedText';
 import { FeedAspectCover } from '@/components/feed/FeedAspectCover';
+import BlogPostFeedItem from '@/components/blog/BlogPostFeedItem';
+import { createClient } from '@/lib/supabase/client';
 
 type FeedType = 'post' | 'review' | 'achievement';
 
@@ -40,6 +42,7 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
+  const [meId, setMeId] = useState<string | null>(null);
   /** Одна активная «вкладка» — всегда понятно, что выбрано (раньше при «все три» все три были зелёными). */
   const [typeFilter, setTypeFilter] = useState<FeedType | 'all'>('all');
 
@@ -79,9 +82,14 @@ export default function FeedPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- перезагрузка только при смене набора типов
   }, [typesParam]);
 
+  useEffect(() => {
+    const supabase = createClient();
+    void supabase.auth.getUser().then(({ data: { user } }) => setMeId(user?.id ?? null));
+  }, []);
+
   return (
     <main className="min-h-screen bg-slate-100 pt-24 pb-10">
-      <div className="max-w-4xl mx-auto px-4">
+      <div className="max-w-5xl mx-auto px-4">
         <div className="mb-4 flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-emerald-100">
             <Newspaper className="w-6 h-6 text-emerald-700" />
@@ -129,13 +137,13 @@ export default function FeedPage() {
             <p className="text-gray-700 font-semibold">Пока нет событий</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-6">
             {items.map((item) => {
               const name = actorName(item.actor);
               const username = item.actor.username || item.actor.id;
               const profileHref = `/users/${username}`;
               return (
-                <article
+                <section
                   key={item.id}
                   className="rounded-2xl border border-gray-200 bg-white p-4 min-w-0 shadow-sm"
                 >
@@ -164,51 +172,47 @@ export default function FeedPage() {
 
                   {item.type === 'post' && (() => {
                     const slug = item.payload.slug ? String(item.payload.slug) : '';
-                    const blogBase = item.actor.username || item.actor.id;
-                    const postHref = slug
-                      ? `/users/${encodeURIComponent(String(blogBase))}/blog/${encodeURIComponent(String(slug))}`
-                      : null;
-                    const cover = item.payload.cover_image_url
-                      ? String(item.payload.cover_image_url)
-                      : '';
-                    const excerptRaw = item.payload.excerpt != null ? String(item.payload.excerpt) : '';
-                    if (!postHref) {
+                    if (!slug || !item.payload.post_id) {
                       return (
                         <div className="mt-2 rounded-xl border border-amber-100 bg-amber-50/80 p-3 text-sm text-amber-900">
-                          Пост без ссылки (нет slug).
+                          Пост без slug или id.
                         </div>
                       );
                     }
                     return (
-                      <Link
-                        href={postHref}
-                        className="group mt-1 flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-gray-50/80 transition hover:border-emerald-200 hover:bg-white hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
-                      >
-                        {cover ? (
-                          <FeedAspectCover
-                            src={cover}
-                            alt=""
-                            className="rounded-t-2xl group-hover:opacity-[0.98]"
-                          />
-                        ) : null}
-                        <div className="min-w-0 px-4 py-3">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
-                            Новый пост
-                          </p>
-                          <ClampedText lines={2} className="font-bold text-gray-900 text-base leading-snug">
-                            {escapeHtml(String(item.payload.title || 'Новый пост'))}
-                          </ClampedText>
-                          {excerptRaw ? (
-                            <ClampedText lines={2} className="mt-1.5 text-sm text-gray-600 leading-relaxed">
-                              {escapeHtml(excerptRaw)}
-                            </ClampedText>
-                          ) : null}
-                          <span className="mt-3 inline-flex items-center gap-0.5 text-sm font-bold text-emerald-700">
-                            Читать пост
-                            <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
-                          </span>
-                        </div>
-                      </Link>
+                      <div className="mt-2 min-w-0 -mx-1 sm:-mx-2">
+                        <BlogPostFeedItem
+                          post={{
+                            id: String(item.payload.post_id),
+                            user_id: item.actor.id,
+                            title: String(item.payload.title || ''),
+                            content:
+                              item.payload.content != null && String(item.payload.content).trim() !== ''
+                                ? String(item.payload.content)
+                                : null,
+                            slug,
+                            cover_image_url:
+                              item.payload.cover_image_url != null
+                                ? String(item.payload.cover_image_url)
+                                : null,
+                            views_count: Number(item.payload.views_count) || 0,
+                            likes_count: Number(item.payload.likes_count) || 0,
+                            comments_count: Number(item.payload.comments_count) || 0,
+                            created_at: item.created_at,
+                            published_at:
+                              item.payload.published_at != null
+                                ? String(item.payload.published_at)
+                                : null,
+                            user: {
+                              id: item.actor.id,
+                              username: item.actor.username,
+                              avatar_url: item.actor.avatar_url ?? null,
+                            },
+                          }}
+                          isOwner={meId != null && meId === item.actor.id}
+                          viewerHasLiked={Boolean(item.payload.liked_by_viewer)}
+                        />
+                      </div>
                     );
                   })()}
 
@@ -295,7 +299,7 @@ export default function FeedPage() {
                       </div>
                     </Link>
                   )}
-                </article>
+                </section>
               );
             })}
 

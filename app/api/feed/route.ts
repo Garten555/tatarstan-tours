@@ -85,10 +85,14 @@ export async function GET(request: NextRequest) {
           title,
           slug,
           excerpt,
+          content,
           cover_image_url,
           user_id,
           created_at,
           published_at,
+          views_count,
+          likes_count,
+          comments_count,
           user:profiles!travel_blog_posts_user_id_fkey(id, username, first_name, last_name, avatar_url)
         `
         )
@@ -111,8 +115,12 @@ export async function GET(request: NextRequest) {
             title: post.title,
             slug: post.slug,
             excerpt: post.excerpt,
+            content: post.content ?? null,
             cover_image_url: post.cover_image_url,
             published_at: post.published_at,
+            views_count: post.views_count ?? 0,
+            likes_count: post.likes_count ?? 0,
+            comments_count: post.comments_count ?? 0,
           },
         });
       }
@@ -200,6 +208,25 @@ export async function GET(request: NextRequest) {
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
     const sliced = sorted.slice(0, limit);
+
+    const postIds = sliced
+      .filter((i) => i.type === 'post')
+      .map((i) => (i.payload as { post_id?: string }).post_id)
+      .filter((id): id is string => Boolean(id));
+    if (postIds.length > 0) {
+      const { data: viewerLikes } = await serviceClient
+        .from('blog_likes')
+        .select('post_id')
+        .eq('user_id', user.id)
+        .in('post_id', postIds);
+      const liked = new Set((viewerLikes || []).map((r) => (r as { post_id: string }).post_id));
+      for (const item of sliced) {
+        if (item.type !== 'post') continue;
+        const p = item.payload as { post_id: string; liked_by_viewer?: boolean };
+        p.liked_by_viewer = liked.has(p.post_id);
+      }
+    }
+
     const nextCursor = sliced.length === limit ? sliced[sliced.length - 1].created_at : null;
 
     return NextResponse.json({

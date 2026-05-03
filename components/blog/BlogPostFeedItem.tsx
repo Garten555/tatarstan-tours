@@ -6,8 +6,9 @@ import Image from 'next/image';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { escapeHtml, sanitizeRichHtml } from '@/lib/utils/sanitize';
+import BlogLikeButton from '@/components/blog/BlogLikeButton';
 import { createClient } from '@/lib/supabase/client';
-import { Trash2, Flag, X, Check, Calendar, Eye, Heart, MessageCircle, Image as ImageIcon } from 'lucide-react';
+import { Trash2, Flag, X, Check, Calendar, Eye, MessageCircle, Image as ImageIcon } from 'lucide-react';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
 import { useDialog } from '@/hooks/useDialog';
 import toast from 'react-hot-toast';
@@ -15,6 +16,8 @@ import { bindPlyrRussianSpeedUi, type PlyrRussianUiHost } from '@/lib/video/plyr
 import { loadPlyr } from '@/lib/video/load-plyr';
 
 interface BlogPostFeedItemProps {
+  /** Лайк текущего пользователя (например из /api/feed) */
+  viewerHasLiked?: boolean;
   post: {
     id: string;
     user_id?: string;
@@ -36,7 +39,11 @@ interface BlogPostFeedItemProps {
   isOwner?: boolean; // Передаем информацию о владельце для быстрого отображения кнопки удаления
 }
 
-export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeedItemProps) {
+export default function BlogPostFeedItem({
+  post,
+  isOwner = false,
+  viewerHasLiked = false,
+}: BlogPostFeedItemProps) {
   const [comments, setComments] = useState<any[]>([]);
   const [commentFormOpen, setCommentFormOpen] = useState(false);
   const [commentInput, setCommentInput] = useState('');
@@ -53,18 +60,6 @@ export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeed
     const loadUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUser(user);
-      // Отладочное логирование
-      if (user) {
-        const postUserId = post.user_id || post.user?.id;
-        const isOwner = user.id === postUserId;
-        console.log('User check:', {
-          currentUserId: user.id,
-          postUserId: postUserId,
-          postUserIdDirect: post.user_id,
-          postUserObjectId: post.user?.id,
-          isOwner,
-        });
-      }
     };
     loadUser();
   }, [supabase, post]);
@@ -239,7 +234,7 @@ export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeed
 
   const displayDate = post.published_at || post.created_at;
   const authorUsername = post.user?.username || post.user?.id;
-  const postUrl = `/users/${authorUsername}/blog/${post.slug}`;
+  const postUrl = `/users/${encodeURIComponent(String(authorUsername || ''))}/blog/${encodeURIComponent(post.slug)}`;
 
   // Если пост удален, не рендерим его (после всех хуков)
   if (postDeleted) {
@@ -433,6 +428,13 @@ export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeed
             dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(post.content) }}
           />
         )}
+
+        <Link
+          href={postUrl}
+          className="mt-4 inline-block text-sm font-semibold text-emerald-700 transition-colors hover:text-emerald-900 hover:underline"
+        >
+          Открыть на отдельной странице
+        </Link>
         
       </div>
 
@@ -443,13 +445,11 @@ export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeed
             <Eye className="w-4 h-4" />
             <span>{post.views_count || 0}</span>
           </div>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-full bg-emerald-50 text-emerald-700 px-3 py-1.5 hover:bg-emerald-100 transition-colors font-medium"
-          >
-            <Heart className="w-4 h-4" />
-            {post.likes_count || 0}
-          </button>
+          <BlogLikeButton
+            postId={post.id}
+            initialLiked={viewerHasLiked}
+            initialLikesCount={post.likes_count || 0}
+          />
           <button
             type="button"
             onClick={() => setCommentFormOpen(!commentFormOpen)}
