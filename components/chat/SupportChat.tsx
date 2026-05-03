@@ -57,12 +57,17 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
     modeRef.current = mode;
   }, [mode]);
 
+  const fetchOpts: RequestInit = { cache: 'no-store', credentials: 'include' };
+
   const loadMessages = async () => {
     try {
-      const response = await fetch(`/api/support/messages?mode=${mode}`, { cache: 'no-store' });
-      
+      const response = await fetch(`/api/support/messages?mode=${mode}`, fetchOpts);
+
       if (!response.ok) {
-        console.error('Ошибка загрузки сообщений:', response.status, response.statusText);
+        // 401 — нет сессии на сервере (гость или cookies не дошли до API)
+        if (response.status !== 401) {
+          console.error('Ошибка загрузки сообщений:', response.status, response.statusText);
+        }
         setMessages([]);
         setLoading(false);
         return;
@@ -85,7 +90,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       // Проверяем статус сессии (только для режима поддержки)
       if (mode === 'support') {
         try {
-          const sessionResponse = await fetch(`/api/support/session-status`, { cache: 'no-store' });
+          const sessionResponse = await fetch(`/api/support/session-status`, fetchOpts);
           if (sessionResponse.ok) {
             const sessionData = await sessionResponse.json();
             if (sessionData.session) {
@@ -117,14 +122,25 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
     }
   };
 
+  // Сообщения и session-status требуют авторизации на сервере — не дергаем API до проверки
   useEffect(() => {
-    loadMessages();
+    if (isAuthenticated === null) return;
 
+    if (!isAuthenticated) {
+      setMessages([]);
+      setSessionStatus(null);
+      setLoading(false);
+      return;
+    }
+
+    void loadMessages();
+  }, [mode, isAuthenticated]);
+
+  useEffect(() => {
     // Pusher используется ТОЛЬКО для режима поддержки (реальные операторы)
     // ИИ работает через OpenRouter API и не использует Pusher
-    if (mode === 'ai') {
-      return; // ИИ не использует Pusher
-    }
+    if (mode === 'ai') return;
+    if (isAuthenticated !== true) return;
 
     // Инициализация Pusher только для режима поддержки
     if (!process.env.NEXT_PUBLIC_PUSHER_KEY || !process.env.NEXT_PUBLIC_PUSHER_CLUSTER) {
@@ -228,7 +244,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       channelRef.current = null;
       pusherRef.current = null;
     };
-  }, [mode]);
+  }, [mode, isAuthenticated]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -283,6 +299,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       const endpoint = mode === 'ai' ? '/api/support/ai' : '/api/support/messages';
       const response = await fetch(endpoint, {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: input }),
       });
@@ -340,6 +357,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       try {
         const response = await fetch('/api/support/ai', {
           method: 'DELETE',
+          credentials: 'include',
         });
 
         if (response.ok) {
@@ -359,6 +377,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       try {
         const response = await fetch('/api/support/clear', {
           method: 'POST',
+          credentials: 'include',
         });
 
         if (response.ok) {
@@ -386,6 +405,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       
       const response = await fetch('/api/support/sessions/new', {
         method: 'POST',
+        credentials: 'include',
       });
 
       if (!response.ok) {
