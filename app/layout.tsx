@@ -5,6 +5,7 @@ import "./globals.css";
 import ConditionalLayout from "@/components/layout/ConditionalLayout";
 import MaintenanceWatcher from "@/components/maintenance/MaintenanceWatcher";
 import DeferredRealtimeShell from "@/components/layout/DeferredRealtimeShell";
+import SupportChatLauncher from "@/components/chat/SupportChatLauncher";
 import BanBanner from "@/components/ban/BanBanner";
 import { Toaster } from "react-hot-toast";
 
@@ -101,6 +102,7 @@ export default function RootLayout({
         </ConditionalLayout>
         <BanBanner />
         <MaintenanceWatcher />
+        <SupportChatLauncher />
         <DeferredRealtimeShell />
         <Toaster 
           position="top-right"

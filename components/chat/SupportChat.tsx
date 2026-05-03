@@ -5,7 +5,7 @@ import { Send, Loader2, MessageSquare, Bot, MessageCircle, Trash2, X } from 'luc
 import Pusher from 'pusher-js';
 import toast from 'react-hot-toast';
 import { createClient } from '@/lib/supabase/client';
-import { getUserFromSession, resolveAuthUserForUi } from '@/lib/supabase/auth-quick-client';
+import { getUserFromSession, resolveAuthUserForSupportChat } from '@/lib/supabase/auth-quick-client';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { playNotificationSound } from '@/lib/sound/notifications';
 import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
@@ -49,7 +49,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
     const supabase = createClient();
 
     void (async () => {
-      const user = await resolveAuthUserForUi(supabase);
+      const user = await resolveAuthUserForSupportChat(supabase);
       if (!cancelled) setIsAuthenticated(!!user);
     })();
 
@@ -298,7 +298,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
     
     // Проверяем авторизацию
     const supabase = createClient();
-    const user = await resolveAuthUserForUi(supabase);
+    const user = await resolveAuthUserForSupportChat(supabase);
     if (!user) {
       toast.error('Для отправки сообщений необходимо войти в аккаунт');
       return;

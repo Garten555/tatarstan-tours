@@ -31,3 +31,19 @@ export async function resolveAuthUserForUi(client: SupabaseClient): Promise<User
   ]);
   return result.data.user ?? null;
 }
+
+/** Виджет поддержки: для гостя короткий таймаут — быстрее показать «войдите», без ожидания полных 6 с */
+const SUPPORT_CHAT_NETWORK_MS = 1200;
+
+export async function resolveAuthUserForSupportChat(client: SupabaseClient): Promise<User | null> {
+  const local = await getUserFromSession(client);
+  if (local) return local;
+
+  const result = await Promise.race([
+    client.auth.getUser(),
+    new Promise<{ data: { user: null } }>((resolve) =>
+      setTimeout(() => resolve({ data: { user: null } }), SUPPORT_CHAT_NETWORK_MS),
+    ),
+  ]);
+  return result.data.user ?? null;
+}

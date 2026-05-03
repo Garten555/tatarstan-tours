@@ -11,13 +11,9 @@ const PresenceHeartbeat = dynamic(() => import('@/components/presence/PresenceHe
   ssr: false,
 });
 
-const SupportChatLauncher = dynamic(() => import('@/components/chat/SupportChatLauncher'), {
-  ssr: false,
-});
-
 /**
- * Pusher, presence и виджет поддержки не нужны для первого кадра LCP.
- * Загружаем после idle — меньше работы на слабом CPU при открытии любой страницы.
+ * Pusher и presence после idle — меньше работы на слабом CPU.
+ * Виджет чата поддержки вынесен в layout отдельно (без задержки idle).
  */
 export default function DeferredRealtimeShell() {
   const [ready, setReady] = useState(false);
@@ -52,7 +48,6 @@ export default function DeferredRealtimeShell() {
     <>
       <PusherUserBridge />
       <PresenceHeartbeat />
-      <SupportChatLauncher />
     </>
   );
 }
