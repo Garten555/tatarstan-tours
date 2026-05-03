@@ -9,7 +9,10 @@ import Image from 'next/image';
 import toast from 'react-hot-toast';
 import VideoPlayer from '@/components/tours/VideoPlayer';
 import UploadProgressBar from '@/components/common/UploadProgressBar';
-import { uploadFormDataWithProgress } from '@/lib/http/upload-form-progress';
+import {
+  uploadFormDataWithProgress,
+  type UploadFormProgressOptions,
+} from '@/lib/http/upload-form-progress';
 
 /** Согласовано с подписью в форме и лимитом в app/api/upload/route.ts */
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
@@ -50,6 +53,8 @@ export default function TourForm({
 }: TourFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  /** Загрузка файлов на S3 (обложка / галерея / видео) — отдельно от сохранения формы */
+  const [uploadBusy, setUploadBusy] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState<string>(''); // ✅ Статус загрузки
   const [fileUploadProgress, setFileUploadProgress] = useState<number | null>(null);
   const [coverImage, setCoverImage] = useState<string | null>(initialData?.cover_image || null);
@@ -390,9 +395,15 @@ export default function TourForm({
 
   const postTourUpload = async (
     formDataUpload: FormData,
-    onProgress: (p: number | null) => void
+    onProgress: (p: number | null) => void,
+    xhrOptions?: UploadFormProgressOptions
   ): Promise<string> => {
-    const { ok, status, data } = await uploadFormDataWithProgress('/api/upload', formDataUpload, onProgress);
+    const { ok, status, data } = await uploadFormDataWithProgress(
+      '/api/upload',
+      formDataUpload,
+      onProgress,
+      xhrOptions
+    );
     if (!ok) {
       throw new Error((data.error as string) || `Ошибка загрузки (${status})`);
     }
@@ -414,7 +425,7 @@ export default function TourForm({
     }
     
     try {
-      setLoading(true);
+      setUploadBusy(true);
       setLoadingStatus('Загрузка обложки...');
       setFileUploadProgress(0);
 
@@ -430,7 +441,7 @@ export default function TourForm({
     } catch (error: any) {
       setErrors(prev => ({ ...prev, cover_image: error.message || 'Ошибка загрузки обложки' }));
     } finally {
-      setLoading(false);
+      setUploadBusy(false);
       setLoadingStatus('');
       setFileUploadProgress(null);
     }
@@ -442,8 +453,8 @@ export default function TourForm({
     if (files.length === 0) return;
     
     try {
-      setLoading(true);
-      setFileUploadProgress(0);
+      setUploadBusy(true);
+      setFileUploadProgress(null);
       const n = files.length;
       const uploadedUrls: string[] = [];
 
@@ -461,13 +472,19 @@ export default function TourForm({
         }
 
         const wrapProgress = (p: number | null) => {
-          if (p === null) return;
           const base = (i / n) * 100;
           const slice = 100 / n;
+          if (p === null) {
+            setFileUploadProgress(null);
+            return;
+          }
           setFileUploadProgress(Math.min(100, Math.round(base + (slice * p) / 100)));
         };
 
-        const url = await postTourUpload(formDataUpload, wrapProgress);
+        const url = await postTourUpload(formDataUpload, wrapProgress, {
+          onRequestBodySent: () =>
+            setLoadingStatus(`Фото ${i + 1} из ${n}: сервер сохраняет файл…`),
+        });
         uploadedUrls.push(url);
       }
 
@@ -476,7 +493,7 @@ export default function TourForm({
     } catch (error: any) {
       alert(error.message || 'Ошибка загрузки фото');
     } finally {
-      setLoading(false);
+      setUploadBusy(false);
       setLoadingStatus('');
       setFileUploadProgress(null);
     }
@@ -506,14 +523,14 @@ export default function TourForm({
     }
 
     try {
-      setLoading(true);
-      setFileUploadProgress(0);
+      setUploadBusy(true);
+      setFileUploadProgress(null);
       const n = files.length;
       const uploadedUrls: string[] = [];
 
       for (let i = 0; i < n; i++) {
         const file = files[i];
-        setLoadingStatus(`Видео ${i + 1} из ${n}…`);
+        setLoadingStatus(`Видео ${i + 1} из ${n}: отправка…`);
 
         const formDataUpload = new FormData();
         formDataUpload.append('file', file);
@@ -525,13 +542,20 @@ export default function TourForm({
         }
 
         const wrapProgress = (p: number | null) => {
-          if (p === null) return;
           const base = (i / n) * 100;
           const slice = 100 / n;
+          if (p === null) {
+            setFileUploadProgress(null);
+            return;
+          }
+          setLoadingStatus(`Видео ${i + 1} из ${n}: загрузка ${p}%`);
           setFileUploadProgress(Math.min(100, Math.round(base + (slice * p) / 100)));
         };
 
-        const url = await postTourUpload(formDataUpload, wrapProgress);
+        const url = await postTourUpload(formDataUpload, wrapProgress, {
+          onRequestBodySent: () =>
+            setLoadingStatus(`Видео ${i + 1} из ${n}: сервер сохраняет в хранилище…`),
+        });
         uploadedUrls.push(url);
       }
 
@@ -540,7 +564,7 @@ export default function TourForm({
     } catch (error: any) {
       toast.error(error.message || 'Ошибка загрузки видео');
     } finally {
-      setLoading(false);
+      setUploadBusy(false);
       setLoadingStatus('');
       setFileUploadProgress(null);
       e.target.value = '';
@@ -780,6 +804,7 @@ export default function TourForm({
       setLoadingStatus('');
     } finally {
       setLoading(false);
+      setLoadingStatus('');
     }
   };
 
@@ -807,7 +832,7 @@ export default function TourForm({
 
   return (
     <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-8">
-      {fileUploadProgress !== null && (
+      {(fileUploadProgress !== null || uploadBusy) && (
         <UploadProgressBar
           label={loadingStatus || 'Загрузка файла'}
           percent={fileUploadProgress}
@@ -1491,13 +1516,17 @@ export default function TourForm({
         </button>
         <button
           type="submit"
-          disabled={loading}
+          disabled={loading || uploadBusy}
           className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white px-6 py-4 rounded-xl font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/30"
         >
-          {loading ? (
+          {loading || uploadBusy ? (
             <>
               <Loader2 className="w-5 h-5 animate-spin" style={{ color: '#ffffff' }} />
-              <span style={{ color: '#ffffff' }}>{loadingStatus || 'Сохранение...'}</span>
+              <span style={{ color: '#ffffff' }}>
+                {uploadBusy && !loading
+                  ? loadingStatus || 'Загрузка файла…'
+                  : loadingStatus || 'Сохранение...'}
+              </span>
             </>
           ) : (
             <>
