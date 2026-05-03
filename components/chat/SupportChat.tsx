@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { Send, Loader2, MessageSquare, Bot, MessageCircle, Trash2, X } from 'lucide-react';
 import Pusher from 'pusher-js';
 import toast from 'react-hot-toast';
@@ -78,7 +78,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
   const fetchOpts: RequestInit = { cache: 'no-store', credentials: 'include' };
 
   /** Не блокировать UI: session-status иногда долго отвечает или сбрасывается — иначе вечный спиннер */
-  const refreshSessionStatus = async () => {
+  const refreshSessionStatus = useCallback(async () => {
     if (mode !== 'support') return;
     try {
       const sessionResponse = await fetch(`/api/support/session-status`, fetchOpts);
@@ -97,44 +97,50 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
     } catch (error) {
       console.error('Ошибка проверки статуса сессии:', error);
     }
-  };
+  }, [mode]);
 
-  const loadMessages = async () => {
-    try {
-      const response = await fetch(`/api/support/messages?mode=${mode}`, fetchOpts);
+  const loadMessages = useCallback(
+    async (silent = false) => {
+      try {
+        if (!silent) setLoading(true);
+        const response = await fetch(`/api/support/messages?mode=${mode}`, fetchOpts);
 
-      if (!response.ok) {
-        // 401 — нет сессии на сервере (гость или cookies не дошли до API)
-        if (response.status !== 401) {
-          console.error('Ошибка загрузки сообщений:', response.status, response.statusText);
+        if (!response.ok) {
+          if (response.status !== 401) {
+            console.error('Ошибка загрузки сообщений:', response.status, response.statusText);
+          }
+          setMessages([]);
+          return;
         }
+
+        const text = await response.text();
+        if (!text) {
+          setMessages([]);
+          return;
+        }
+
+        const data = JSON.parse(text);
+        if (data.success) {
+          setMessages(data.messages || []);
+        } else {
+          setMessages([]);
+        }
+      } catch (error) {
+        console.error('Ошибка парсинга сообщений:', error);
         setMessages([]);
-        return;
+      } finally {
+        if (!silent) setLoading(false);
       }
 
-      const text = await response.text();
-      if (!text) {
-        setMessages([]);
-        return;
+      if (mode === 'support' && !silent) {
+        void refreshSessionStatus();
       }
+    },
+    [mode, refreshSessionStatus],
+  );
 
-      const data = JSON.parse(text);
-      if (data.success) {
-        setMessages(data.messages || []);
-      } else {
-        setMessages([]);
-      }
-    } catch (error) {
-      console.error('Ошибка парсинга сообщений:', error);
-      setMessages([]);
-    } finally {
-      setLoading(false);
-    }
-
-    if (mode === 'support') {
-      void refreshSessionStatus();
-    }
-  };
+  const loadMessagesRef = useRef(loadMessages);
+  loadMessagesRef.current = loadMessages;
 
   // Сообщения и session-status требуют авторизации на сервере — не дергаем API до проверки
   useEffect(() => {
@@ -147,8 +153,34 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       return;
     }
 
-    void loadMessages();
-  }, [mode, isAuthenticated]);
+    void loadMessages(false);
+  }, [mode, isAuthenticated, loadMessages]);
+
+  /**
+   * Фоновые вкладки «замораживают» WebSocket — Pusher может не доставить событие сразу.
+   * Догоняем список при возврате на вкладку и лёгким poll, без спиннера.
+   */
+  useEffect(() => {
+    if (!isAuthenticated || mode !== 'support') return;
+
+    const silentSync = () => {
+      void loadMessagesRef.current(true);
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      silentSync();
+      void refreshSessionStatus();
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    const interval = setInterval(silentSync, 12_000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      clearInterval(interval);
+    };
+  }, [isAuthenticated, mode, refreshSessionStatus]);
 
   useEffect(() => {
     // Pusher используется ТОЛЬКО для режима поддержки (реальные операторы)
@@ -161,6 +193,10 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       // Pusher не настроен (не критично для разработки)
       return;
     }
+
+    const onPusherConnected = () => {
+      void loadMessagesRef.current?.(true);
+    };
 
     // Получаем session_id (user.id) для подписки на канал
     const initPusher = async () => {
@@ -186,6 +222,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
         });
 
         pusherRef.current = pusher;
+        pusher.connection.bind('connected', onPusherConnected);
 
         const channelName = `support-chat-${userId}`;
         const channel = pusher.subscribe(channelName);
@@ -194,6 +231,8 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
         channel.bind('pusher:subscription_succeeded', () => {
           console.log('[SupportChat] Pusher subscribed to channel:', channelName);
           isInitializingRef.current = false;
+          /** После (пере)подписки подтягиваем ленту — вкладка могла пропустить события офлайн */
+          void loadMessagesRef.current?.(true);
         });
 
         channel.bind('pusher:subscription_error', (status: unknown) => {
@@ -244,9 +283,8 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
 
         // Обработка создания новой сессии
         channel.bind('new-session-created', async () => {
-          // Обновляем статус и перезагружаем сообщения
           setSessionStatus('active');
-          await loadMessages();
+          await loadMessagesRef.current?.(false);
         });
       } catch (error) {
         console.error('[SupportChat] Pusher initialization error:', error);
@@ -258,6 +296,10 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
 
     return () => {
       isInitializingRef.current = false;
+      const p = pusherRef.current;
+      if (p?.connection) {
+        p.connection.unbind('connected', onPusherConnected);
+      }
       disconnectPusherSafely(pusherRef.current, [channelRef.current]);
       channelRef.current = null;
       pusherRef.current = null;
@@ -434,8 +476,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
       // Устанавливаем статус как активный
       setSessionStatus('active');
       
-      // Перезагружаем сообщения для новой сессии
-      await loadMessages();
+      await loadMessages(false);
     } catch (error) {
       console.error('Ошибка создания новой сессии:', error);
       toast.error('Не удалось начать новую сессию');
