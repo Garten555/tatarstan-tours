@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { createClient } from '@/lib/supabase/client';
-import { useRouter, usePathname } from 'next/navigation';
+import { supabase } from '@/lib/supabase/client';
+import { getUserFromSession } from '@/lib/supabase/auth-quick-client';
+import { usePathname } from 'next/navigation';
 import { Ban, AlertCircle } from 'lucide-react';
 
 export default function BanBanner() {
@@ -12,10 +13,7 @@ export default function BanBanner() {
     ban_until: string | null;
   } | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
   const pathname = usePathname();
-  const supabase = createClient();
-
   useEffect(() => {
     // Не показываем баннер на странице /banned или в админке
     if (pathname === '/banned' || pathname?.startsWith('/admin')) {
@@ -23,7 +21,7 @@ export default function BanBanner() {
       return;
     }
     async function checkBan() {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getUserFromSession(supabase);
       
       if (!user) {
         setLoading(false);
@@ -58,8 +56,8 @@ export default function BanBanner() {
       setLoading(false);
     }
 
-    checkBan();
-  }, [supabase]);
+    void checkBan();
+  }, [pathname]);
 
   useEffect(() => {
     // Если пользователь забанен, редиректим на /banned

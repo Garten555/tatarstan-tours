@@ -375,11 +375,13 @@ export async function POST(request: NextRequest) {
       console.error('Ошибка создания уведомления о сообщении:', notifErr);
     }
 
-    // Отправляем через Pusher получателю
+    // Pusher: получатель и отправитель — второй канал синхронизирует вторую вкладку / устройство
     try {
-      await pusher.trigger(`user-${recipient_id}`, 'new-message', {
-        message: newMessage,
-      });
+      const payload = { message: newMessage };
+      await pusher.trigger(`user-${recipient_id}`, 'new-message', payload);
+      if (recipient_id !== user.id) {
+        await pusher.trigger(`user-${user.id}`, 'new-message', payload);
+      }
     } catch (pusherError) {
       console.error('Ошибка Pusher:', pusherError);
       // Не прерываем выполнение, сообщение уже сохранено

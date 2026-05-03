@@ -25,11 +25,10 @@ export default async function AuthPage({ searchParams }: AuthPageProps) {
   
   // Проверяем, авторизован ли пользователь
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+  } = await supabase.auth.getSession();
 
-  // Если авторизован - редирект на главную страницу
-  if (user) {
+  if (session?.user) {
     redirect(safeRedirect);
   }
 

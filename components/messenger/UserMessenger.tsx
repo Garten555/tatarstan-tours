@@ -144,29 +144,37 @@ export default function UserMessenger() {
     return () => clearInterval(t);
   }, [selectedConversation, fetchPeerPresence]);
 
-  // Загружаем сообщения при выборе беседы
+  // Загружаем сообщения при выборе беседы (не ждём currentUserId — API по cookie)
   useEffect(() => {
     if (selectedConversation) {
       autoScrollNextRef.current = true;
-      loadMessages(selectedConversation);
-      initPusher(selectedConversation);
-    } else {
+      void loadMessages(selectedConversation);
+    }
+  }, [selectedConversation]);
+
+  // Pusher только после известного id пользователя — иначе канал `user-null` и realtime молчит
+  useEffect(() => {
+    if (!selectedConversation || !currentUserId) {
       disconnectPusherSafely(pusherRef.current, [channelRef.current]);
       channelRef.current = null;
       pusherRef.current = null;
       setRealtimeConnected(false);
+      return;
     }
+
+    initPusher(selectedConversation, currentUserId);
 
     return () => {
       disconnectPusherSafely(pusherRef.current, [channelRef.current]);
       channelRef.current = null;
       pusherRef.current = null;
     };
-  }, [selectedConversation]);
+  }, [selectedConversation, currentUserId]);
 
-  const loadConversations = async () => {
+  const loadConversations = async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await fetch('/api/users/messages');
       if (response.ok) {
         const contentType = response.headers.get('content-type');
@@ -181,7 +189,7 @@ export default function UserMessenger() {
     } catch (error) {
       console.error('Ошибка загрузки бесед:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -209,11 +217,15 @@ export default function UserMessenger() {
     }
   };
 
-  const initPusher = (userId: string) => {
+  const initPusher = (peerUserId: string, myUserId: string) => {
     if (!process.env.NEXT_PUBLIC_PUSHER_KEY || !process.env.NEXT_PUBLIC_PUSHER_CLUSTER) {
       console.error('[UserMessenger] Pusher credentials not configured');
       return;
     }
+
+    disconnectPusherSafely(pusherRef.current, [channelRef.current]);
+    channelRef.current = null;
+    pusherRef.current = null;
 
     const pusher = new Pusher(process.env.NEXT_PUBLIC_PUSHER_KEY!, {
       cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'eu',
@@ -221,7 +233,7 @@ export default function UserMessenger() {
 
     pusherRef.current = pusher;
 
-    const channelName = `user-${currentUserId}`;
+    const channelName = `user-${myUserId}`;
     const channel = pusher.subscribe(channelName);
     channelRef.current = channel;
 
@@ -231,23 +243,24 @@ export default function UserMessenger() {
     });
 
     channel.bind('new-message', (data: { message: Message }) => {
-      if (data.message.sender_id === userId || data.message.recipient_id === userId) {
+      if (data.message.sender_id === peerUserId || data.message.recipient_id === peerUserId) {
         setMessages((prev) => {
           const exists = prev.some((msg) => msg.id === data.message.id);
           if (exists) return prev;
           return [...prev, data.message];
         });
-        const isMine = data.message.sender_id === currentUserId;
+        const isMine = data.message.sender_id === myUserId;
         if (isMine || nearBottomRef.current) {
           autoScrollNextRef.current = true;
         }
         if (!isMine) playNotificationSound('message');
-        loadConversations(); // Обновляем список бесед
+        void loadConversations({ silent: true });
       }
     });
   };
 
   useEffect(() => {
+    if (!selectedConversation) return;
     const container = messagesContainerRef.current;
     if (!container) return;
     const onScroll = () => {
@@ -257,7 +270,7 @@ export default function UserMessenger() {
     onScroll();
     container.addEventListener('scroll', onScroll);
     return () => container.removeEventListener('scroll', onScroll);
-  }, []);
+  }, [selectedConversation]);
 
   const scrollToBottom = () => {
     const container = messagesContainerRef.current;
@@ -365,7 +378,7 @@ export default function UserMessenger() {
         setMessages((prev) => [...prev, data.message]);
         playNotificationSound('message');
         autoScrollNextRef.current = true;
-        loadConversations(); // Обновляем список бесед
+        void loadConversations({ silent: true });
       }
     } catch (error: any) {
       console.error('Ошибка отправки сообщения:', error);

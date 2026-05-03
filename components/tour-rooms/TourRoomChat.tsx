@@ -38,6 +38,8 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
   const channelRef = useRef<any>(null);
   const supabase = createClient();
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const currentUserIdRef = useRef<string | null>(null);
+  currentUserIdRef.current = currentUserId;
   const nearBottomRef = useRef(true);
   const autoScrollNextRef = useRef(true);
   const [reportMessageId, setReportMessageId] = useState<string | null>(null);
@@ -103,10 +105,10 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
       setMessages((prev) => {
         const exists = prev.some((msg) => msg.id === data.message.id);
         if (exists) return prev;
-        if (data.message.user_id !== currentUserId) {
+        if (data.message.user_id !== currentUserIdRef.current) {
           playNotificationSound('message');
         }
-        if (nearBottomRef.current || data.message.user_id === currentUserId) {
+        if (nearBottomRef.current || data.message.user_id === currentUserIdRef.current) {
           autoScrollNextRef.current = true;
         }
         return [...prev, data.message];

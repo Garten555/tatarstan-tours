@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
+import { getUserFromSession } from '@/lib/supabase/auth-quick-client';
 import {
   PUSHER_BRIDGE_EVENT,
   type PusherBridgeDetail,
@@ -134,270 +135,237 @@ export default function UserMenu() {
   useEffect(() => {
     // Быстрый старт из localStorage, чтобы ссылка Админ-панель не пропадала при пробуждении вкладки
     const cached = readCachedProfile();
-      if (cached && (cached.role || cached.first_name || cached.last_name)) {
-        setProfile(cached);
-      }
+    if (cached && (cached.role || cached.first_name || cached.last_name)) {
+      setProfile(cached);
+    }
 
-    // Получаем текущего пользователя
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-      if (user) {
-        // Сначала загружаем из БД (приоритет для актуальных данных, особенно avatar_url)
-        supabase
-          .from('profiles')
-          .select('first_name, last_name, avatar_url, role, username')
-          .eq('id', user.id)
-          .single()
-          .then(({ data, error }) => {
-            if (!error && data) {
-              // Используем данные из БД как основной источник
-              const dbProfile = {
-                first_name: (data as any).first_name,
-                last_name: (data as any).last_name,
-                avatar_url: (data as any).avatar_url,
-                role: (data as any).role,
-                username: (data as any).username,
+    const hydrateProfileFromDb = (u: SupabaseUser) => {
+      supabase
+        .from('profiles')
+        .select('first_name, last_name, avatar_url, role, username')
+        .eq('id', u.id)
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data) {
+            const dbProfile = {
+              first_name: (data as any).first_name,
+              last_name: (data as any).last_name,
+              avatar_url: (data as any).avatar_url,
+              role: (data as any).role,
+              username: (data as any).username,
+            };
+            setProfile((prev: any) => {
+              const keepAdmin = isAdminRole(prev?.role) && !isAdminRole(dbProfile.role);
+              const next = {
+                first_name: dbProfile.first_name ?? prev?.first_name ?? u.user_metadata?.first_name,
+                last_name: dbProfile.last_name ?? prev?.last_name ?? u.user_metadata?.last_name,
+                avatar_url: dbProfile.avatar_url ?? prev?.avatar_url ?? u.user_metadata?.avatar_url,
+                role: keepAdmin ? prev?.role : (dbProfile.role ?? prev?.role ?? u.user_metadata?.role),
+                username: dbProfile.username ?? prev?.username,
               };
-              
-              setProfile((prev: any) => {
-                const keepAdmin = isAdminRole(prev?.role) && !isAdminRole(dbProfile.role);
-                const next = {
-                  first_name: dbProfile.first_name ?? prev?.first_name ?? user.user_metadata?.first_name,
-                  last_name: dbProfile.last_name ?? prev?.last_name ?? user.user_metadata?.last_name,
-                  // Всегда приоритет avatar_url из БД
-                  avatar_url: dbProfile.avatar_url ?? prev?.avatar_url ?? user.user_metadata?.avatar_url,
-                  role: keepAdmin ? prev?.role : (dbProfile.role ?? prev?.role ?? user.user_metadata?.role),
-                  username: dbProfile.username ?? prev?.username,
+              writeCachedProfile(next);
+              return next;
+            });
+          } else {
+            const metaProfile = {
+              first_name: u.user_metadata?.first_name,
+              last_name: u.user_metadata?.last_name,
+              avatar_url: u.user_metadata?.avatar_url,
+              role: u.user_metadata?.role,
+            };
+            setProfile((prev: any) => {
+              if (prev?.role || prev?.first_name) {
+                return {
+                  ...prev,
+                  avatar_url: prev.avatar_url ?? metaProfile.avatar_url,
                 };
-                writeCachedProfile(next);
-                return next;
-              });
-            } else {
-              // Если ошибка RLS - используем данные из metadata как fallback
-              const metaProfile = {
-                first_name: user.user_metadata?.first_name,
-                last_name: user.user_metadata?.last_name,
-                avatar_url: user.user_metadata?.avatar_url,
-                role: user.user_metadata?.role,
-              };
-              setProfile((prev: any) => {
-                // Не перезаписываем, если уже есть данные из кэша
-                if (prev?.role || prev?.first_name) {
-                  return {
-                    ...prev,
-                    avatar_url: prev.avatar_url ?? metaProfile.avatar_url,
-                  };
-                }
-                return metaProfile;
-              });
-              writeCachedProfile(metaProfile);
-            }
-          });
-      }
+              }
+              return metaProfile;
+            });
+            writeCachedProfile(metaProfile);
+          }
+        });
+    };
+
+    // getSession() — локально/из cookie, без лишнего round-trip к Auth API
+    void supabase.auth.getSession().then(({ data: { session } }) => {
+      const initialUser = session?.user ?? null;
+      setUser(initialUser);
       setAuthResolved(true);
+      if (initialUser) {
+        hydrateProfileFromDb(initialUser);
+      }
     });
 
-    // Подписка на изменения авторизации
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        // При изменении сессии перезагружаем профиль из БД для получения актуальных данных
-        // Используем кэш для быстрого старта
+      const sUser = session?.user ?? null;
+      setUser(sUser);
+      setAuthResolved(true);
+      if (sUser) {
         const cachedProfile = readCachedProfile();
         if (cachedProfile && cachedProfile.role) {
           setProfile(cachedProfile);
         }
-        
-        // Загружаем из БД в фоне (не блокируем UI)
         supabase
           .from('profiles')
           .select('first_name, last_name, avatar_url, role, username')
-          .eq('id', session.user.id)
+          .eq('id', sUser.id)
           .single()
           .then(({ data, error }) => {
             if (!error && data) {
               setProfile((prev: any) => {
                 const keepAdmin = isAdminRole(prev?.role) && !isAdminRole((data as any).role);
                 const next = {
-                  first_name: (data as any).first_name ?? prev?.first_name ?? session.user.user_metadata?.first_name,
-                  last_name: (data as any).last_name ?? prev?.last_name ?? session.user.user_metadata?.last_name,
-                  // Всегда приоритет avatar_url из БД
-                  avatar_url: (data as any).avatar_url ?? prev?.avatar_url ?? session.user.user_metadata?.avatar_url,
-                  role: keepAdmin ? prev?.role : ((data as any).role ?? prev?.role ?? session.user.user_metadata?.role),
+                  first_name: (data as any).first_name ?? prev?.first_name ?? sUser.user_metadata?.first_name,
+                  last_name: (data as any).last_name ?? prev?.last_name ?? sUser.user_metadata?.last_name,
+                  avatar_url: (data as any).avatar_url ?? prev?.avatar_url ?? sUser.user_metadata?.avatar_url,
+                  role: keepAdmin ? prev?.role : ((data as any).role ?? prev?.role ?? sUser.user_metadata?.role),
                   username: (data as any).username ?? prev?.username,
                 };
                 writeCachedProfile(next);
                 return next;
               });
             } else {
-              // Fallback на user_metadata только если БД недоступна
               setProfile((prev: any) => {
-                // Не перезаписываем аватар, если он уже есть
-                if (prev?.avatar_url && !session.user.user_metadata?.avatar_url) {
+                if (prev?.avatar_url && !sUser.user_metadata?.avatar_url) {
                   return {
                     ...prev,
-                    first_name: session.user.user_metadata?.first_name ?? prev?.first_name,
-                    last_name: session.user.user_metadata?.last_name ?? prev?.last_name,
-                    role: session.user.user_metadata?.role ?? prev?.role,
+                    first_name: sUser.user_metadata?.first_name ?? prev?.first_name,
+                    last_name: sUser.user_metadata?.last_name ?? prev?.last_name,
+                    role: sUser.user_metadata?.role ?? prev?.role,
                   };
                 }
                 return {
-                  first_name: session.user.user_metadata?.first_name,
-                  last_name: session.user.user_metadata?.last_name,
-                  avatar_url: session.user.user_metadata?.avatar_url ?? prev?.avatar_url,
-                  role: session.user.user_metadata?.role,
+                  first_name: sUser.user_metadata?.first_name,
+                  last_name: sUser.user_metadata?.last_name,
+                  avatar_url: sUser.user_metadata?.avatar_url ?? prev?.avatar_url,
+                  role: sUser.user_metadata?.role,
                 };
               });
               writeCachedProfile({
-                first_name: session.user.user_metadata?.first_name,
-                last_name: session.user.user_metadata?.last_name,
-                avatar_url: session.user.user_metadata?.avatar_url,
-                role: session.user.user_metadata?.role,
+                first_name: sUser.user_metadata?.first_name,
+                last_name: sUser.user_metadata?.last_name,
+                avatar_url: sUser.user_metadata?.avatar_url,
+                role: sUser.user_metadata?.role,
               });
             }
           });
       }
-      setAuthResolved(true);
     });
 
-    // При возврате на вкладку перезагружаем профиль из БД для синхронизации
     const onVisible = async () => {
-      // Не перезагружаем, если вкладка только что стала видимой (может быть ложное срабатывание)
       if (document.hidden) return;
-      
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (currentUser) {
-        // Перезагружаем профиль из БД для получения актуальных данных (особенно avatar_url)
-        supabase
-          .from('profiles')
-          .select('first_name, last_name, avatar_url, role, username')
-          .eq('id', currentUser.id)
-          .single()
-          .then(({ data, error }) => {
-            if (!error && data) {
-              setProfile((prev: any) => {
-                const keepAdmin = isAdminRole(prev?.role) && !isAdminRole((data as any).role);
-                const next = {
-                  first_name: (data as any).first_name ?? prev?.first_name,
-                  last_name: (data as any).last_name ?? prev?.last_name,
-                  // Всегда используем avatar_url из БД при возврате на вкладку
-                  avatar_url: (data as any).avatar_url ?? prev?.avatar_url,
-                  role: keepAdmin ? prev?.role : ((data as any).role ?? prev?.role),
-                  username: (data as any).username ?? prev?.username,
-                };
-                writeCachedProfile(next);
-                return next;
-              });
-            }
-          });
+      const currentUser = await getUserFromSession(supabase);
+      if (!currentUser) return;
+      supabase
+        .from('profiles')
+        .select('first_name, last_name, avatar_url, role, username')
+        .eq('id', currentUser.id)
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data) {
+            setProfile((prev: any) => {
+              const keepAdmin = isAdminRole(prev?.role) && !isAdminRole((data as any).role);
+              const next = {
+                first_name: (data as any).first_name ?? prev?.first_name,
+                last_name: (data as any).last_name ?? prev?.last_name,
+                avatar_url: (data as any).avatar_url ?? prev?.avatar_url,
+                role: keepAdmin ? prev?.role : ((data as any).role ?? prev?.role),
+                username: (data as any).username ?? prev?.username,
+              };
+              writeCachedProfile(next);
+              return next;
+            });
+          }
+        });
+    };
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) {
+        setTimeout(() => void onVisible(), 100);
       }
     };
-    
-    // Используем только visibilitychange для избежания множественных срабатываний
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) {
-        // Небольшая задержка для избежания ложных срабатываний
-        setTimeout(onVisible, 100);
-      }
-    });
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
-    // Слушаем событие обновления аватара
     const handleAvatarUpdate = async (event: Event) => {
       const customEvent = event as CustomEvent;
       const newAvatarUrl = customEvent.detail?.url;
-      if (newAvatarUrl) {
-        // Обновляем профиль с новым аватаром
-        setProfile((prev: any) => {
-          const updated = { ...prev, avatar_url: newAvatarUrl };
-          writeCachedProfile(updated);
-          return updated;
-        });
-        
-        // Также перезагружаем профиль из БД для синхронизации
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-        if (currentUser) {
-          supabase
-            .from('profiles')
-            .select('first_name, last_name, avatar_url, role')
-            .eq('id', currentUser.id)
-            .single()
-            .then(({ data, error }) => {
-              if (!error && data) {
-                setProfile((prev: any) => {
-                  const next = {
-                    first_name: (data as any).first_name ?? prev?.first_name,
-                    last_name: (data as any).last_name ?? prev?.last_name,
-                    avatar_url: (data as any).avatar_url ?? prev?.avatar_url,
-                    role: (data as any).role ?? prev?.role,
-                  };
-                  writeCachedProfile(next);
-                  return next;
-                });
-              }
+      if (!newAvatarUrl) return;
+      setProfile((prev: any) => {
+        const updated = { ...prev, avatar_url: newAvatarUrl };
+        writeCachedProfile(updated);
+        return updated;
+      });
+      const currentUser = await getUserFromSession(supabase);
+      if (!currentUser) return;
+      supabase
+        .from('profiles')
+        .select('first_name, last_name, avatar_url, role')
+        .eq('id', currentUser.id)
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data) {
+            setProfile((prev: any) => {
+              const next = {
+                first_name: (data as any).first_name ?? prev?.first_name,
+                last_name: (data as any).last_name ?? prev?.last_name,
+                avatar_url: (data as any).avatar_url ?? prev?.avatar_url,
+                role: (data as any).role ?? prev?.role,
+              };
+              writeCachedProfile(next);
+              return next;
             });
-        }
-      }
+          }
+        });
     };
     window.addEventListener('avatarUpdated', handleAvatarUpdate);
 
-    // Проверяем, является ли пользователь гидом (только один раз для каждого пользователя)
+    return () => {
+      subscription.unsubscribe();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('avatarUpdated', handleAvatarUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
     const checkIfGuide = async (userId: string) => {
-      // Если уже проверено для этого пользователя - пропускаем
       if (guideCheckedRef.current === userId) return;
-      
       try {
-        // Проверяем кэш
         const cachedTime = localStorage.getItem('tt_is_guide_time');
         const cachedGuide = localStorage.getItem('tt_is_guide');
         const cachedUserId = localStorage.getItem('tt_is_guide_user_id');
         const now = Date.now();
-        
-        // Если кэш для этого пользователя свежий (менее 5 минут) - используем его
         if (cachedUserId === userId && cachedTime && cachedGuide !== null) {
-          const cacheAge = now - parseInt(cachedTime);
+          const cacheAge = now - parseInt(cachedTime, 10);
           if (cacheAge < 5 * 60 * 1000) {
             setIsGuide(cachedGuide === 'true');
-            guideCheckedRef.current = userId; // Помечаем как проверенное
+            guideCheckedRef.current = userId;
             return;
           }
         }
-        
-        // Загружаем только если нет свежего кэша
         const response = await fetch('/api/guide/rooms');
         const data = await response.json();
         const isGuideValue = data.success && data.rooms && data.rooms.length > 0;
         setIsGuide(isGuideValue);
-        guideCheckedRef.current = userId; // Помечаем как проверенное
-        
-        // Кэшируем результат на 5 минут
+        guideCheckedRef.current = userId;
         localStorage.setItem('tt_is_guide', String(isGuideValue));
         localStorage.setItem('tt_is_guide_time', now.toString());
         localStorage.setItem('tt_is_guide_user_id', userId);
       } catch (error) {
         console.error('Ошибка проверки гида:', error);
-        guideCheckedRef.current = userId; // Помечаем как проверенное даже при ошибке
+        guideCheckedRef.current = userId;
       }
     };
-    
-    // Проверяем только один раз при появлении нового пользователя
-    if (user && guideCheckedRef.current !== user.id) {
-      checkIfGuide(user.id);
+
+    if (user?.id && guideCheckedRef.current !== user.id) {
+      void checkIfGuide(user.id);
     }
-    
-    // Сбрасываем флаг при смене пользователя
-    if (!user && guideCheckedRef.current !== null) {
+    if (!user?.id && guideCheckedRef.current !== null) {
       guideCheckedRef.current = null;
       setIsGuide(false);
     }
-
-    return () => {
-      subscription.unsubscribe();
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('focus', onVisible);
-      window.removeEventListener('avatarUpdated', handleAvatarUpdate);
-    };
   }, [user?.id]);
 
   useEffect(() => {
