@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
 
   const range = request.headers.get('range');
   const upstreamHeaders = new Headers({
-    Accept: 'video/mp4,video/webm,video/*,*/*',
+    Accept: 'video/mp4,video/webm,video/quicktime,video/*,*/*',
     'User-Agent':
       'Mozilla/5.0 (compatible; turrrr-video-proxy/1.0; +https://github.com/nodejs/undici)',
   });
@@ -105,6 +105,10 @@ export async function GET(request: NextRequest) {
   ) {
     const pathLower = target.pathname.toLowerCase();
     if (pathLower.endsWith('.webm')) contentType = 'video/webm';
+    else if (pathLower.endsWith('.mov') || pathLower.endsWith('.qt')) contentType = 'video/quicktime';
+    else if (pathLower.endsWith('.m4v')) contentType = 'video/x-m4v';
+    else if (pathLower.endsWith('.ogv')) contentType = 'video/ogg';
+    else if (pathLower.endsWith('.avi')) contentType = 'video/x-msvideo';
     else contentType = 'video/mp4';
   }
   out.set('Content-Type', contentType);

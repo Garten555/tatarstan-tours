@@ -1,6 +1,7 @@
 'use client';
 
 import { useLayoutEffect, useRef } from 'react';
+import { resolveVideoSourceType } from '@/lib/video/guess-mime-from-url';
 import { videoPlaybackSrc } from '@/lib/video/playback-src';
 import { bindPlyrRussianSpeedUi, type PlyrRussianUiHost } from '@/lib/video/plyr-ru-speed-ui';
 import { loadPlyr } from '@/lib/video/load-plyr';
@@ -21,7 +22,7 @@ const MEDIA_ERR_LABEL: Record<number, string> = {
   4: 'MEDIA_ERR_SRC_NOT_SUPPORTED (кодек/формат не поддерживается браузером)',
 };
 
-export default function VideoPlayer({ src, title }: VideoPlayerProps) {
+export default function VideoPlayer({ src, mimeType, title }: VideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<PlyrInstance | null>(null);
   const teardownRef = useRef(false);
@@ -174,16 +175,14 @@ export default function VideoPlayer({ src, title }: VideoPlayerProps) {
       destroy();
       videoEl.removeAttribute('controls');
     };
-  }, [src]);
+  }, [src, mimeType]);
 
   const safeSrc = src?.trim() ?? '';
   if (!safeSrc) return null;
 
   const playback = videoPlaybackSrc(safeSrc);
-  const mimeHint =
-    /\.webm(\?|$)/i.test(safeSrc) || /\.webm(\?|$)/i.test(playback)
-      ? 'video/webm'
-      : 'video/mp4';
+  /** Не подставлять ложный video/mp4 для .mov — Chromium не воспроизводит (MEDIA_ERR_SRC_NOT_SUPPORTED). */
+  const sourceType = resolveVideoSourceType(safeSrc, mimeType);
 
   return (
     <div key={`${safeSrc}-${playback}`} className="plyr-container relative w-full aspect-video min-h-[200px] bg-black">
@@ -194,7 +193,7 @@ export default function VideoPlayer({ src, title }: VideoPlayerProps) {
         preload="auto"
         {...(title ? { 'aria-label': title } : {})}
       >
-        <source src={playback} type={mimeHint} />
+        <source src={playback} {...(sourceType ? { type: sourceType } : {})} />
       </video>
     </div>
   );
