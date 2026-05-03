@@ -1,7 +1,7 @@
 // API для загрузки файлов в S3
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadFileToS3, generateUniqueFileName } from '@/lib/s3/upload';
-import { createClient } from '@/lib/supabase/server';
+import { createClient, createServiceClient } from '@/lib/supabase/server';
 
 // Максимальный размер файла
 const MAX_FILE_SIZE = {
@@ -37,12 +37,24 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File;
     const folder = formData.get('folder') as string; // tours/covers, tours/gallery, tours/videos, diaries/covers, diaries/media
 
-    // Проверяем права доступа
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
+    // Роль читаем service role: иначе при RLS/сбоях anon-клиента `.single()` даёт пусто → ложный 403 даже у super_admin
+    let profile: { role: string } | null = null;
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      const svc = createServiceClient();
+      const { data } = await svc
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+      profile = data as { role: string } | null;
+    } else {
+      const { data } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+      profile = data as { role: string } | null;
+    }
 
     const isDiaryUpload = folder?.startsWith('diaries/');
     const isReviewUpload = folder?.startsWith('reviews/');
@@ -50,7 +62,14 @@ export async function POST(request: NextRequest) {
     
     // Для загрузки медиа дневников и галереи пользователя разрешаем всем авторизованным пользователям
     // Для туров - только админам
-    if (!isDiaryUpload && !isReviewUpload && !isUserGalleryUpload && (!profile || !['super_admin', 'tour_admin'].includes((profile as any).role))) {
+    const adminRoles = ['super_admin', 'tour_admin'];
+    const role = profile?.role?.trim();
+    if (
+      !isDiaryUpload &&
+      !isReviewUpload &&
+      !isUserGalleryUpload &&
+      (!role || !adminRoles.includes(role))
+    ) {
       return NextResponse.json(
         { error: 'Недостаточно прав для загрузки файлов' },
         { status: 403 }
