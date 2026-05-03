@@ -28,14 +28,16 @@ export async function uploadFileToS3(
       contentType = 'application/octet-stream';
     }
 
-    // Команда для загрузки файла
+    // ACL отключён по умолчанию: у Timeweb/AWS с Object Ownership / без ACL PutObject с ACL → 500.
+    // Публичность через политику бакета. При необходимости: S3_OBJECT_ACL=public-read
     const command = new PutObjectCommand({
       Bucket: S3_CONFIG.bucket,
       Key: path,
       Body: buffer,
       ContentType: contentType,
-      // Делаем файл публично доступным
-      ACL: 'public-read',
+      ...(process.env.S3_OBJECT_ACL === 'public-read'
+        ? { ACL: 'public-read' as const }
+        : {}),
     });
 
     await s3Client.send(command);

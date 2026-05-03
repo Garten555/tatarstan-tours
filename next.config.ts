@@ -92,13 +92,13 @@ const nextConfig: NextConfig = {
       { key: 'X-Content-Type-Options', value: 'nosniff' },
       { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
       { key: 'X-Download-Options', value: 'noopen' },
-      { key: 'Origin-Agent-Cluster', value: '?1' },
       { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
       { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(), interest-cohort=()' },
     ];
 
     if (useHttps) {
       securityHeaders.push(
+        { key: 'Origin-Agent-Cluster', value: '?1' },
         { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
         { key: 'Cross-Origin-Resource-Policy', value: 'same-site' },
         {
