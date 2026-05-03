@@ -28,6 +28,7 @@ import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
 import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
 import { insertEmojiAtCursor } from '@/lib/chat/insert-emoji-at-cursor';
 import { formatLastSeen, type PresenceStatus } from '@/lib/utils/presence';
+import { useDialog } from '@/hooks/useDialog';
 import { postFormDataJsonWithProgress } from '@/lib/upload/post-form-data-xhr';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
 
@@ -83,6 +84,7 @@ interface Message {
 }
 
 export default function UserMessenger() {
+  const { confirm, DialogComponents } = useDialog();
   const searchParams = useSearchParams();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
@@ -369,8 +371,12 @@ export default function UserMessenger() {
 
   const clearThreadWithPeer = async () => {
     if (!selectedConversation) return;
-    const ok = window.confirm(
-      'Удалить всю переписку с этим человеком у вас и у него? Сообщения исчезнут у обоих, восстановить нельзя.'
+    const ok = await confirm(
+      'Удалить всю переписку с этим человеком у вас и у него? Сообщения исчезнут у обоих, восстановить нельзя.',
+      'Очистить переписку',
+      'danger',
+      'Удалить',
+      'Отмена'
     );
     if (!ok) return;
     try {
@@ -908,6 +914,7 @@ export default function UserMessenger() {
       title="Фото в чате"
       onClose={() => setImageViewer(null)}
     />
+    {DialogComponents}
     </>
   );
 }
