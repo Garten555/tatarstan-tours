@@ -42,7 +42,13 @@ const nextConfig: NextConfig = {
   },
   // Оптимизация сборки
   experimental: {
-    optimizePackageImports: ['lucide-react', 'date-fns', '@supabase/supabase-js', 'framer-motion'],
+    optimizePackageImports: [
+      'lucide-react',
+      'date-fns',
+      '@supabase/supabase-js',
+      'framer-motion',
+      'pusher-js',
+    ],
     /**
      * Middleware на /api/*: Next буферизует тело (дефолт 10MB). Видео до 100MB → обрезка → FormData падает.
      * В Next 16 лимит задаётся через proxyClientMaxBodySize (см. предупреждение сборки про middlewareClientMaxBodySize).

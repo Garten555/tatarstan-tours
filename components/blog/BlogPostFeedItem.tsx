@@ -12,6 +12,7 @@ import ImageViewerModal from '@/components/common/ImageViewerModal';
 import { useDialog } from '@/hooks/useDialog';
 import toast from 'react-hot-toast';
 import { bindPlyrRussianSpeedUi, type PlyrRussianUiHost } from '@/lib/video/plyr-ru-speed-ui';
+import { loadPlyr } from '@/lib/video/load-plyr';
 
 interface BlogPostFeedItemProps {
   post: {
@@ -148,10 +149,9 @@ export default function BlogPostFeedItem({ post, isOwner = false }: BlogPostFeed
       
       wrapper.replaceChild(newVideo, tempDiv);
       
-      // Инициализируем Plyr
-      import('plyr')
-        .then((PlyrModule) => {
-          const Plyr = PlyrModule.default;
+      // Инициализируем Plyr (стили подтягиваются внутри loadPlyr)
+      loadPlyr()
+        .then((Plyr) => {
           const player = new Plyr(newVideo, {
             controls: [
               'play-large',
