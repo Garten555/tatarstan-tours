@@ -122,21 +122,22 @@ export async function FeaturedTours() {
         {/* Сетка туров */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 md:gap-6 mb-8 sm:mb-10 md:mb-12">
           {(tours as any[]).map((tour) => (
-            <TourCard
-              key={tour.id}
-              id={tour.id}
-              title={tour.title}
-              slug={tour.slug}
-              short_desc={tour.short_desc}
-              cover_image={tour.cover_image}
-              price_per_person={tour.price_per_person}
-              start_date={tour.start_date}
-              end_date={tour.end_date}
-              max_participants={tour.max_participants}
-              current_participants={tour.current_participants || 0}
-              tour_type={tour.tour_type}
-              category={tour.category}
-            />
+            <div key={tour.id} className="min-w-0">
+              <TourCard
+                id={tour.id}
+                title={tour.title}
+                slug={tour.slug}
+                short_desc={tour.short_desc}
+                cover_image={tour.cover_image}
+                price_per_person={tour.price_per_person}
+                start_date={tour.start_date}
+                end_date={tour.end_date}
+                max_participants={tour.max_participants}
+                current_participants={tour.current_participants || 0}
+                tour_type={tour.tour_type}
+                category={tour.category}
+              />
+            </div>
           ))}
         </div>
 

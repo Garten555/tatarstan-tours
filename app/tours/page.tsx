@@ -572,7 +572,7 @@ function ToursPageContent() {
                 {tours.map((tour, index) => (
                   <div
                     key={tour.id}
-                    className="animate-in fade-in slide-in-from-bottom-4"
+                    className="min-w-0 animate-in fade-in slide-in-from-bottom-4"
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
                     <TourCard

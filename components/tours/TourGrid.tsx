@@ -346,7 +346,9 @@ export default function TourGrid() {
       {filteredTours.length > 0 ? (
         <div className="grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-3">
           {filteredTours.map((tour) => (
-            <TourCard key={tour.id} {...toTourCardProps(tour)} />
+            <div key={tour.id} className="min-w-0">
+              <TourCard {...toTourCardProps(tour)} />
+            </div>
           ))}
         </div>
       ) : (

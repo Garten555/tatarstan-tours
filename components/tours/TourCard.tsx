@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { Calendar, Users, Clock } from 'lucide-react';
+import ClampedText from '@/components/ui/ClampedText';
 
 interface TourCardProps {
   id: string;
@@ -54,6 +55,8 @@ export default function TourCard({
 }: TourCardProps) {
   const availableSpots = max_participants - current_participants;
   const isFullyBooked = availableSpots <= 0;
+  const titleSingleLine = title.replace(/\s+/g, ' ').trim();
+  const descSingleLine = short_desc.replace(/\s+/g, ' ').trim();
 
   // Форматирование даты
   const formatDate = (dateString: string) => {
@@ -81,12 +84,12 @@ export default function TourCard({
 
   return (
     <Link href={`/tours/${slug}`} prefetch={true} className="group">
-      <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm hover:shadow-2xl transition-all duration-300 overflow-hidden h-full flex flex-col">
+      <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm hover:shadow-2xl transition-all duration-300 overflow-hidden h-full flex flex-col min-w-0">
         {/* Изображение */}
-        <div className="relative h-48 sm:h-56 md:h-60 overflow-hidden">
+        <div className="relative h-48 sm:h-56 md:h-60 overflow-hidden min-w-0">
           <Image
             src={cover_image}
-            alt={title}
+            alt={titleSingleLine}
             fill
             className="object-cover group-hover:scale-110 transition-transform duration-500"
             loading="lazy"
@@ -104,15 +107,19 @@ export default function TourCard({
           )}
 
           {/* Название на изображении */}
-          <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 md:p-5">
-            <h3 className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-black text-white mb-2 sm:mb-3 group-hover:text-emerald-300 transition-colors line-clamp-2 leading-tight drop-shadow-lg">
-              {title}
-            </h3>
+          <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4 md:p-5 min-w-0">
+            <ClampedText
+              as="h3"
+              lines={2}
+              className="text-lg sm:text-xl md:text-2xl lg:text-3xl font-black text-white mb-2 sm:mb-3 group-hover:text-emerald-300 transition-colors leading-tight drop-shadow-lg"
+            >
+              {titleSingleLine}
+            </ClampedText>
           </div>
         </div>
 
         {/* Контент */}
-        <div className="p-4 sm:p-5 md:p-6 lg:p-7 flex-1 flex flex-col">
+        <div className="p-4 sm:p-5 md:p-6 lg:p-7 flex-1 flex flex-col min-w-0">
           {/* Бейджи */}
           <div className="flex flex-wrap gap-2 sm:gap-2.5 mb-3 sm:mb-4">
             <span className="px-3 py-1.5 sm:px-4 sm:py-2 bg-emerald-100 text-emerald-700 text-xs sm:text-sm font-bold rounded-xl shadow-sm inline-flex items-center gap-1.5 sm:gap-2">
@@ -126,9 +133,12 @@ export default function TourCard({
           </div>
 
           {/* Описание */}
-          <p className="text-gray-600 text-sm sm:text-base md:text-lg mb-3 sm:mb-4 md:mb-5 line-clamp-2 flex-1 leading-relaxed">
-            {short_desc}
-          </p>
+          <ClampedText
+            lines={2}
+            className="text-gray-600 text-sm sm:text-base md:text-lg mb-3 sm:mb-4 md:mb-5 flex-1 leading-relaxed"
+          >
+            {descSingleLine}
+          </ClampedText>
 
           {/* Метаданные */}
           <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-5">
