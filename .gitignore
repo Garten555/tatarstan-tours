@@ -68,6 +68,13 @@ commit-*.txt
 generate_diploma.py
 run_diploma.bat
 src/generate_*.py
+append_docx_part3_gui.py
+format_gost_3_2.py
+rewrite_db_section_as_list.py
+rewrite_part3_inline.py
+typography_preview.html
+doc_figures/
+*.docx
 
 # SQL files (keep local, remove from repo)
 *.sql
