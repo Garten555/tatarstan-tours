@@ -1,10 +1,11 @@
 {
   "name": "turrrr",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build --webpack",
+    "build:low-mem": "cross-env LOW_MEMORY_BUILD=1 next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
@@ -52,6 +53,7 @@
     "@types/sanitize-html": "^2.16.1",
     "@types/speakeasy": "^2.0.9",
     "baseline-browser-mapping": "^2.9.19",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.0.0",
     "tailwindcss": "^4",

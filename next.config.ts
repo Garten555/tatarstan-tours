@@ -5,6 +5,13 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,
+  /** На VPS с ~2 GB RAM: `LOW_MEMORY_BUILD=1 npm run build` или `npm run build:low-mem` */
+  webpack: (config, { dev }) => {
+    if (!dev && process.env.LOW_MEMORY_BUILD === '1') {
+      config.parallelism = 1;
+    }
+    return config;
+  },
   // Оптимизация производительности
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production' ? {
