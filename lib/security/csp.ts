@@ -27,6 +27,8 @@ export function buildContentSecurityPolicy(): string {
   const connectParts = [
     "'self'",
     'blob:',
+    /** Plyr (npm): дефолтный iconUrl грузит plyr.svg с CDN через fetch */
+    'https://cdn.plyr.io',
     supabaseOrigin,
     supabaseHost ? `https://${supabaseHost}` : '',
     supabaseHost ? `wss://${supabaseHost}` : '',
@@ -44,6 +46,7 @@ export function buildContentSecurityPolicy(): string {
     'blob:',
     /** emoji-picker-react: PNG эмодзи с jsDelivr (emoji-datasource-apple и др.) */
     'https://cdn.jsdelivr.net',
+    'https://cdn.plyr.io',
     'https://s3.twcstorage.ru',
     'https://images.unsplash.com',
     ...(supabaseOrigin ? [supabaseOrigin] : []),
