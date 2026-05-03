@@ -1,7 +1,7 @@
 'use client';
 
 // Компонент чата в комнате тура с Pusher - полностью переделанный дизайн
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { TourRoomMessage } from '@/types';
 import { Send, Trash2, Loader2, Wifi, WifiOff, Image as ImageIcon, X, Flag } from 'lucide-react';
 import Pusher from 'pusher-js';
@@ -14,6 +14,8 @@ import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
 import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
 import { insertEmojiAtCursor } from '@/lib/chat/insert-emoji-at-cursor';
 import ReportReasonModal from '@/components/common/ReportReasonModal';
+import { postFormDataJsonWithProgress } from '@/lib/upload/post-form-data-xhr';
+import { ChatImageLightbox } from '@/components/chat/ChatImageLightbox';
 
 interface TourRoomChatProps {
   roomId: string;
@@ -30,7 +32,9 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
   const [sending, setSending] = useState(false);
   const [connected, setConnected] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedImage, setSelectedImage] = useState<{ file: File; preview: string } | null>(null);
+  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messageTextareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -176,42 +180,29 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
   const uploadImage = async (file: File): Promise<{ url: string; path: string } | null> => {
     try {
       setUploadingImage(true);
-      console.log('[TourRoomChat] Starting image upload:', { fileName: file.name, fileSize: file.size, fileType: file.type });
+      setUploadProgress(0);
       const formData = new FormData();
       formData.append('file', file);
 
-      // Используем отдельный endpoint для фото из сообщений (не сохраняет в галерею)
-      const response = await fetch(`/api/tour-rooms/${roomId}/messages/upload-image`, {
-        method: 'POST',
-        body: formData,
-      });
+      const data = await postFormDataJsonWithProgress<{
+        success?: boolean;
+        url?: string;
+        path?: string;
+        error?: string;
+        details?: string;
+      }>(`/api/tour-rooms/${roomId}/messages/upload-image`, formData, (p) => setUploadProgress(p));
 
-      console.log('[TourRoomChat] Upload response status:', response.status);
-      const data = await response.json();
-      console.log('[TourRoomChat] Upload response data:', data);
-      
-      if (!response.ok) {
-        const errorMessage = data.error || data.details || 'Ошибка загрузки изображения';
-        console.error('[TourRoomChat] Upload failed:', errorMessage);
-        throw new Error(errorMessage);
-      }
-      
       if (data.success && data.url && data.path) {
-        console.log('[TourRoomChat] Upload successful');
-        return {
-          url: data.url,
-          path: data.path,
-        };
-      } else {
-        throw new Error(data.error || data.details || 'Ошибка загрузки изображения');
+        return { url: data.url, path: data.path };
       }
-    } catch (error: any) {
-      console.error('[TourRoomChat] Image upload error:', error);
-      const errorMessage = error?.message || 'Не удалось загрузить изображение. Проверьте консоль для деталей.';
-      toast.error(errorMessage);
+      throw new Error(data.error || data.details || 'Ошибка загрузки изображения');
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Не удалось загрузить изображение';
+      toast.error(msg);
       return null;
     } finally {
       setUploadingImage(false);
+      setUploadProgress(0);
     }
   };
 
@@ -386,7 +377,18 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
     return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
   };
 
+  const messageImageUrls = useMemo(
+    () => messages.map((m) => m.image_url).filter((u): u is string => !!u),
+    [messages]
+  );
+
+  const openTourLightbox = (url: string) => {
+    const urls = messageImageUrls.length ? messageImageUrls : [url];
+    setLightbox({ urls, index: Math.max(0, urls.indexOf(url)) });
+  };
+
   return (
+    <>
     <div
       className={`flex min-h-0 flex-col overflow-hidden ${
         messenger
@@ -550,14 +552,19 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
                   >
                     {/* Изображение */}
                     {message.image_url && (
-                      <div className="mb-2 rounded-lg overflow-hidden">
+                      <button
+                        type="button"
+                        className="mb-2 block w-full overflow-hidden rounded-lg text-left outline-none ring-emerald-400/40 focus-visible:ring-2"
+                        onClick={() => openTourLightbox(message.image_url!)}
+                        title="Открыть фото"
+                      >
                         <img
                           src={message.image_url}
                           alt="Фото из чата"
-                          className="max-w-full max-h-64 object-contain rounded-lg"
+                          className="max-h-64 w-full max-w-full cursor-zoom-in object-contain rounded-lg"
                           loading="lazy"
                         />
-                      </div>
+                      </button>
                     )}
                     
                     {/* Текст сообщения */}
@@ -634,21 +641,28 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
       >
         {/* Превью выбранного изображения */}
         {selectedImage && (
-          <div className="mb-3 relative inline-block">
-            <div className="relative">
-              <img
-                src={selectedImage.preview}
-                alt="Превью"
-                className="max-w-xs max-h-32 rounded-lg object-cover"
-              />
-              <button
-                onClick={() => setSelectedImage(null)}
-                className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-lg"
-                type="button"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+          <div className="relative mb-3 inline-block max-w-xs">
+            <img
+              src={selectedImage.preview}
+              alt="Превью"
+              className="max-h-32 w-full rounded-lg object-cover"
+            />
+            {uploadingImage ? (
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200/80">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-[width] duration-150"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            ) : null}
+            <button
+              onClick={() => setSelectedImage(null)}
+              disabled={uploadingImage}
+              className="absolute -right-2 -top-2 rounded-full bg-red-500 p-1 text-white shadow-lg hover:bg-red-600 disabled:opacity-50"
+              type="button"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         )}
         
@@ -765,5 +779,15 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
         onSubmit={(reason) => void submitMessageReport(reason)}
       />
     </div>
+    <ChatImageLightbox
+      open={lightbox !== null}
+      urls={lightbox?.urls ?? []}
+      index={lightbox?.index ?? 0}
+      onClose={() => setLightbox(null)}
+      onIndexChange={(next) =>
+        setLightbox((prev) => (prev ? { ...prev, index: next } : null))
+      }
+    />
+    </>
   );
 }

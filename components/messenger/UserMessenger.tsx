@@ -3,7 +3,19 @@
 // Компонент мессенджера для приватных сообщений между пользователями
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Send, Search, UserPlus, Loader2, WifiOff, Image as ImageIcon, X, MessageSquare, Check, CheckCheck } from 'lucide-react';
+import {
+  Send,
+  Search,
+  UserPlus,
+  Loader2,
+  WifiOff,
+  Image as ImageIcon,
+  X,
+  MessageSquare,
+  Check,
+  CheckCheck,
+  Eraser,
+} from 'lucide-react';
 import Pusher from 'pusher-js';
 import { createClient } from '@/lib/supabase/client';
 import { resolveAuthUserForUi } from '@/lib/supabase/auth-quick-client';
@@ -16,6 +28,8 @@ import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
 import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
 import { insertEmojiAtCursor } from '@/lib/chat/insert-emoji-at-cursor';
 import { formatLastSeen, type PresenceStatus } from '@/lib/utils/presence';
+import { postFormDataJsonWithProgress } from '@/lib/upload/post-form-data-xhr';
+import { ChatImageLightbox } from '@/components/chat/ChatImageLightbox';
 
 interface Conversation {
   id: string;
@@ -80,7 +94,10 @@ export default function UserMessenger() {
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [peerPresence, setPeerPresence] = useState<PresenceStatus | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedImage, setSelectedImage] = useState<{ file: File; preview: string } | null>(null);
+  const [lightbox, setLightbox] = useState<{ urls: string[]; index: number } | null>(null);
+  const [clearingThread, setClearingThread] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -91,6 +108,8 @@ export default function UserMessenger() {
   const channelRef = useRef<any>(null);
   const nearBottomRef = useRef(true);
   const autoScrollNextRef = useRef(true);
+  /** Пока открыт чат с peer — входящие по Pusher помечаем прочитанными на сервере (GET ?with=), не только при первом открытии */
+  const markThreadReadDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const supabase = createClient();
 
   const fetchPeerPresence = useCallback(async (otherUserId: string) => {
@@ -171,6 +190,10 @@ export default function UserMessenger() {
     initPusher(selectedConversation, currentUserId);
 
     return () => {
+      if (markThreadReadDebounceRef.current) {
+        clearTimeout(markThreadReadDebounceRef.current);
+        markThreadReadDebounceRef.current = null;
+      }
       disconnectPusherSafely(pusherRef.current, [channelRef.current]);
       channelRef.current = null;
       pusherRef.current = null;
@@ -199,9 +222,10 @@ export default function UserMessenger() {
     }
   };
 
-  const loadMessages = async (userId: string) => {
+  const loadMessages = async (userId: string, opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const response = await fetch(`/api/users/messages?with=${userId}`);
       if (response.ok) {
         const contentType = response.headers.get('content-type');
@@ -220,7 +244,7 @@ export default function UserMessenger() {
     } catch (error) {
       console.error('Ошибка загрузки сообщений:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -256,8 +280,24 @@ export default function UserMessenger() {
         if (isMine || nearBottomRef.current) {
           autoScrollNextRef.current = true;
         }
-        if (!isMine) playNotificationSound('message');
+        if (!isMine) {
+          // Уже в этом диалоге — не дублируем звук «как извне»; синхронизируем прочитанное на сервере и бейдж в списке
+          if (markThreadReadDebounceRef.current) clearTimeout(markThreadReadDebounceRef.current);
+          markThreadReadDebounceRef.current = setTimeout(() => {
+            markThreadReadDebounceRef.current = null;
+            void loadMessages(peerUserId, { silent: true });
+          }, 120);
+        } else {
+          void loadConversations({ silent: true });
+        }
+      }
+    });
+
+    channel.bind('dm-thread-cleared', (data: { peer_id: string }) => {
+      if (data.peer_id === peerUserId) {
+        setMessages([]);
         void loadConversations({ silent: true });
+        window.dispatchEvent(new Event('notifications:update'));
       }
     });
   };
@@ -294,40 +334,64 @@ export default function UserMessenger() {
   const uploadImage = async (file: File) => {
     try {
       setUploadingImage(true);
+      setUploadProgress(0);
       const formData = new FormData();
       formData.append('file', file);
       formData.append('folder', 'messages');
 
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      const data = await postFormDataJsonWithProgress<{ url?: string; path?: string; error?: string }>(
+        '/api/upload',
+        formData,
+        (p) => setUploadProgress(p)
+      );
 
-      if (!response.ok) {
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const data = await response.json();
-          throw new Error(data.error || 'Ошибка загрузки изображения');
-        }
-        throw new Error('Ошибка загрузки изображения');
+      if (data.url && data.path) {
+        return { url: data.url, path: data.path };
       }
-
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        const data = await response.json();
-        return {
-          url: data.url,
-          path: data.path,
-        };
-      }
-      
-      throw new Error('Неверный формат ответа');
+      throw new Error(data.error || 'Ошибка загрузки изображения');
     } catch (error: any) {
       console.error('Ошибка загрузки изображения:', error);
       toast.error(error.message || 'Не удалось загрузить изображение');
       return null;
     } finally {
       setUploadingImage(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const messageImageUrls = messages.map((m) => m.image_url).filter((u): u is string => !!u);
+
+  const openLightbox = (url: string) => {
+    const urls = messageImageUrls.length ? messageImageUrls : [url];
+    const index = Math.max(0, urls.indexOf(url));
+    setLightbox({ urls, index });
+  };
+
+  const clearThreadWithPeer = async () => {
+    if (!selectedConversation) return;
+    const ok = window.confirm(
+      'Удалить всю переписку с этим человеком у вас и у него? Сообщения исчезнут у обоих, восстановить нельзя.'
+    );
+    if (!ok) return;
+    try {
+      setClearingThread(true);
+      const res = await fetch('/api/users/messages/clear-thread', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ peer_id: selectedConversation }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error || 'Не удалось очистить чат');
+      }
+      setMessages([]);
+      void loadConversations({ silent: true });
+      window.dispatchEvent(new Event('notifications:update'));
+      toast.success('Переписка очищена');
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Ошибка');
+    } finally {
+      setClearingThread(false);
     }
   };
 
@@ -464,6 +528,7 @@ export default function UserMessenger() {
   const selectedConv = conversations.find((c) => c.other_user.id === selectedConversation);
 
   return (
+    <>
     <div className="flex flex-col lg:flex-row h-[calc(100vh-300px)] min-h-[600px] bg-white rounded-2xl border-2 border-gray-100 shadow-xl overflow-hidden">
       {/* Список бесед */}
       <div className="w-full lg:w-1/3 border-r-2 border-gray-100 flex flex-col bg-white">
@@ -605,12 +670,28 @@ export default function UserMessenger() {
                     </div>
                   </div>
                 </div>
-                <Link
-                  href={`/users/${selectedConv?.other_user.username || selectedConv?.other_user.id}`}
-                  className="text-base text-emerald-600 hover:text-emerald-700 font-bold transition-colors"
-                >
-                  Профиль
-                </Link>
+                <div className="flex flex-shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void clearThreadWithPeer()}
+                    disabled={clearingThread || !messages.length}
+                    className="inline-flex items-center gap-2 rounded-xl border-2 border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-40"
+                    title="Удалить всю переписку у вас и у собеседника"
+                  >
+                    {clearingThread ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Eraser className="h-4 w-4" />
+                    )}
+                    <span className="hidden sm:inline">Очистить</span>
+                  </button>
+                  <Link
+                    href={`/users/${selectedConv?.other_user.username || selectedConv?.other_user.id}`}
+                    className="text-base text-emerald-600 hover:text-emerald-700 font-bold transition-colors"
+                  >
+                    Профиль
+                  </Link>
+                </div>
               </div>
             </div>
 
@@ -675,14 +756,19 @@ export default function UserMessenger() {
                           }`}
                         >
                           {message.image_url && (
-                            <div className="mb-3 rounded-xl overflow-hidden">
+                            <button
+                              type="button"
+                              className="mb-3 block w-full overflow-hidden rounded-xl text-left outline-none ring-emerald-400/50 focus-visible:ring-2"
+                              onClick={() => openLightbox(message.image_url!)}
+                              title="Открыть фото"
+                            >
                               <img
                                 src={message.image_url}
                                 alt="Фото"
-                                className="max-w-full max-h-80 object-contain rounded-xl"
+                                className="max-h-80 w-full max-w-full cursor-zoom-in object-contain rounded-xl"
                                 loading="lazy"
                               />
-                            </div>
+                            </button>
                           )}
                           {message.message && (
                             <div className="whitespace-pre-wrap break-words text-base leading-relaxed">
@@ -724,17 +810,26 @@ export default function UserMessenger() {
             {/* Поле ввода */}
             <div className="p-6 border-t-2 border-gray-100 bg-white">
               {selectedImage && (
-                <div className="mb-4 relative inline-block">
+                <div className="mb-4 relative inline-block max-w-xs">
                   <img
                     src={selectedImage.preview}
                     alt="Preview"
-                    className="max-w-xs max-h-48 rounded-xl object-cover border-2 border-gray-200"
+                    className="max-h-48 w-full rounded-xl border-2 border-gray-200 object-cover"
                   />
+                  {uploadingImage ? (
+                    <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                      <div
+                        className="h-full rounded-full bg-emerald-600 transition-[width] duration-150"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  ) : null}
                   <button
                     onClick={() => setSelectedImage(null)}
-                    className="absolute -top-2 -right-2 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors shadow-lg"
+                    disabled={uploadingImage}
+                    className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white shadow-lg transition-colors hover:bg-red-600 disabled:opacity-50"
                   >
-                    <X className="w-4 h-4" />
+                    <X className="h-4 w-4" />
                   </button>
                 </div>
               )}
@@ -806,5 +901,15 @@ export default function UserMessenger() {
         )}
       </div>
     </div>
+    <ChatImageLightbox
+      open={lightbox !== null}
+      urls={lightbox?.urls ?? []}
+      index={lightbox?.index ?? 0}
+      onClose={() => setLightbox(null)}
+      onIndexChange={(next) =>
+        setLightbox((prev) => (prev ? { ...prev, index: next } : null))
+      }
+    />
+    </>
   );
 }
