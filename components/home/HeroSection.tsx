@@ -2,24 +2,17 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
+import type { ComponentProps } from 'react';
+import TourCard from '@/components/tours/TourCard';
 import { Button } from '@/components/ui/Button';
 import { ArrowRight, MapPin, Calendar, Users } from 'lucide-react';
 
-type PopularTour = {
-  title: string;
-  slug?: string;
-  price?: number | null;
-  startDateLabel?: string | null;
-};
+type TourCardProps = ComponentProps<typeof TourCard>;
 
-export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | null }) {
+export function HeroSection({ popularTourCards }: { popularTourCards?: TourCardProps[] | null }) {
   const items = useMemo(
-    () =>
-      popularTours && popularTours.length > 0
-        ? popularTours
-        : [{ title: 'Казань + Болгар', slug: undefined, price: null, startDateLabel: 'Скоро' }],
-    [popularTours]
+    () => (popularTourCards && popularTourCards.length > 0 ? popularTourCards : []),
+    [popularTourCards]
   );
   const [activeIndex, setActiveIndex] = useState(0);
 
@@ -35,7 +28,7 @@ export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | n
     return () => clearInterval(timer);
   }, [items.length]);
 
-  const activeTour = items[activeIndex] ?? items[0];
+  const activeTour = items[activeIndex];
 
   return (
     <section className="relative w-full h-screen min-h-[500px] sm:min-h-[600px] md:min-h-[700px] max-h-[900px] flex items-center justify-center overflow-hidden">
@@ -89,10 +82,10 @@ export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | n
 
             {/* Кнопки */}
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mb-6 sm:mb-8 animate-fadeInUp" style={{ animationDelay: '0.3s' }}>
-              <Button 
-                href="/tours" 
-                variant="primary" 
-                size="lg" 
+              <Button
+                href="/tours"
+                variant="primary"
+                size="lg"
                 className="group shadow-2xl hover:shadow-emerald-500/50 transition-all duration-300 hover:scale-105 text-sm sm:text-base"
               >
                 Посмотреть туры
@@ -114,7 +107,7 @@ export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | n
                 { icon: Users, label: 'Поддержка 24/7', value: 'Всегда на связи' },
                 { icon: MapPin, label: 'Безопасно', value: 'Проверенные гиды' },
                 { icon: Calendar, label: 'Удобно', value: 'Быстрое бронирование' },
-              ].map((item, index) => {
+              ].map((item) => {
                 const Icon = item.icon;
                 return (
                   <div
@@ -134,73 +127,45 @@ export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | n
             </div>
           </div>
 
-          {/* Карточка популярного тура - справа */}
-          <div className="hidden xl:block absolute right-8 top-1/2 -translate-y-1/2 w-80 animate-fadeInRight" style={{ animationDelay: '0.5s' }}>
-            {activeTour.slug ? (
-              <Link href={`/tours/${activeTour.slug}`} className="block">
-                <div className="relative rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 p-6 shadow-2xl hover:bg-white/15 transition-all duration-300 cursor-pointer">
-                  <div className="flex items-center gap-2 mb-4">
-                    <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-white/80 text-sm font-medium uppercase tracking-wider">Популярный тур</span>
-                  </div>
-                  
-                  <h3 className="text-white text-2xl font-bold mb-3 leading-tight line-clamp-2">
-                    {activeTour.title}
-                  </h3>
-                  
-                  <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
-                    {activeTour.price ? (
-                      <div className="text-emerald-300 text-2xl font-bold">
-                        от {activeTour.price.toLocaleString('ru-RU')} ₽
-                      </div>
-                    ) : (
-                      <div className="text-white/70 text-lg">Лучшие маршруты сезона</div>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-white/70 text-sm">Ближайший выезд</span>
-                    <span className="text-white text-lg font-bold">
-                      {activeTour.startDateLabel || 'Скоро'}
-                    </span>
-                  </div>
-
+          {/* Те же карточки туров, что и в каталоге */}
+          <div className="hidden xl:block absolute right-6 2xl:right-10 top-1/2 -translate-y-1/2 w-80 max-h-[88vh] overflow-y-auto overflow-x-hidden min-w-0 pr-1 animate-fadeInRight [scrollbar-gutter:stable]" style={{ animationDelay: '0.5s' }}>
+            {activeTour ? (
+              <div className="min-w-0 space-y-3">
+                <div className="rounded-xl border border-white/15 bg-white/5 px-2 py-1.5 text-center text-[11px] font-bold uppercase tracking-wider text-white/80">
+                  Популярные туры
                 </div>
-              </Link>
+                <div className="min-w-0 [&_a]:block [&_a]:min-w-0">
+                  <TourCard key={activeTour.id} {...activeTour} />
+                </div>
+                {items.length > 1 ? (
+                  <div className="flex justify-center gap-2 pt-1" role="tablist" aria-label="Выбор тура в блоке героя">
+                    {items.map((t, i) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={i === activeIndex}
+                        aria-label={`Тур ${i + 1}`}
+                        onClick={() => setActiveIndex(i)}
+                        className={`h-2.5 rounded-full transition-all ${
+                          i === activeIndex ? 'w-8 bg-emerald-400' : 'w-2.5 bg-white/35 hover:bg-white/55'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </div>
             ) : (
-              <div className="relative rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 p-6 shadow-2xl hover:bg-white/15 transition-all duration-300">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="text-white/80 text-sm font-medium uppercase tracking-wider">Популярный тур</span>
-                </div>
-                
-                <h3 className="text-white text-2xl font-bold mb-3 leading-tight line-clamp-2">
-                  {activeTour.title}
-                </h3>
-                
-                <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
-                  {activeTour.price ? (
-                    <div className="text-emerald-300 text-2xl font-bold">
-                      от {activeTour.price.toLocaleString('ru-RU')} ₽
-                    </div>
-                  ) : (
-                    <div className="text-white/70 text-lg">Лучшие маршруты сезона</div>
-                  )}
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <span className="text-white/70 text-sm">Ближайший выезд</span>
-                  <span className="text-white text-lg font-bold">
-                    {activeTour.startDateLabel || 'Скоро'}
-                  </span>
-                </div>
-
+              <div className="rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-md">
+                <p className="mb-4 text-center text-sm font-medium text-white/90">Туры скоро появятся</p>
+                <Button href="/tours" variant="primary" size="md" className="w-full justify-center">
+                  Каталог туров
+                </Button>
               </div>
             )}
           </div>
         </div>
       </div>
-
     </section>
   );
 }

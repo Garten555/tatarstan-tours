@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Bell, ChevronRight, Loader2, Newspaper } from 'lucide-react';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import ClampedText from '@/components/ui/ClampedText';
+import { FeedAspectCover } from '@/components/feed/FeedAspectCover';
 
 type FeedType = 'post' | 'review' | 'achievement';
 
@@ -22,7 +23,8 @@ type FeedItem = {
   payload: Record<string, any>;
 };
 
-const FILTERS: { id: FeedType; label: string }[] = [
+const FILTERS: { id: FeedType | 'all'; label: string }[] = [
+  { id: 'all', label: 'Все' },
   { id: 'post', label: 'Посты' },
   { id: 'review', label: 'Отзывы' },
   { id: 'achievement', label: 'Достижения' },
@@ -38,9 +40,13 @@ export default function FeedPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
-  const [selected, setSelected] = useState<FeedType[]>(['post', 'review', 'achievement']);
+  /** Одна активная «вкладка» — всегда понятно, что выбрано (раньше при «все три» все три были зелёными). */
+  const [typeFilter, setTypeFilter] = useState<FeedType | 'all'>('all');
 
-  const typesParam = useMemo(() => selected.join(','), [selected]);
+  const typesParam = useMemo(
+    () => (typeFilter === 'all' ? 'post,review,achievement' : typeFilter),
+    [typeFilter]
+  );
 
   const load = useCallback(
     async (append: boolean) => {
@@ -70,14 +76,8 @@ export default function FeedPage() {
   useEffect(() => {
     setCursor(null);
     load(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- перезагрузка только при смене набора типов
   }, [typesParam]);
-
-  const toggleFilter = (id: FeedType) => {
-    setSelected((prev) => {
-      if (prev.includes(id)) return prev.length === 1 ? prev : prev.filter((x) => x !== id);
-      return [...prev, id];
-    });
-  };
 
   return (
     <main className="min-h-screen bg-slate-100 pt-24 pb-10">
@@ -92,20 +92,30 @@ export default function FeedPage() {
           </div>
         </div>
 
-        <div className="mb-5 flex flex-wrap gap-2">
-          {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => toggleFilter(f.id)}
-              className={`px-3 py-1.5 rounded-lg text-sm font-bold border transition ${
-                selected.includes(f.id)
-                  ? 'bg-emerald-600 text-white border-emerald-600'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
+        <div
+          className="mb-6 inline-flex flex-wrap gap-0 rounded-2xl border border-gray-200 bg-white p-1 shadow-sm"
+          role="tablist"
+          aria-label="Тип событий в ленте"
+        >
+          {FILTERS.map((f) => {
+            const active = typeFilter === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setTypeFilter(f.id)}
+                className={`rounded-xl px-4 py-2.5 text-sm font-bold transition focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2 ${
+                  active
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
+              >
+                {f.label}
+              </button>
+            );
+          })}
         </div>
 
         {loading ? (
@@ -125,8 +135,11 @@ export default function FeedPage() {
               const username = item.actor.username || item.actor.id;
               const profileHref = `/users/${username}`;
               return (
-                <article key={item.id} className="rounded-2xl border border-gray-200 bg-white p-4 min-w-0">
-                  <div className="flex items-center gap-3 mb-2">
+                <article
+                  key={item.id}
+                  className="rounded-2xl border border-gray-200 bg-white p-4 min-w-0 shadow-sm"
+                >
+                  <div className="flex items-center gap-3 mb-3">
                     {item.actor.avatar_url ? (
                       <img src={item.actor.avatar_url} alt={name} className="w-10 h-10 rounded-full object-cover" />
                     ) : (
@@ -167,20 +180,19 @@ export default function FeedPage() {
                     return (
                       <Link
                         href={postHref}
-                        className="group mt-2 flex flex-col overflow-hidden rounded-xl border border-gray-100 bg-slate-50/70 transition hover:border-emerald-200 hover:bg-emerald-50/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
+                        className="group mt-1 flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-gray-50/80 transition hover:border-emerald-200 hover:bg-white hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600"
                       >
                         {cover ? (
-                          <div className="relative h-36 w-full shrink-0 overflow-hidden bg-gray-100">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={cover}
-                              alt=""
-                              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                            />
-                          </div>
+                          <FeedAspectCover
+                            src={cover}
+                            alt=""
+                            className="rounded-t-2xl group-hover:opacity-[0.98]"
+                          />
                         ) : null}
-                        <div className="min-w-0 p-3">
-                          <p className="text-sm text-gray-500 mb-1">Опубликовал(а) новый пост</p>
+                        <div className="min-w-0 px-4 py-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+                            Новый пост
+                          </p>
                           <ClampedText lines={2} className="font-bold text-gray-900 text-base leading-snug">
                             {escapeHtml(String(item.payload.title || 'Новый пост'))}
                           </ClampedText>
@@ -189,7 +201,7 @@ export default function FeedPage() {
                               {escapeHtml(excerptRaw)}
                             </ClampedText>
                           ) : null}
-                          <span className="mt-2 inline-flex items-center gap-0.5 text-sm font-bold text-emerald-700">
+                          <span className="mt-3 inline-flex items-center gap-0.5 text-sm font-bold text-emerald-700">
                             Читать пост
                             <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
                           </span>
@@ -202,9 +214,10 @@ export default function FeedPage() {
                     const tour = item.payload.tour as { slug?: string; title?: string; cover_image?: string } | null;
                     const tourSlug = tour?.slug ? String(tour.slug) : '';
                     const tourHref = tourSlug ? `/tours/${tourSlug}` : null;
+                    const tourCover = tour?.cover_image ? String(tour.cover_image) : '';
                     const body = (
                       <div className="min-w-0">
-                        <p className="text-sm text-gray-500 mb-1">Оставил(а) отзыв</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Отзыв</p>
                         <p className="font-bold text-gray-900">
                           Оценка: {item.payload.rating != null ? String(item.payload.rating) : '-'}/5
                           {tour?.title ? (
@@ -219,31 +232,41 @@ export default function FeedPage() {
                           </ClampedText>
                         ) : null}
                         {tourHref ? (
-                          <span className="mt-2 inline-flex items-center gap-0.5 text-sm font-bold text-emerald-700">
+                          <span className="mt-3 inline-flex items-center gap-0.5 text-sm font-bold text-emerald-700">
                             К туру
                             <ChevronRight className="h-4 w-4" aria-hidden />
                           </span>
                         ) : null}
                       </div>
                     );
+                    const shell = (
+                      <>
+                        {tourCover && tourHref ? (
+                          <FeedAspectCover src={tourCover} alt="" className="rounded-t-2xl" />
+                        ) : null}
+                        <div className="px-4 py-3">{body}</div>
+                      </>
+                    );
                     return tourHref ? (
                       <Link
                         href={tourHref}
-                        className="group mt-2 block rounded-xl border border-gray-100 bg-slate-50/70 p-3 transition hover:border-emerald-200 hover:bg-emerald-50/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 min-w-0"
+                        className="group mt-1 flex flex-col overflow-hidden rounded-2xl border border-gray-100 bg-gray-50/80 transition hover:border-emerald-200 hover:bg-white hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 min-w-0"
                       >
-                        {body}
+                        {shell}
                       </Link>
                     ) : (
-                      <div className="mt-2 rounded-xl border border-gray-100 bg-slate-50/70 p-3 min-w-0">{body}</div>
+                      <div className="mt-1 overflow-hidden rounded-2xl border border-gray-100 bg-gray-50/80 min-w-0">
+                        {shell}
+                      </div>
                     );
                   })()}
 
                   {item.type === 'achievement' && (
                     <Link
                       href={profileHref}
-                      className="group mt-2 block rounded-xl border border-gray-100 bg-slate-50/70 p-3 transition hover:border-emerald-200 hover:bg-emerald-50/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 min-w-0"
+                      className="group mt-1 block overflow-hidden rounded-2xl border border-gray-100 bg-gray-50/80 px-4 py-3 transition hover:border-emerald-200 hover:bg-white hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 min-w-0"
                     >
-                      <p className="text-sm text-gray-500 mb-1">Получил(а) достижение</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">Достижение</p>
                       <div className="flex items-start gap-3 min-w-0">
                         {item.payload.badge_icon_url ? (
                           // eslint-disable-next-line @next/next/no-img-element

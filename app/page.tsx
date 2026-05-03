@@ -13,7 +13,22 @@ export default async function Home() {
   const now = new Date().toISOString();
   const { data: popularTours } = await supabase
     .from('tours')
-    .select('title, slug, price_per_person, start_date, end_date, current_participants')
+    .select(
+      `
+      id,
+      title,
+      slug,
+      short_desc,
+      cover_image,
+      price_per_person,
+      start_date,
+      end_date,
+      max_participants,
+      current_participants,
+      tour_type,
+      category
+    `
+    )
     .eq('status', 'active')
     .or(`end_date.is.null,end_date.gte.${now}`)
     .order('current_participants', { ascending: false })
@@ -25,21 +40,42 @@ export default async function Home() {
     data: { user },
   } = await supabaseAuth.auth.getUser();
 
-  const popularTourItems = (popularTours || []).map((tour) => ({
-    title: tour.title,
-    slug: tour.slug,
-    price: tour.price_per_person,
-    startDateLabel: tour.start_date
-      ? new Date(tour.start_date).toLocaleDateString('ru-RU', {
-          day: '2-digit',
-          month: 'long',
-        })
-      : null,
-  }));
+  const FALLBACK_COVER = '/hero-tatarstan.jpg';
+  const popularTourCards = (popularTours || [])
+    .filter((t: { slug?: string | null }) => Boolean(t.slug))
+    .map(
+      (tour: {
+        id: string;
+        title: string;
+        slug: string;
+        short_desc?: string | null;
+        cover_image?: string | null;
+        price_per_person: number;
+        start_date: string;
+        end_date?: string | null;
+        max_participants: number;
+        current_participants?: number | null;
+        tour_type: string;
+        category: string;
+      }) => ({
+        id: tour.id,
+        title: tour.title,
+        slug: tour.slug,
+        short_desc: (tour.short_desc || '').trim() || 'Тур по Татарстану',
+        cover_image: tour.cover_image?.trim() || FALLBACK_COVER,
+        price_per_person: tour.price_per_person,
+        start_date: tour.start_date,
+        end_date: tour.end_date || tour.start_date,
+        max_participants: tour.max_participants,
+        current_participants: tour.current_participants ?? 0,
+        tour_type: tour.tour_type || 'excursion',
+        category: tour.category || 'culture',
+      })
+    );
 
   return (
     <main>
-      <HeroSection popularTours={popularTourItems} />
+      <HeroSection popularTourCards={popularTourCards} />
       <StatsSection />
       <WhyUsSection />
       <FeaturedTours />
