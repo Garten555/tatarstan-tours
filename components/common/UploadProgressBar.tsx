@@ -7,6 +7,13 @@ export type UploadProgressBarProps = {
   label: string;
   /** 0–100 или null — неизвестный прогресс */
   percent: number | null;
+  /** Вторая строка под заголовком (например имя файла) */
+  subtitle?: string;
+  /**
+   * default — в потоке документа (можно sticky).
+   * floating — закрепление снизу по центру: заметно при длинной форме (админка тура).
+   */
+  layout?: 'default' | 'floating';
   variant?: 'emerald' | 'amber';
   /** embedded — тёмная карточка (галерея комнаты) */
   tone?: 'light' | 'embedded';
@@ -19,6 +26,8 @@ export type UploadProgressBarProps = {
 export default function UploadProgressBar({
   label,
   percent,
+  subtitle,
+  layout = 'default',
   variant = 'emerald',
   tone = 'light',
   indeterminateStyle = 'pulse',
@@ -26,6 +35,7 @@ export default function UploadProgressBar({
   sticky = false,
 }: UploadProgressBarProps) {
   const isIndeterminate = percent === null;
+  const barHeight = layout === 'floating' ? 'h-4' : 'h-3';
 
   const wrap =
     tone === 'embedded'
@@ -72,31 +82,56 @@ export default function UploadProgressBar({
         ? 'bg-emerald-400/70'
         : 'bg-emerald-500/80';
 
-  return (
+  const floatingChrome =
+    layout === 'floating'
+      ? 'border-2 shadow-2xl shadow-emerald-900/15 ring-2 ring-emerald-500/25 py-4 sm:px-5'
+      : '';
+
+  const labelSize = layout === 'floating' ? 'text-sm sm:text-base' : 'text-xs';
+
+  const inner = (
     <div
       role="status"
       aria-live="polite"
-      className={`rounded-xl border px-3 py-3 shadow-sm backdrop-blur-md sm:px-4 ${wrap} ${sticky ? 'sticky top-0 z-20' : ''} ${className}`}
+      aria-valuenow={isIndeterminate ? undefined : percent ?? undefined}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      className={`rounded-xl border px-3 py-3 backdrop-blur-md sm:px-4 ${wrap} ${layout === 'default' && sticky ? 'sticky top-0 z-20' : ''} ${floatingChrome} ${className}`}
     >
-      <div className={`mb-1.5 flex justify-between text-xs font-semibold ${labelCls}`}>
-        <span>{label}</span>
-        {!isIndeterminate ? <span>{percent}%</span> : <span>Подготовка…</span>}
+      <div className={`mb-1.5 flex justify-between font-semibold ${labelSize} ${labelCls}`}>
+        <span className="min-w-0 pr-2">{label}</span>
+        {!isIndeterminate ? <span className="shrink-0 tabular-nums">{percent}%</span> : <span className="shrink-0">Подготовка…</span>}
       </div>
+      {subtitle ? (
+        <p className={`mb-2 truncate ${layout === 'floating' ? 'text-xs text-gray-600 sm:text-sm' : 'text-[11px] text-gray-600'}`} title={subtitle}>
+          {subtitle}
+        </p>
+      ) : null}
       {!isIndeterminate ? (
         <progress
-          className={`h-3 w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-value]:rounded-full ${fillEmbedded} ${accent}`}
+          className={`${barHeight} w-full overflow-hidden rounded-full [&::-webkit-progress-bar]:rounded-full [&::-webkit-progress-value]:rounded-full ${fillEmbedded} ${accent}`}
           max={100}
           value={percent}
         />
       ) : indeterminateStyle === 'shuttle' ? (
-        <div className={`relative h-3 w-full overflow-hidden rounded-full ${trackEmbedded}`}>
+        <div className={`relative ${barHeight} w-full overflow-hidden rounded-full ${trackEmbedded}`}>
           <div className={`animate-gallery-zip-shuttle h-full rounded-full ${shuttleFill}`} />
         </div>
       ) : (
-        <div className={`h-3 w-full overflow-hidden rounded-full ${trackEmbedded}`}>
+        <div className={`${barHeight} w-full overflow-hidden rounded-full ${trackEmbedded}`}>
           <div className={`h-full w-full animate-pulse rounded-full ${pulseFill}`} />
         </div>
       )}
     </div>
   );
+
+  if (layout === 'floating') {
+    return (
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[100] flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2">
+        <div className="pointer-events-auto w-full max-w-lg">{inner}</div>
+      </div>
+    );
+  }
+
+  return inner;
 }

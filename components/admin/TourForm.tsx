@@ -57,6 +57,7 @@ export default function TourForm({
   const [uploadBusy, setUploadBusy] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState<string>(''); // ✅ Статус загрузки
   const [fileUploadProgress, setFileUploadProgress] = useState<number | null>(null);
+  const [uploadActiveFileName, setUploadActiveFileName] = useState<string | null>(null);
   const [coverImage, setCoverImage] = useState<string | null>(initialData?.cover_image || null);
   const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
@@ -426,14 +427,26 @@ export default function TourForm({
     
     try {
       setUploadBusy(true);
-      setLoadingStatus('Загрузка обложки...');
-      setFileUploadProgress(0);
+      setUploadActiveFileName(file.name);
+      setLoadingStatus('Обложка: отправка…');
+      setFileUploadProgress(null);
 
       const formDataUpload = new FormData();
       formDataUpload.append('file', file);
       formDataUpload.append('folder', 'tours/covers');
 
-      const uploadUrl = await postTourUpload(formDataUpload, setFileUploadProgress);
+      const wrapProgress = (p: number | null) => {
+        if (p === null) {
+          setFileUploadProgress(null);
+          return;
+        }
+        setLoadingStatus(`Обложка: загрузка ${p}%`);
+        setFileUploadProgress(p);
+      };
+
+      const uploadUrl = await postTourUpload(formDataUpload, wrapProgress, {
+        onRequestBodySent: () => setLoadingStatus('Обложка: сервер сохраняет файл…'),
+      });
 
       setCoverImageFile(file);
       setCoverImage(uploadUrl);
@@ -444,6 +457,7 @@ export default function TourForm({
       setUploadBusy(false);
       setLoadingStatus('');
       setFileUploadProgress(null);
+      setUploadActiveFileName(null);
     }
   };
 
@@ -460,6 +474,7 @@ export default function TourForm({
 
       for (let i = 0; i < n; i++) {
         const file = files[i];
+        setUploadActiveFileName(file.name);
         setLoadingStatus(`Фото ${i + 1} из ${n}…`);
 
         const formDataUpload = new FormData();
@@ -496,6 +511,7 @@ export default function TourForm({
       setUploadBusy(false);
       setLoadingStatus('');
       setFileUploadProgress(null);
+      setUploadActiveFileName(null);
     }
   };
 
@@ -530,6 +546,7 @@ export default function TourForm({
 
       for (let i = 0; i < n; i++) {
         const file = files[i];
+        setUploadActiveFileName(file.name);
         setLoadingStatus(`Видео ${i + 1} из ${n}: отправка…`);
 
         const formDataUpload = new FormData();
@@ -567,6 +584,7 @@ export default function TourForm({
       setUploadBusy(false);
       setLoadingStatus('');
       setFileUploadProgress(null);
+      setUploadActiveFileName(null);
       e.target.value = '';
     }
   };
@@ -834,10 +852,11 @@ export default function TourForm({
     <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-8">
       {(fileUploadProgress !== null || uploadBusy) && (
         <UploadProgressBar
+          layout="floating"
           label={loadingStatus || 'Загрузка файла'}
+          subtitle={uploadActiveFileName ?? undefined}
           percent={fileUploadProgress}
-          className="mb-2"
-          sticky
+          indeterminateStyle="shuttle"
         />
       )}
       {/* Header */}
