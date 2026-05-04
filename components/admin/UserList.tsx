@@ -26,6 +26,14 @@ interface UserListProps {
   currentUserRole?: string;
 }
 
+function canShowBanUserButton(viewerRole: string, target: User, currentUserId: string): boolean {
+  if (target.id === currentUserId) return false;
+  if (viewerRole !== 'super_admin' && viewerRole !== 'support_admin') return false;
+  if (target.role === 'super_admin') return false;
+  if (viewerRole === 'support_admin' && ['tour_admin', 'support_admin'].includes(target.role)) return false;
+  return true;
+}
+
 export default function UserList({ users, currentUserId, currentUserRole = 'user' }: UserListProps) {
   const canChangeRoles = currentUserRole === 'super_admin';
   const canBanUsers = currentUserRole === 'super_admin' || currentUserRole === 'support_admin';
@@ -275,7 +283,7 @@ export default function UserList({ users, currentUserId, currentUserRole = 'user
                           Туристический паспорт
                           <ExternalLink className="w-4 h-4" />
                         </Link>
-                        {canBanUsers && !isCurrentUser && (
+                        {canBanUsers && canShowBanUserButton(currentUserRole, user, currentUserId) && (
                           <div className="inline-block">
                             <BanUserButton
                               userId={user.id}
