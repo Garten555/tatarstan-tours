@@ -253,15 +253,15 @@ export default async function TourPage({ params }: TourPageProps) {
   const fallbackDurationLabel = tourDurationLabel(t.start_date, t.end_date ?? null);
 
   return (
-    <div className="min-h-screen bg-gray-50 relative w-full">
-      <div className="relative z-10 container mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-6 sm:py-8 lg:py-12 max-w-7xl w-full overflow-x-hidden">
-        {/* Кнопка назад с улучшенным дизайном */}
+    <div className="min-h-screen bg-gray-50 relative w-full pt-14 sm:pt-16 md:pt-[4.5rem] lg:pt-20">
+      <div className="relative z-10 container mx-auto px-3 sm:px-4 md:px-6 lg:px-8 pb-6 sm:pb-8 lg:pb-12 max-w-7xl w-full overflow-x-hidden">
+        {/* Кнопка назад: отступ сверху под fixed Header, стиль как в каталоге туров */}
         <Link
-          href="/"
-          className="group inline-flex items-center gap-2 sm:gap-3 text-gray-700 hover:text-emerald-600 transition-all duration-200 mb-6 sm:mb-8 px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg sm:rounded-xl hover:bg-white hover:shadow-lg border-2 border-gray-200 hover:border-emerald-200"
+          href="/tours"
+          className="group relative z-10 inline-flex items-center gap-2 sm:gap-3 text-gray-900 hover:text-emerald-600 transition-all duration-200 mb-6 sm:mb-8 px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-white/95 backdrop-blur-md shadow-md hover:shadow-lg border-2 border-gray-200 hover:border-emerald-300 hover:bg-white"
         >
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 group-hover:-translate-x-1 transition-transform duration-200 flex-shrink-0" />
-          <span className="font-bold text-sm sm:text-base">Назад на главную</span>
+          <span className="font-bold text-sm sm:text-base">Назад к турам</span>
         </Link>
 
         <TourSessionsProvider sessions={tourSessions}>
