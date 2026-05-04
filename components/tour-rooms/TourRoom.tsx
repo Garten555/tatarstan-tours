@@ -6,7 +6,8 @@ import { TourRoom as TourRoomType } from '@/types';
 import { TourRoomChat } from './TourRoomChat';
 import { TourRoomGallery } from './TourRoomGallery';
 import { TourRoomParticipants } from './TourRoomParticipants';
-import { MessageSquare, Image, Users, ArrowLeft, Loader2 } from 'lucide-react';
+import { MessageSquare, Image, Users, ArrowLeft, Loader2, Flag } from 'lucide-react';
+import ReportReasonModal from '@/components/common/ReportReasonModal';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import toast from 'react-hot-toast';
 
@@ -71,6 +72,8 @@ export function TourRoom({ roomId, initialRoom, viewerUserId, galleryCanModerate
   const [activeTab, setActiveTab] = useState<TabType>(getInitialTab());
   const [room, setRoom] = useState<TourRoomType | null>(initialRoom || null);
   const [loading, setLoading] = useState(!initialRoom);
+  const [guideReportOpen, setGuideReportOpen] = useState(false);
+  const [guideReportBusy, setGuideReportBusy] = useState(false);
 
   useEffect(() => {
     if (!initialRoom) loadRoom();
@@ -133,6 +136,9 @@ export function TourRoom({ roomId, initialRoom, viewerUserId, galleryCanModerate
 
   const participantCount = Array.isArray((room as any).participants) ? (room as any).participants.length : 0;
 
+  const canReportGuide =
+    Boolean(viewerUserId && room.guide_id && viewerUserId !== room.guide_id);
+
   const subtitleParts: string[] = [];
   if (room.tour?.city?.name) subtitleParts.push(escapeHtml(room.tour.city.name));
   if (room.tour) {
@@ -191,8 +197,49 @@ export function TourRoom({ roomId, initialRoom, viewerUserId, galleryCanModerate
             <p className="mt-0.5 break-words text-xs leading-snug text-gray-500 line-clamp-3 sm:line-clamp-2">
               {subtitleParts.length > 0 ? subtitleParts.join(' · ') : 'Групповой чат'}
             </p>
+            {canReportGuide ? (
+              <button
+                type="button"
+                onClick={() => setGuideReportOpen(true)}
+                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/90 px-2.5 py-1 text-[11px] font-bold text-amber-900 transition hover:bg-amber-100 sm:text-xs"
+              >
+                <Flag className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                Пожаловаться на гида
+              </button>
+            ) : null}
           </div>
         </header>
+
+        <ReportReasonModal
+          open={guideReportOpen}
+          title="Жалоба на гида"
+          subtitle="Опишите ситуацию. Модераторы и администраторы сервиса увидят обращение."
+          submitLabel="Отправить"
+          busy={guideReportBusy}
+          onCancel={() => !guideReportBusy && setGuideReportOpen(false)}
+          onSubmit={async (reason) => {
+            setGuideReportBusy(true);
+            try {
+              const res = await fetch(`/api/tour-rooms/${room.id}/guide-report`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ reason }),
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok) {
+                toast.error(typeof data.error === 'string' ? data.error : 'Не удалось отправить жалобу');
+                return;
+              }
+              toast.success('Жалоба отправлена');
+              setGuideReportOpen(false);
+            } catch {
+              toast.error('Ошибка сети');
+            } finally {
+              setGuideReportBusy(false);
+            }
+          }}
+        />
 
         {/* Контент: flex-1 + min-h-0 чтобы лента чата растягивалась, поле ввода — внизу */}
         <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-[#e9edef]">

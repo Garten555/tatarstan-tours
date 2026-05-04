@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { sendEmail, getAppealApprovedEmail, getAppealRejectedEmail } from '@/lib/email/send-email';
 
-const ADMIN_ROLES = ['super_admin', 'support_admin'];
+const ADMIN_ROLES = ['super_admin', 'support_admin', 'tour_admin'];
 
 // PATCH - обновление статуса апелляции
 export async function PATCH(

@@ -18,6 +18,7 @@ import {
   Award,
   AlertCircle,
   Flag,
+  UserRound,
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
@@ -97,6 +98,12 @@ export default function AdminSidebar({ userRole, userName, avatarUrl }: AdminSid
       roles: ['super_admin', 'tour_admin', 'support_admin'],
     },
     {
+      name: 'Жалобы на гидов',
+      href: '/admin/guide-reports',
+      icon: UserRound,
+      roles: ['super_admin', 'tour_admin', 'support_admin'],
+    },
+    {
       name: 'Отзывы',
       href: '/admin/reviews',
       icon: Star,
@@ -118,7 +125,7 @@ export default function AdminSidebar({ userRole, userName, avatarUrl }: AdminSid
       name: 'Апелляции на бан',
       href: '/admin/ban-appeals',
       icon: AlertCircle,
-      roles: ['super_admin', 'support_admin'],
+      roles: ['super_admin', 'support_admin', 'tour_admin'],
     },
   ];
 

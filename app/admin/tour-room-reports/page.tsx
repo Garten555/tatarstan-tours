@@ -46,13 +46,14 @@ export default async function TourRoomReportsPage() {
       `
       id,
       room_id,
+      user_id,
       message,
       image_url,
       created_at,
       reported_at,
       report_reason,
       reported_by,
-      author:profiles!tour_room_messages_user_id_fkey(first_name, last_name, email),
+      author:profiles!tour_room_messages_user_id_fkey(id, first_name, last_name, email, role, is_banned),
       room:tour_rooms(
         id,
         tour:tours(title)
@@ -71,13 +72,23 @@ export default async function TourRoomReportsPage() {
   type RawMsg = {
     id: string;
     room_id: string;
+    user_id: string | null;
     message: string | null;
     image_url: string | null;
     created_at: string;
     reported_at: string | null;
     report_reason: string | null;
     reported_by: string | null;
-    author?: { first_name?: string | null; last_name?: string | null; email?: string | null } | unknown;
+    author?:
+      | {
+          id?: string;
+          first_name?: string | null;
+          last_name?: string | null;
+          email?: string | null;
+          role?: string | null;
+          is_banned?: boolean | null;
+        }
+      | unknown;
     room?: { tour?: { title?: string | null } | { title?: string | null }[] } | { tour?: { title?: string | null } | { title?: string | null }[] }[] | null;
   };
 
@@ -85,29 +96,36 @@ export default async function TourRoomReportsPage() {
   const reporterIds = [...new Set(list.map((m) => m.reported_by).filter((id): id is string => Boolean(id)))];
 
   const reporterMap = new Map<string, string>();
+  type ReporterRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; role?: string | null };
+  let reporterRows: ReporterRow[] = [];
   if (reporterIds.length > 0) {
     const { data: reporters } = await serviceClient
       .from('profiles')
-      .select('id, first_name, last_name, email')
+      .select('id, first_name, last_name, email, role, is_banned')
       .in('id', reporterIds);
 
-    for (const r of reporters || []) {
-      const row = r as { id: string; first_name?: string | null; last_name?: string | null; email?: string | null };
-      reporterMap.set(row.id, profileLabel(row, 'Пользователь'));
+    reporterRows = (reporters || []) as ReporterRow[];
+    for (const r of reporterRows) {
+      reporterMap.set(r.id, profileLabel(r, 'Пользователь'));
     }
   }
 
   const rows: TourRoomReportRow[] = list.map((m) => {
     const author = unwrapRelation(m.author) as {
+      id?: string;
       first_name?: string | null;
       last_name?: string | null;
       email?: string | null;
+      role?: string | null;
+      is_banned?: boolean | null;
     } | null;
     const room = unwrapRelation(m.room) as {
       tour?: { title?: string | null } | { title?: string | null }[];
     } | null;
     const tour = unwrapRelation(room?.tour);
     const tourTitle = tour && typeof tour === 'object' && 'title' in tour && typeof tour.title === 'string' ? tour.title : 'Тур';
+
+    const rep = m.reported_by ? reporterRows.find((x) => x.id === m.reported_by) : undefined;
 
     return {
       id: m.id,
@@ -117,7 +135,12 @@ export default async function TourRoomReportsPage() {
       created_at: m.created_at,
       reported_at: m.reported_at,
       report_reason: m.report_reason,
+      author_user_id: author?.id || m.user_id || '',
+      author_role: author?.role ?? null,
+      author_is_banned: Boolean(author?.is_banned),
       author_label: profileLabel(author, 'Участник'),
+      reporter_user_id: m.reported_by,
+      reporter_role: rep?.role ?? null,
       reporter_label: m.reported_by ? reporterMap.get(m.reported_by) || 'Пользователь' : '—',
       tour_title: tourTitle,
     };
@@ -151,7 +174,7 @@ export default async function TourRoomReportsPage() {
         </p>
       </div>
 
-      <TourRoomMessageReportsPanel rows={rows} />
+      <TourRoomMessageReportsPanel rows={rows} viewerRole={role} />
 
       <div className="mt-8 text-center">
         <Link href="/admin/tour-rooms" className="text-sm font-bold text-emerald-600 underline hover:text-emerald-700">

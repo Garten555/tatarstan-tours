@@ -43,7 +43,13 @@ function reportTimestamp(row: TourRoomReportRow): number {
   return new Date(row.created_at).getTime();
 }
 
-export default function TourRoomMessageReportsPanel({ rows }: { rows: TourRoomReportRow[] }) {
+export default function TourRoomMessageReportsPanel({
+  rows,
+  viewerRole,
+}: {
+  rows: TourRoomReportRow[];
+  viewerRole: string;
+}) {
   const [search, setSearch] = useState('');
   const [reasonFilter, setReasonFilter] = useState<ReasonFilter>('all');
   const [reportedFrom, setReportedFrom] = useState('');
@@ -67,7 +73,9 @@ export default function TourRoomMessageReportsPanel({ rows }: { rows: TourRoomRe
       const blob = [
         row.tour_title,
         row.author_label,
+        row.author_role ?? '',
         row.reporter_label,
+        row.reporter_role ?? '',
         row.message ?? '',
         row.report_reason ?? '',
         row.room_id,
@@ -201,6 +209,7 @@ export default function TourRoomMessageReportsPanel({ rows }: { rows: TourRoomRe
 
       <TourRoomMessageReportsList
         rows={filtered}
+        viewerRole={viewerRole}
         filteredEmpty={filtered.length === 0 && rows.length > 0}
         onResetFilters={resetFilters}
       />

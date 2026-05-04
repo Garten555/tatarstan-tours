@@ -27,7 +27,7 @@ export default async function BanAppealsPage() {
   const typedProfile = (profile ?? null) as { role?: string | null } | null;
   const userRole = typedProfile?.role || 'user';
 
-  if (userRole !== 'super_admin' && userRole !== 'support_admin') {
+  if (!['super_admin', 'support_admin', 'tour_admin'].includes(userRole)) {
     redirect('/admin');
   }
 

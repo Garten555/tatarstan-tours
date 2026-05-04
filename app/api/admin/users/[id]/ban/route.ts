@@ -47,7 +47,24 @@ export async function PATCH(
       .single();
 
     const targetUserRole = (targetUser as { role?: string; first_name?: string; last_name?: string } | null)?.role;
-    
+
+    if (targetUserRole === 'super_admin') {
+      return NextResponse.json(
+        { error: 'Суперадминистратора нельзя заблокировать через эту форму' },
+        { status: 403 }
+      );
+    }
+
+    if (role === 'support_admin') {
+      const elevated = ['super_admin', 'tour_admin', 'support_admin'];
+      if (targetUserRole && elevated.includes(targetUserRole)) {
+        return NextResponse.json(
+          { error: 'Модератор может заблокировать только обычных пользователей и гидов' },
+          { status: 403 }
+        );
+      }
+    }
+
     // Получаем email пользователя из auth
     let userEmail: string | null = null;
     try {

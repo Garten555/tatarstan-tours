@@ -1,6 +1,7 @@
 import Link from 'next/link';
-import { Flag, ExternalLink, Calendar } from 'lucide-react';
+import { Flag, ExternalLink, Calendar, Shield } from 'lucide-react';
 import { escapeHtml } from '@/lib/utils/sanitize';
+import BanUserButton from '@/components/admin/BanUserButton';
 
 export type TourRoomReportRow = {
   id: string;
@@ -11,12 +12,40 @@ export type TourRoomReportRow = {
   reported_at: string | null;
   report_reason: string | null;
   author_label: string;
+  author_user_id: string;
+  author_role: string | null;
+  author_is_banned: boolean;
   reporter_label: string;
+  reporter_user_id: string | null;
+  reporter_role: string | null;
   tour_title: string;
 };
 
+function roleRu(role: string | null | undefined): string {
+  if (!role) return '';
+  const m: Record<string, string> = {
+    super_admin: 'Суперадмин',
+    tour_admin: 'Админ туров',
+    support_admin: 'Модератор',
+    guide: 'Гид',
+    user: 'Участник',
+  };
+  return m[role] || role;
+}
+
+function canShowBanAuthor(row: TourRoomReportRow, viewerRole: string): boolean {
+  if (!row.author_user_id) return false;
+  if (!['super_admin', 'tour_admin', 'support_admin'].includes(viewerRole)) return false;
+  if (row.author_role === 'super_admin') return false;
+  if (viewerRole === 'support_admin' && row.author_role && ['tour_admin', 'support_admin'].includes(row.author_role)) {
+    return false;
+  }
+  return true;
+}
+
 type ListProps = {
   rows: TourRoomReportRow[];
+  viewerRole: string;
   /** После фильтрации список пуст, но записи на сервере были */
   filteredEmpty?: boolean;
   onResetFilters?: () => void;
@@ -24,6 +53,7 @@ type ListProps = {
 
 export default function TourRoomMessageReportsList({
   rows,
+  viewerRole,
   filteredEmpty = false,
   onResetFilters,
 }: ListProps) {
@@ -74,6 +104,26 @@ export default function TourRoomMessageReportsList({
               <span className="truncate text-base font-black text-gray-900">{escapeHtml(row.tour_title)}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {canShowBanAuthor(row, viewerRole) ? (
+                <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <BanUserButton
+                    userId={row.author_user_id}
+                    isBanned={row.author_is_banned}
+                    userRole={row.author_role ?? undefined}
+                  />
+                </div>
+              ) : row.author_role === 'super_admin' ? (
+                <span className="inline-flex items-center gap-1.5 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-black text-violet-900">
+                  <Shield className="h-4 w-4 shrink-0" aria-hidden />
+                  Суперадмина нельзя забанить
+                </span>
+              ) : viewerRole === 'support_admin' &&
+                row.author_role &&
+                ['tour_admin', 'support_admin'].includes(row.author_role) ? (
+                <span className="inline-flex max-w-[14rem] items-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-bold text-gray-700">
+                  Бан автора только у админа туров / суперадмина
+                </span>
+              ) : null}
               <Link
                 href={`/tour-rooms/${row.room_id}`}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"
@@ -92,14 +142,24 @@ export default function TourRoomMessageReportsList({
 
           <div className="grid gap-4 p-5 sm:grid-cols-[1fr_auto] sm:items-start">
             <div className="min-w-0 space-y-3">
-              <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm font-semibold text-gray-600">
+              <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold text-gray-600">
                 <span>
                   <span className="text-gray-500">Автор:</span>{' '}
                   <span className="text-gray-900">{escapeHtml(row.author_label)}</span>
+                  {row.author_role ? (
+                    <span className="ml-2 inline-block rounded-md bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-700">
+                      {roleRu(row.author_role)}
+                    </span>
+                  ) : null}
                 </span>
                 <span>
                   <span className="text-gray-500">Пожаловался:</span>{' '}
                   <span className="text-gray-900">{escapeHtml(row.reporter_label)}</span>
+                  {row.reporter_role ? (
+                    <span className="ml-2 inline-block rounded-md bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-700">
+                      {roleRu(row.reporter_role)}
+                    </span>
+                  ) : null}
                 </span>
               </div>
               {row.report_reason ? (

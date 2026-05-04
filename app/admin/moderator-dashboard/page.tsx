@@ -2,7 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
-import { MessageSquare, Users, AlertCircle, Shield, Flag } from 'lucide-react';
+import { MessageSquare, Users, AlertCircle, Shield, Flag, UserRound } from 'lucide-react';
 
 export const metadata = {
   title: 'Панель модератора - Админ панель',
@@ -207,6 +207,16 @@ export default async function ModeratorDashboard() {
             </div>
           </Link>
           <Link
+            href="/admin/ban-appeals"
+            className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-orange-500 hover:bg-orange-50 transition-all"
+          >
+            <AlertCircle className="w-6 h-6 text-orange-600" />
+            <div>
+              <p className="font-semibold text-gray-900">Апелляции на бан</p>
+              <p className="text-sm text-gray-600">Рассмотрение заявок заблокированных</p>
+            </div>
+          </Link>
+          <Link
             href="/admin/reviews"
             className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-yellow-500 hover:bg-yellow-50 transition-all"
           >
@@ -224,6 +234,16 @@ export default async function ModeratorDashboard() {
             <div>
               <p className="font-semibold text-gray-900">Жалобы в чатах туров</p>
               <p className="text-sm text-gray-600">Сообщения с флагом жалобы</p>
+            </div>
+          </Link>
+          <Link
+            href="/admin/guide-reports"
+            className="flex items-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-violet-500 hover:bg-violet-50 transition-all"
+          >
+            <UserRound className="w-6 h-6 text-violet-700" />
+            <div>
+              <p className="font-semibold text-gray-900">Жалобы на гидов</p>
+              <p className="text-sm text-gray-600">Поведение гида в комнате тура</p>
             </div>
           </Link>
         </div>
