@@ -31,12 +31,12 @@ export default function TwoFactorSettings() {
 
   const loadStatus = async () => {
     try {
-      const response = await fetch('/api/auth/2fa/status');
+      const response = await fetch('/api/auth/2fa/status', { credentials: 'include' });
       const data = await response.json();
-      if (data.success) {
+      if (response.ok && typeof data.enabled === 'boolean') {
         setStatus({
           enabled: data.enabled,
-          backupCodesCount: data.backupCodesCount,
+          backupCodesCount: data.backupCodesCount ?? 0,
         });
       }
     } catch (error) {
