@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import speakeasy from 'speakeasy';
+import { verifyTotpToken } from '@/lib/auth/totp';
 
 export async function POST(request: NextRequest) {
   try {
@@ -46,14 +46,8 @@ export async function POST(request: NextRequest) {
       isValid = mfaData.backup_codes.includes(code.trim());
     }
 
-    // Если не резервный код, проверяем TOTP
     if (!isValid) {
-      isValid = speakeasy.totp.verify({
-        secret: mfaData.secret,
-        encoding: 'base32',
-        token: code.trim(),
-        window: 2,
-      });
+      isValid = verifyTotpToken(mfaData.secret, code);
     }
 
     if (!isValid) {

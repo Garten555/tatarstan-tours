@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
-import speakeasy from 'speakeasy';
+import { verifyTotpToken } from '@/lib/auth/totp';
 
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCK_DURATION_MINUTES = 15;
@@ -91,12 +91,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!isValid) {
-      isValid = speakeasy.totp.verify({
-        secret: mfaData.secret,
-        encoding: 'base32',
-        token: code.trim(),
-        window: 2,
-      });
+      isValid = verifyTotpToken(mfaData.secret, code);
     }
 
     if (isValid) {

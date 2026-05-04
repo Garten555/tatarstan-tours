@@ -22,8 +22,8 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [needs2FA, setNeeds2FA] = useState(false);
+  /** Для отображения шага 2FA (после signOut id всё ещё нужен только для пропсов) */
   const [userId, setUserId] = useState<string | null>(null);
-  const [has2FA, setHas2FA] = useState(false); // Есть ли 2FA у пользователя
   
   const [formData, setFormData] = useState({
     email: '',
@@ -52,7 +52,7 @@ export default function LoginForm() {
     }
   };
 
-  // Шаг 1: Проверка email и определение наличия 2FA
+  // Шаг 1: только email — пароль и 2FA проверяются после (сначала пароль, затем TOTP при необходимости)
   const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -67,34 +67,7 @@ export default function LoginForm() {
       return;
     }
 
-    setLoading(true);
-
-    try {
-      // Проверяем, включена ли 2FA для этого email
-      const mfaCheckResponse = await fetch('/api/auth/2fa/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formData.email }),
-      });
-      const mfaCheckData = await mfaCheckResponse.json();
-      
-      if (mfaCheckData.enabled) {
-        // У пользователя включена 2FA - переходим к вводу кода
-        setHas2FA(true);
-        setUserId(mfaCheckData.userId);
-        setNeeds2FA(true);
-        setStep('2fa');
-      } else {
-        // У пользователя нет 2FA - переходим к вводу пароля
-        setHas2FA(false);
-        setStep('password');
-      }
-    } catch (err) {
-      console.error('Ошибка проверки 2FA:', err);
-      setError('Ошибка при проверке аккаунта');
-    } finally {
-      setLoading(false);
-    }
+    setStep('password');
   };
 
   // Шаг 2: Вход с паролем (если нет 2FA)
@@ -119,7 +92,18 @@ export default function LoginForm() {
       if (signInError) throw signInError;
 
       if (data.user) {
-        // Загружаем роль из profiles и обновляем user_metadata
+        const mfaRes = await fetch('/api/auth/2fa/status', { credentials: 'include' });
+        const mfaJson = await mfaRes.json().catch(() => ({}));
+
+        if (mfaRes.ok && mfaJson.enabled) {
+          setUserId(data.user.id);
+          await supabase.auth.signOut();
+          setNeeds2FA(true);
+          setStep('2fa');
+          setLoading(false);
+          return;
+        }
+
         const { data: profile } = await supabase
           .from('profiles')
           .select('role, first_name, last_name, avatar_url')
@@ -127,7 +111,6 @@ export default function LoginForm() {
           .single();
 
         if (profile) {
-          // Обновляем user_metadata с актуальной ролью
           await supabase.auth.updateUser({
             data: {
               role: (profile as any).role,
@@ -138,7 +121,6 @@ export default function LoginForm() {
           });
         }
 
-        // Успешный вход - редирект на запрошенную страницу
         router.push(redirectPath);
         router.refresh();
       }
@@ -154,21 +136,19 @@ export default function LoginForm() {
     }
   };
 
-  // Шаг 3: Проверка кода 2FA (быстрый вход без пароля)
+  /** Шаг 3: пароль уже проверен на клиенте; сервер повторно проверяет пароль + TOTP и выдаёт magic link */
   const handle2FAVerify = async (code: string) => {
-    if (!userId) return;
-
     setLoading(true);
     setError(null);
 
     try {
-      // Быстрый вход только по коду 2FA (без пароля)
-      const response = await fetch('/api/auth/quick-login-2fa', {
+      const response = await fetch('/api/auth/login-with-2fa', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          email: formData.email,
-          code: code,
+          email: formData.email.trim(),
+          password: formData.password,
+          code,
         }),
       });
 
@@ -178,7 +158,6 @@ export default function LoginForm() {
         throw new Error(data.error || 'Неверный код');
       }
 
-      // Используем magic link для входа
       if (data.loginLink) {
         window.location.href = data.loginLink;
       } else {
@@ -203,10 +182,11 @@ export default function LoginForm() {
             </div>
             <div className="flex-1">
               <h3 className="text-base font-bold text-blue-900 mb-1">
-                Вход по коду 2FA
+                Двухфакторная проверка
               </h3>
               <p className="text-sm text-blue-800 font-medium">
-                Введите 6-значный код из приложения-аутентификатора (Google Authenticator, Authy и т.д.).
+                Пароль для <span className="font-black">{formData.email}</span> уже проверен. Введите 6-значный код из
+                приложения-аутентификатора (Google Authenticator, Authy и т.д.).
               </p>
             </div>
           </div>
@@ -217,9 +197,8 @@ export default function LoginForm() {
           onCancel={() => {
             setNeeds2FA(false);
             setUserId(null);
-            setHas2FA(false);
-            setStep('email');
-            setFormData({ email: formData.email, password: '' });
+            setStep('password');
+            setFormData({ ...formData, password: '' });
           }}
         />
       </div>

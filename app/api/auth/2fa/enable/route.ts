@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
-import speakeasy from 'speakeasy';
+import { verifyTotpToken } from '@/lib/auth/totp';
 
 export async function POST(request: NextRequest) {
   try {
@@ -44,13 +44,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Проверяем код
-    const verified = speakeasy.totp.verify({
-      secret: mfaData.secret,
-      encoding: 'base32',
-      token: code.trim(),
-      window: 2, // Разрешаем отклонение ±1 интервал (60 секунд)
-    });
+    const verified = verifyTotpToken(mfaData.secret, code);
 
     if (!verified) {
       return NextResponse.json(
