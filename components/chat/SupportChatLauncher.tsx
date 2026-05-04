@@ -3,16 +3,34 @@
 import { useEffect, useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
-import { MessageCircle, Loader2 } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
+
+/** Совпадает с корнем виджета в SupportChat — без отдельного «экрана загрузки», чтобы не мигало. */
+function SupportChatWidgetShellSkeleton() {
+  return (
+    <div
+      className={[
+        'flex flex-col overflow-hidden border border-gray-200 bg-white shadow-2xl',
+        'fixed inset-0 z-[51] max-h-[min(100dvh,100svh)]',
+        'sm:inset-auto sm:left-auto sm:top-auto',
+        'sm:bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))]',
+        'sm:right-[max(0.75rem,env(safe-area-inset-right,0px))]',
+        'sm:w-[min(92vw,292px)] md:w-[min(88vw,304px)] lg:w-[min(80vw,316px)]',
+        'sm:h-[min(68dvh,396px)] md:h-[min(72dvh,424px)] lg:h-[min(76dvh,452px)]',
+        'sm:min-h-[260px] sm:max-h-[min(calc(100dvh-4rem),560px)]',
+        'sm:rounded-xl sm:max-w-[min(100vw-1rem,316px)]',
+      ].join(' ')}
+      aria-hidden
+    >
+      <div className="h-[104px] flex-shrink-0 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-white" />
+      <div className="min-h-0 flex-1 bg-gradient-to-b from-gray-50/90 to-gray-100/80" />
+    </div>
+  );
+}
 
 const SupportChatLazy = dynamic(() => import('@/components/chat/SupportChat'), {
   ssr: false,
-  loading: () => (
-    <div className="flex flex-col items-center justify-center min-h-[260px] w-full sm:w-[min(100vw-2rem,420px)] bg-white rounded-t-2xl sm:rounded-2xl shadow-xl border border-gray-100 p-8 gap-3">
-      <Loader2 className="h-8 w-8 animate-spin text-emerald-600" aria-hidden />
-      <span className="text-sm font-medium text-gray-600">Загрузка чата…</span>
-    </div>
-  ),
+  loading: () => <SupportChatWidgetShellSkeleton />,
 });
 
 export default function SupportChatLauncher() {
@@ -22,6 +40,12 @@ export default function SupportChatLauncher() {
   const prefetchChatModule = useCallback(() => {
     void import('@/components/chat/SupportChat');
   }, []);
+
+  // Чанк подгружаем заранее — при первом открытии почти нет фолбэка dynamic().
+  useEffect(() => {
+    if (pathname?.startsWith('/admin') || pathname?.startsWith('/tour-rooms')) return;
+    void import('@/components/chat/SupportChat');
+  }, [pathname]);
   
   // Закрытие чата при клике на пользовательское меню или другие элементы
   useEffect(() => {

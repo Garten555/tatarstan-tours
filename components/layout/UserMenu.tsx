@@ -83,23 +83,25 @@ export default function UserMenu() {
     }
   };
 
-  // Хелперы кэша
-  const readCachedProfile = (): any | null => {
+  /** Кэш профиля только для указанного user id — иначе после смены аккаунта тянулся чужой avatar_url. */
+  const PROFILE_CACHE_KEY = 'tt_profile';
+  const readCachedProfile = (forUserId?: string | null): any | null => {
     try {
-      const raw = localStorage.getItem('tt_profile') || sessionStorage.getItem('tt_profile');
+      const raw = localStorage.getItem(PROFILE_CACHE_KEY) || sessionStorage.getItem(PROFILE_CACHE_KEY);
       if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed;
+      const parsed = JSON.parse(raw) as Record<string, unknown> & { _uid?: string };
+      if (forUserId && parsed._uid && parsed._uid !== forUserId) return null;
+      const { _uid: _drop, ...rest } = parsed;
+      return rest;
     } catch {
-      // Тихая обработка ошибки парсинга кэша (не критично)
       return null;
     }
   };
-  const writeCachedProfile = (data: any) => {
+  const writeCachedProfile = (data: any, userId: string) => {
     try {
-      const s = JSON.stringify(data);
-      localStorage.setItem('tt_profile', s);
-      sessionStorage.setItem('tt_profile', s);
+      const s = JSON.stringify({ ...data, _uid: userId });
+      localStorage.setItem(PROFILE_CACHE_KEY, s);
+      sessionStorage.setItem(PROFILE_CACHE_KEY, s);
     } catch {}
   };
 
@@ -133,12 +135,6 @@ export default function UserMenu() {
   }, [isOpen]);
 
   useEffect(() => {
-    // Быстрый старт из localStorage, чтобы ссылка Админ-панель не пропадала при пробуждении вкладки
-    const cached = readCachedProfile();
-    if (cached && (cached.role || cached.first_name || cached.last_name)) {
-      setProfile(cached);
-    }
-
     const hydrateProfileFromDb = (u: SupabaseUser) => {
       supabase
         .from('profiles')
@@ -157,32 +153,25 @@ export default function UserMenu() {
             setProfile((prev: any) => {
               const keepAdmin = isAdminRole(prev?.role) && !isAdminRole(dbProfile.role);
               const next = {
-                first_name: dbProfile.first_name ?? prev?.first_name ?? u.user_metadata?.first_name,
-                last_name: dbProfile.last_name ?? prev?.last_name ?? u.user_metadata?.last_name,
-                avatar_url: dbProfile.avatar_url ?? prev?.avatar_url ?? u.user_metadata?.avatar_url,
-                role: keepAdmin ? prev?.role : (dbProfile.role ?? prev?.role ?? u.user_metadata?.role),
-                username: dbProfile.username ?? prev?.username,
+                first_name: dbProfile.first_name ?? u.user_metadata?.first_name ?? '',
+                last_name: dbProfile.last_name ?? u.user_metadata?.last_name ?? '',
+                avatar_url: dbProfile.avatar_url ?? u.user_metadata?.avatar_url ?? null,
+                role: keepAdmin ? prev?.role : (dbProfile.role ?? u.user_metadata?.role),
+                username: dbProfile.username ?? u.user_metadata?.username ?? undefined,
               };
-              writeCachedProfile(next);
+              writeCachedProfile(next, u.id);
               return next;
             });
           } else {
             const metaProfile = {
               first_name: u.user_metadata?.first_name,
               last_name: u.user_metadata?.last_name,
-              avatar_url: u.user_metadata?.avatar_url,
+              avatar_url: u.user_metadata?.avatar_url ?? null,
               role: u.user_metadata?.role,
+              username: u.user_metadata?.username,
             };
-            setProfile((prev: any) => {
-              if (prev?.role || prev?.first_name) {
-                return {
-                  ...prev,
-                  avatar_url: prev.avatar_url ?? metaProfile.avatar_url,
-                };
-              }
-              return metaProfile;
-            });
-            writeCachedProfile(metaProfile);
+            setProfile(metaProfile);
+            writeCachedProfile(metaProfile, u.id);
           }
         });
     };
@@ -193,6 +182,10 @@ export default function UserMenu() {
       setUser(initialUser);
       setAuthResolved(true);
       if (initialUser) {
+        const cached = readCachedProfile(initialUser.id);
+        if (cached && (cached.role || cached.first_name || cached.last_name)) {
+          setProfile(cached);
+        }
         hydrateProfileFromDb(initialUser);
       }
     });
@@ -203,56 +196,49 @@ export default function UserMenu() {
       const sUser = session?.user ?? null;
       setUser(sUser);
       setAuthResolved(true);
-      if (sUser) {
-        const cachedProfile = readCachedProfile();
-        if (cachedProfile && cachedProfile.role) {
-          setProfile(cachedProfile);
-        }
-        supabase
-          .from('profiles')
-          .select('first_name, last_name, avatar_url, role, username')
-          .eq('id', sUser.id)
-          .single()
-          .then(({ data, error }) => {
-            if (!error && data) {
-              setProfile((prev: any) => {
-                const keepAdmin = isAdminRole(prev?.role) && !isAdminRole((data as any).role);
-                const next = {
-                  first_name: (data as any).first_name ?? prev?.first_name ?? sUser.user_metadata?.first_name,
-                  last_name: (data as any).last_name ?? prev?.last_name ?? sUser.user_metadata?.last_name,
-                  avatar_url: (data as any).avatar_url ?? prev?.avatar_url ?? sUser.user_metadata?.avatar_url,
-                  role: keepAdmin ? prev?.role : ((data as any).role ?? prev?.role ?? sUser.user_metadata?.role),
-                  username: (data as any).username ?? prev?.username,
-                };
-                writeCachedProfile(next);
-                return next;
-              });
-            } else {
-              setProfile((prev: any) => {
-                if (prev?.avatar_url && !sUser.user_metadata?.avatar_url) {
-                  return {
-                    ...prev,
-                    first_name: sUser.user_metadata?.first_name ?? prev?.first_name,
-                    last_name: sUser.user_metadata?.last_name ?? prev?.last_name,
-                    role: sUser.user_metadata?.role ?? prev?.role,
-                  };
-                }
-                return {
-                  first_name: sUser.user_metadata?.first_name,
-                  last_name: sUser.user_metadata?.last_name,
-                  avatar_url: sUser.user_metadata?.avatar_url ?? prev?.avatar_url,
-                  role: sUser.user_metadata?.role,
-                };
-              });
-              writeCachedProfile({
-                first_name: sUser.user_metadata?.first_name,
-                last_name: sUser.user_metadata?.last_name,
-                avatar_url: sUser.user_metadata?.avatar_url,
-                role: sUser.user_metadata?.role,
-              });
-            }
-          });
+      if (!sUser) {
+        setProfile(null);
+        try {
+          localStorage.removeItem(PROFILE_CACHE_KEY);
+          sessionStorage.removeItem(PROFILE_CACHE_KEY);
+        } catch {}
+        return;
       }
+      const cachedProfile = readCachedProfile(sUser.id);
+      if (cachedProfile && cachedProfile.role) {
+        setProfile(cachedProfile);
+      }
+      supabase
+        .from('profiles')
+        .select('first_name, last_name, avatar_url, role, username')
+        .eq('id', sUser.id)
+        .single()
+        .then(({ data, error }) => {
+          if (!error && data) {
+            setProfile((prev: any) => {
+              const keepAdmin = isAdminRole(prev?.role) && !isAdminRole((data as any).role);
+              const next = {
+                first_name: (data as any).first_name ?? sUser.user_metadata?.first_name ?? '',
+                last_name: (data as any).last_name ?? sUser.user_metadata?.last_name ?? '',
+                avatar_url: (data as any).avatar_url ?? sUser.user_metadata?.avatar_url ?? null,
+                role: keepAdmin ? prev?.role : ((data as any).role ?? sUser.user_metadata?.role),
+                username: (data as any).username ?? sUser.user_metadata?.username ?? undefined,
+              };
+              writeCachedProfile(next, sUser.id);
+              return next;
+            });
+          } else {
+            const fallback = {
+              first_name: sUser.user_metadata?.first_name,
+              last_name: sUser.user_metadata?.last_name,
+              avatar_url: sUser.user_metadata?.avatar_url ?? null,
+              role: sUser.user_metadata?.role,
+              username: sUser.user_metadata?.username,
+            };
+            setProfile(fallback);
+            writeCachedProfile(fallback, sUser.id);
+          }
+        });
     });
 
     const onVisible = async () => {
@@ -269,13 +255,13 @@ export default function UserMenu() {
             setProfile((prev: any) => {
               const keepAdmin = isAdminRole(prev?.role) && !isAdminRole((data as any).role);
               const next = {
-                first_name: (data as any).first_name ?? prev?.first_name,
-                last_name: (data as any).last_name ?? prev?.last_name,
-                avatar_url: (data as any).avatar_url ?? prev?.avatar_url,
-                role: keepAdmin ? prev?.role : ((data as any).role ?? prev?.role),
-                username: (data as any).username ?? prev?.username,
+                first_name: (data as any).first_name ?? currentUser.user_metadata?.first_name ?? '',
+                last_name: (data as any).last_name ?? currentUser.user_metadata?.last_name ?? '',
+                avatar_url: (data as any).avatar_url ?? currentUser.user_metadata?.avatar_url ?? null,
+                role: keepAdmin ? prev?.role : ((data as any).role ?? currentUser.user_metadata?.role),
+                username: (data as any).username ?? currentUser.user_metadata?.username ?? undefined,
               };
-              writeCachedProfile(next);
+              writeCachedProfile(next, currentUser.id);
               return next;
             });
           }
@@ -293,13 +279,13 @@ export default function UserMenu() {
       const customEvent = event as CustomEvent;
       const newAvatarUrl = customEvent.detail?.url;
       if (!newAvatarUrl) return;
-      setProfile((prev: any) => {
-        const updated = { ...prev, avatar_url: newAvatarUrl };
-        writeCachedProfile(updated);
-        return updated;
-      });
       const currentUser = await getUserFromSession(supabase);
       if (!currentUser) return;
+      setProfile((prev: any) => {
+        const updated = { ...prev, avatar_url: newAvatarUrl };
+        writeCachedProfile(updated, currentUser.id);
+        return updated;
+      });
       supabase
         .from('profiles')
         .select('first_name, last_name, avatar_url, role')
@@ -309,12 +295,12 @@ export default function UserMenu() {
           if (!error && data) {
             setProfile((prev: any) => {
               const next = {
-                first_name: (data as any).first_name ?? prev?.first_name,
-                last_name: (data as any).last_name ?? prev?.last_name,
-                avatar_url: (data as any).avatar_url ?? prev?.avatar_url,
+                first_name: (data as any).first_name ?? currentUser.user_metadata?.first_name,
+                last_name: (data as any).last_name ?? currentUser.user_metadata?.last_name,
+                avatar_url: (data as any).avatar_url ?? currentUser.user_metadata?.avatar_url ?? null,
                 role: (data as any).role ?? prev?.role,
               };
-              writeCachedProfile(next);
+              writeCachedProfile(next, currentUser.id);
               return next;
             });
           }
@@ -410,8 +396,8 @@ export default function UserMenu() {
     try {
       setIsOpen(false);
 
-      localStorage.removeItem('tt_profile');
-      sessionStorage.removeItem('tt_profile');
+      localStorage.removeItem(PROFILE_CACHE_KEY);
+      sessionStorage.removeItem(PROFILE_CACHE_KEY);
       localStorage.removeItem('tt_is_guide');
       localStorage.removeItem('tt_is_guide_time');
       localStorage.removeItem('tt_is_guide_user_id');
@@ -495,6 +481,7 @@ export default function UserMenu() {
       >
         {profile?.avatar_url ? (
           <img
+            key={`${user?.id ?? ''}:${profile.avatar_url}`}
             src={profile.avatar_url}
             alt="Avatar"
             className="header-user-avatar"
