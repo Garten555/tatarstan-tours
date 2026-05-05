@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
 import { dedupeTourRowsForCatalog } from '@/lib/tours/listing-dedupe';
+import { sortCatalogTourRows } from '@/lib/tours/catalog-sort';
 
 export async function GET(request: NextRequest) {
   try {
@@ -99,7 +100,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const toursDeduped = dedupeTourRowsForCatalog(toursRaw || []);
+    const toursDeduped = sortCatalogTourRows(
+      dedupeTourRowsForCatalog(toursRaw || []),
+      sortField,
+      sortOrder
+    );
     const total = toursDeduped.length;
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
     const tours = toursDeduped.slice(offset, offset + limit);

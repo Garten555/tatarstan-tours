@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { Edit, Trash2, Calendar, Users, Coins, Search, X, ChevronLeft, ChevronRight, Filter, Map } from 'lucide-react';
+import { Edit, Trash2, Calendar, Users, Coins, Search, X, ChevronLeft, ChevronRight, Filter, Map, Ban } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useDialog } from '@/hooks/useDialog';
 
@@ -65,7 +65,8 @@ export default function TourAdminList() {
   const [tours, setTours] = useState<Tour[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const { confirm, alert, DialogComponents } = useDialog();
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const { confirm, alert, prompt, DialogComponents } = useDialog();
   
   // Фильтры и пагинация
   const [search, setSearch] = useState('');
@@ -113,6 +114,49 @@ export default function TourAdminList() {
   }, [loadTours]);
 
   const hasActiveFilters = search || status || tourType || category;
+
+  const handleCancelTour = async (tourId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation?.();
+    const tour = tours.find((t) => t.id === tourId);
+    if (!tour || tour.status === 'cancelled') return;
+
+    const confirmed = await confirm(
+      'Тур будет отмечен как отменённый, активные бронирования аннулированы. Участникам придёт письмо на почту.',
+      'Отменить тур?',
+      'warning',
+      'Отменить тур',
+      'Закрыть'
+    );
+    if (!confirmed) return;
+
+    const reason = await prompt(
+      'Комментарий для участников (необязательно)',
+      'Причина отмены',
+      'Например: форс-мажор, погода…',
+      ''
+    );
+    if (reason === null) return;
+
+    setCancellingId(tourId);
+    try {
+      const response = await fetch(`/api/admin/tours/${tourId}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: reason.trim() || undefined }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error((data as { error?: string }).error || 'Не удалось отменить тур');
+      }
+      await loadTours();
+      await alert('Тур отменён, участники уведомлены по почте (если настроен SMTP).', 'Готово', 'success');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Не удалось отменить тур';
+      await alert(message, 'Ошибка', 'error');
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   const handleDelete = async (tourId: string) => {
     const confirmed = await confirm(
@@ -430,25 +474,37 @@ export default function TourAdminList() {
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3">
-              <Link
-                href={`/admin/tours/${tour.id}/edit`}
-                onClick={(e) => e.stopPropagation()}
-                className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-              >
-                <Edit className="w-5 h-5" />
-                Изменить
-              </Link>
+            <div className="flex flex-col gap-3">
+              <div className="flex gap-3">
+                <Link
+                  href={`/admin/tours/${tour.id}/edit`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                >
+                  <Edit className="w-5 h-5" />
+                  Изменить
+                </Link>
+                <button
+                  type="button"
+                  onClick={(e) => handleCancelTour(tour.id, e)}
+                  disabled={cancellingId === tour.id || tour.status === 'cancelled'}
+                  className="flex flex-1 items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-3 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50"
+                >
+                  <Ban className="w-5 h-5" />
+                  {cancellingId === tour.id ? '…' : tour.status === 'cancelled' ? 'Отменён' : 'Отменить'}
+                </button>
+              </div>
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleDelete(tour.id);
                 }}
                 disabled={deletingId === tour.id}
-                className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50"
               >
                 <Trash2 className="w-5 h-5" />
-                {deletingId === tour.id ? '...' : 'Удалить'}
+                {deletingId === tour.id ? '...' : 'Удалить навсегда'}
               </button>
             </div>
           </div>

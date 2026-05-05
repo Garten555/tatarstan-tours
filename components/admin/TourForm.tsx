@@ -7,6 +7,7 @@ import AutoResizeTextarea from './AutoResizeTextarea';
 import { Upload, Loader2, Save, AlertCircle, CheckCircle2, MapPin, Search, X, Copy, Calendar } from 'lucide-react';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
+import { useDialog } from '@/hooks/useDialog';
 import VideoPlayer from '@/components/tours/VideoPlayer';
 import UploadProgressBar from '@/components/common/UploadProgressBar';
 import {
@@ -52,6 +53,7 @@ export default function TourForm({
   initialSessions = [],
 }: TourFormProps) {
   const router = useRouter();
+  const { confirm, DialogComponents } = useDialog();
   const [loading, setLoading] = useState(false);
   /** Загрузка файлов на S3 (обложка / галерея / видео) — отдельно от сохранения формы */
   const [uploadBusy, setUploadBusy] = useState(false);
@@ -669,6 +671,65 @@ export default function TourForm({
       return;
     }
 
+    const sliceIso = (iso?: string | null) => (iso ? new Date(iso).toISOString().slice(0, 16) : '');
+    const initialPrimaryStart =
+      mode === 'edit' && initialSessions?.[0]?.start_at
+        ? sliceIso(initialSessions[0].start_at)
+        : mode === 'edit' && initialData?.start_date
+          ? sliceIso(initialData.start_date)
+          : '';
+    const initialPrimaryEnd =
+      mode === 'edit' && initialSessions?.[0]?.end_at
+        ? sliceIso(initialSessions[0].end_at)
+        : mode === 'edit' && initialData?.end_date
+          ? sliceIso(initialData.end_date)
+          : '';
+
+    const normExtra = (pairs: { start: string; end: string }[]) =>
+      [...pairs]
+        .map((p) => ({ ...p }))
+        .sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
+
+    const initialExtraPairs =
+      mode === 'edit' && initialSessions && initialSessions.length > 1
+        ? initialSessions.slice(1).map((s) => ({
+            start: sliceIso(s.start_at),
+            end: sliceIso(s.end_at ?? ''),
+          }))
+        : [];
+    const currentExtraPairs = extraDateRanges.map((r) => ({
+      start: r.start_date,
+      end: r.end_date,
+    }));
+
+    const datesChanged =
+      mode === 'edit' &&
+      (formData.start_date !== initialPrimaryStart ||
+        formData.end_date !== initialPrimaryEnd ||
+        JSON.stringify(normExtra(initialExtraPairs)) !== JSON.stringify(normExtra(currentExtraPairs)));
+
+    if (datesChanged && mode === 'edit' && initialData?.id) {
+      try {
+        const impactRes = await fetch(`/api/admin/tours/${initialData.id}`);
+        if (impactRes.ok) {
+          const impact = await impactRes.json();
+          const n = typeof impact.activeBookingsCount === 'number' ? impact.activeBookingsCount : 0;
+          if (n > 0) {
+            const proceed = await confirm(
+              `У тура есть ${n} активных бронирований. После сохранения участники получат письмо о переносе дат. Продолжить?`,
+              'Изменение дат тура',
+              'warning',
+              'Сохранить',
+              'Назад'
+            );
+            if (!proceed) return;
+          }
+        }
+      } catch {
+        /* продолжаем сохранение без блокировки */
+      }
+    }
+
     setLoading(true);
     setLoadingStatus('Подготовка данных...');
 
@@ -682,8 +743,19 @@ export default function TourForm({
       // Create/update tour
       setLoadingStatus(mode === 'create' ? 'Создание тура...' : 'Обновление тура...');
       
+      let effectiveStatus = formData.status;
+      if (
+        mode === 'edit' &&
+        datesChanged &&
+        formData.status !== 'cancelled' &&
+        formData.status !== 'completed'
+      ) {
+        effectiveStatus = 'active';
+      }
+
       const tourData = {
         ...formData,
+        status: effectiveStatus,
         cover_image: coverImageUrl,
         price_per_person: parseFloat(formData.price_per_person),
         yandex_map_url: formData.yandex_map_url.trim() || null,
@@ -849,6 +921,7 @@ export default function TourForm({
   };
 
   return (
+    <>
     <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-8">
       {(fileUploadProgress !== null || uploadBusy) && (
         <UploadProgressBar
@@ -1556,5 +1629,7 @@ export default function TourForm({
         </button>
       </div>
     </form>
+    {DialogComponents}
+    </>
   );
 }

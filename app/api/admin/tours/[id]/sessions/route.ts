@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { ensureTourRoomForSession } from '@/lib/tour/ensure-session-room';
+import { sendTourRescheduleEmail } from '@/lib/email/tour-notifications';
 
 type IncomingSession = {
   id?: string;
@@ -9,6 +10,57 @@ type IncomingSession = {
   /** UUID профиля гида или null — гид на этом выезде */
   guide_id?: string | null;
 };
+
+function isoNorm(ts: string | null | undefined): string {
+  if (!ts) return '';
+  try {
+    return new Date(ts).toISOString();
+  } catch {
+    return ts;
+  }
+}
+
+function scheduleRescheduleEmails(
+  serviceClient: Awaited<ReturnType<typeof createServiceClient>>,
+  items: Array<{
+    sessionId: string;
+    oldStart: string;
+    oldEnd: string | null;
+    newStart: string;
+    newEnd: string | null;
+  }>,
+  tourTitle: string
+) {
+  void (async () => {
+    try {
+      for (const item of items) {
+        const { data: bookings } = await serviceClient
+          .from('bookings')
+          .select('user_id')
+          .eq('session_id', item.sessionId)
+          .in('status', ['pending', 'confirmed']);
+        const userIds = [...new Set((bookings ?? []).map((b: { user_id: string }) => b.user_id))];
+        if (userIds.length === 0) continue;
+        const { data: profiles } = await serviceClient.from('profiles').select('email').in('id', userIds);
+        const emails = [...new Set((profiles ?? []).map((p: { email: string }) => p.email).filter(Boolean))];
+        await Promise.allSettled(
+          emails.map((to) =>
+            sendTourRescheduleEmail({
+              to,
+              tourTitle,
+              oldStart: item.oldStart,
+              oldEnd: item.oldEnd,
+              newStart: item.newStart,
+              newEnd: item.newEnd,
+            })
+          )
+        );
+      }
+    } catch (e) {
+      console.error('[sessions/sync] reschedule emails', e);
+    }
+  })();
+}
 
 /**
  * Синхронизация выездов тура с таблицей tour_sessions (один тур — несколько дат).
@@ -52,7 +104,7 @@ export async function POST(
 
     const { data: tour, error: tourErr } = await serviceClient
       .from('tours')
-      .select('id, max_participants')
+      .select('id, max_participants, title')
       .eq('id', tourId)
       .single();
 
@@ -61,10 +113,11 @@ export async function POST(
     }
 
     const maxP = (tour as { max_participants: number }).max_participants;
+    const tourTitle = String((tour as { title?: string }).title || 'Тур');
 
     const { data: existing, error: exErr } = await serviceClient
       .from('tour_sessions')
-      .select('id')
+      .select('id, start_at, end_at')
       .eq('tour_id', tourId);
 
     const guideColumnMissing = (msg: string) =>
@@ -83,6 +136,20 @@ export async function POST(
     }
 
     const existingRows = existing ?? [];
+    const previousById = new Map(
+      existingRows.map((r) => [
+        r.id,
+        { start_at: r.start_at as string, end_at: (r.end_at as string | null) ?? null },
+      ])
+    );
+    const rescheduleNotify: Array<{
+      sessionId: string;
+      oldStart: string;
+      oldEnd: string | null;
+      newStart: string;
+      newEnd: string | null;
+    }> = [];
+
     const incomingIds = new Set(
       sessions.map((s) => s.id).filter(Boolean) as string[]
     );
@@ -145,6 +212,21 @@ export async function POST(
             { status: 500 }
           );
         }
+
+        const prev = previousById.get(s.id);
+        if (prev) {
+          const changed =
+            isoNorm(prev.start_at) !== isoNorm(start_at) || isoNorm(prev.end_at) !== isoNorm(end_at);
+          if (changed) {
+            rescheduleNotify.push({
+              sessionId: s.id,
+              oldStart: prev.start_at,
+              oldEnd: prev.end_at,
+              newStart: start_at,
+              newEnd: end_at,
+            });
+          }
+        }
       } else {
         const insertPayload: Record<string, unknown> = {
           tour_id: tourId,
@@ -189,6 +271,10 @@ export async function POST(
           console.warn('[sessions/sync] ensure room', sid, res.error);
         }
       }
+    }
+
+    if (rescheduleNotify.length > 0) {
+      scheduleRescheduleEmails(serviceClient, rescheduleNotify, tourTitle);
     }
 
     return NextResponse.json({ success: true });

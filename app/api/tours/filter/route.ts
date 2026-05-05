@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
 import { dedupeTourRowsForCatalog } from '@/lib/tours/listing-dedupe';
+import { sortCatalogTourRows } from '@/lib/tours/catalog-sort';
 
 // Динамический роут (использует searchParams)
 export const dynamic = 'force-dynamic';
@@ -16,8 +17,12 @@ export async function GET(request: NextRequest) {
     const tourType = sanitizeText(searchParams.get('tour_type') || '').trim();
     const category = sanitizeText(searchParams.get('category') || '').trim();
     const cityId = sanitizeText(searchParams.get('city_id') || '').trim();
-    const minPrice = searchParams.get('min_price') ? parseFloat(searchParams.get('min_price')!) : null;
-    const maxPrice = searchParams.get('max_price') ? parseFloat(searchParams.get('max_price')!) : null;
+    const rawMin = searchParams.get('min_price')?.trim();
+    const rawMax = searchParams.get('max_price')?.trim();
+    const minParsed = rawMin ? parseFloat(rawMin.replace(',', '.')) : NaN;
+    const maxParsed = rawMax ? parseFloat(rawMax.replace(',', '.')) : NaN;
+    const minPrice = Number.isFinite(minParsed) ? minParsed : null;
+    const maxPrice = Number.isFinite(maxParsed) ? maxParsed : null;
     const startDate = sanitizeText(searchParams.get('start_date') || '').trim();
     const endDate = sanitizeText(searchParams.get('end_date') || '').trim();
     const sortBy = sanitizeText(searchParams.get('sort_by') || 'created_at').trim();
@@ -49,13 +54,7 @@ export async function GET(request: NextRequest) {
         created_at
       `)
       .eq('status', 'active')
-      // Исключаем завершенные туры (end_date < NOW())
       .or(`end_date.is.null,end_date.gte.${now}`);
-    
-    // Дополнительная фильтрация завершенных туров
-    // Фильтруем: end_date IS NULL OR end_date >= NOW()
-    // В Supabase используем правильный синтаксис для OR
-    query = query.or(`end_date.is.null,end_date.gte.${now}`);
 
     // Поиск по названию, описанию и городу
     if (search) {
@@ -125,7 +124,7 @@ export async function GET(request: NextRequest) {
     if (minPrice !== null && minPrice >= 0) {
       query = query.gte('price_per_person', minPrice);
     }
-    if (maxPrice !== null && maxPrice > 0) {
+    if (maxPrice !== null && maxPrice >= 0) {
       query = query.lte('price_per_person', maxPrice);
     }
 
@@ -168,7 +167,8 @@ export async function GET(request: NextRequest) {
       return endDate >= currentTime;
     });
 
-    const catalogTours = dedupeTourRowsForCatalog(activeTours);
+    const deduped = dedupeTourRowsForCatalog(activeTours);
+    const catalogTours = sortCatalogTourRows(deduped, sortField, sortOrder);
     const total = catalogTours.length;
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
     const pageSlice = catalogTours.slice(offset, offset + limit);

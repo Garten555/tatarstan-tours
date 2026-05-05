@@ -15,7 +15,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
-  TrendingUp
+  TrendingUp,
+  ChevronDown
 } from 'lucide-react';
 import { sanitizeText, escapeHtml } from '@/lib/utils/sanitize';
 
@@ -499,20 +500,26 @@ function ToursPageContent() {
                       <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
                       Сортировка
                     </label>
-                    <select
-                      value={sortBy}
-                      onChange={(e) => {
-                        setSortBy(e.target.value);
-                        setPage(1);
-                      }}
-                      className="w-full px-4 py-3.5 sm:py-4 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-gray-50 hover:bg-white text-base font-bold shadow-sm hover:shadow-md"
-                    >
-                      {SORT_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={sortBy}
+                        onChange={(e) => {
+                          setSortBy(e.target.value);
+                          setPage(1);
+                        }}
+                        className="w-full appearance-none pl-4 pr-11 py-3.5 sm:py-4 border-2 border-gray-300 rounded-xl bg-white hover:bg-white text-base font-bold text-gray-900 transition-colors focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/25"
+                      >
+                        {SORT_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown
+                        className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500"
+                        aria-hidden
+                      />
+                    </div>
                   </div>
                 </div>
 
