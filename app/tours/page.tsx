@@ -4,19 +4,18 @@ import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import TourCard from '@/components/tours/TourCard';
 import Link from 'next/link';
-import { 
-  ArrowLeft, 
-  Search, 
-  X, 
-  SlidersHorizontal,
+import {
+  ArrowLeft,
+  Search,
+  X,
   Loader2,
   MapPin,
   Sparkles,
   ChevronLeft,
   ChevronRight,
-  Filter,
   TrendingUp,
-  ChevronDown
+  ChevronDown,
+  Coins,
 } from 'lucide-react';
 import { sanitizeText, escapeHtml } from '@/lib/utils/sanitize';
 import { parseClientSortParam } from '@/lib/tours/catalog-sort';
@@ -37,6 +36,17 @@ interface Tour {
   city?: { id: string; name: string } | null;
   available_spots: number;
   is_available: boolean;
+  catalog_price_from?: number;
+  catalog_price_to?: number;
+  catalog_variant_count?: number;
+}
+
+function initialSortFromSearchParams(sp: { get: (k: string) => string | null }): string {
+  const sb = sp.get('sort_by');
+  const so = sp.get('sort_order');
+  if (sb && (so === 'asc' || so === 'desc')) return `${sb}-${so}`;
+  if (sb?.includes('-')) return sb;
+  return 'created_at-desc';
 }
 
 interface City {
@@ -88,8 +98,7 @@ function ToursPageContent() {
   const [cityId, setCityId] = useState(searchParams.get('city_id') || '');
   const [minPrice, setMinPrice] = useState(searchParams.get('min_price') || '');
   const [maxPrice, setMaxPrice] = useState(searchParams.get('max_price') || '');
-  const [sortBy, setSortBy] = useState(searchParams.get('sort_by') || 'created_at-desc');
-  const [showFilters, setShowFilters] = useState(false);
+  const [sortBy, setSortBy] = useState(() => initialSortFromSearchParams(searchParams));
   
   // Города для фильтра
   const [cities, setCities] = useState<City[]>([]);
@@ -294,13 +303,12 @@ function ToursPageContent() {
       </section>
 
       {/* Поиск и фильтры */}
-      <section className="py-8 sm:py-10 md:py-12 bg-gray-50">
-        <div className="container mx-auto px-4 sm:px-5 md:px-6 lg:px-8">
-          <div className="bg-white rounded-2xl sm:rounded-3xl border-2 border-gray-200 shadow-lg p-5 sm:p-6 md:p-8 lg:p-10 mb-6 sm:mb-8">
-            {/* Поиск */}
-            <div className="relative mb-5 sm:mb-6 md:mb-8">
+      <section className="py-8 sm:py-10 md:py-12 bg-gradient-to-b from-[#eef6f2] to-gray-50">
+        <div className="container mx-auto px-4 sm:px-5 md:px-6 lg:px-8 max-w-7xl">
+          <div className="rounded-3xl border border-emerald-100 bg-white shadow-[0_12px_48px_-16px_rgba(5,150,105,0.35)] overflow-hidden mb-6 sm:mb-8">
+            <div className="border-b border-emerald-50 bg-gradient-to-r from-emerald-50/90 via-white to-teal-50/50 px-4 py-4 sm:px-6 sm:py-5">
               <div className="relative">
-                <Search className="absolute left-4 sm:left-5 top-1/2 transform -translate-y-1/2 w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
+                <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-emerald-600 sm:h-6 sm:w-6" />
                 <input
                   type="text"
                   value={search}
@@ -308,238 +316,225 @@ function ToursPageContent() {
                     setSearch(e.target.value);
                     setPage(1);
                   }}
-                  placeholder="Поиск по названию тура, описанию или городу..."
-                  className="w-full pl-12 sm:pl-14 pr-12 sm:pr-14 py-4 sm:py-5 border-2 border-gray-300 rounded-xl sm:rounded-2xl focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-base sm:text-lg bg-gray-50 hover:bg-white shadow-sm hover:shadow-md placeholder:text-gray-400 font-medium"
+                  placeholder="Название, описание или город…"
+                  className="w-full rounded-2xl border-2 border-emerald-100 bg-white py-3.5 pl-12 pr-12 text-base font-medium text-gray-900 shadow-inner outline-none transition placeholder:text-gray-400 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20 sm:py-4 sm:pl-14 sm:pr-14 sm:text-lg"
                 />
-                {search && (
+                {search ? (
                   <button
+                    type="button"
                     onClick={() => {
                       setSearch('');
                       setPage(1);
                     }}
-                    className="absolute right-4 sm:right-5 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-red-50"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                    aria-label="Очистить поиск"
                   >
-                    <X className="w-5 h-5 sm:w-6 sm:h-6" />
+                    <X className="h-5 w-5" />
                   </button>
-                )}
+                ) : null}
               </div>
+              <p className="mt-3 text-xs font-medium text-emerald-800/80 sm:text-sm">
+                Цена «от / до» учитывает все выезды одного тура (разные даты и гиды). В списке покажется тур,
+                если хотя бы один выезд попадает в диапазон.
+              </p>
             </div>
 
-            {/* Быстрые фильтры */}
-            <div className="flex flex-wrap gap-3 sm:gap-4 mb-5 sm:mb-6">
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`px-4 py-3 sm:px-5 sm:py-3.5 md:px-6 md:py-4 rounded-xl sm:rounded-2xl font-bold text-sm sm:text-base transition-all duration-300 flex items-center gap-2 sm:gap-2.5 shadow-md hover:shadow-lg ${
-                  showFilters || hasActiveFilters
-                    ? 'bg-gradient-to-r from-emerald-600 to-emerald-700 text-white shadow-emerald-500/50 hover:from-emerald-700 hover:to-emerald-800'
-                    : 'bg-white text-gray-700 hover:bg-gray-50 border-2 border-gray-200 hover:border-emerald-300'
-                }`}
-              >
-                <SlidersHorizontal className="w-5 h-5 sm:w-6 sm:h-6" />
-                <span className="hidden xs:inline">Фильтры</span>
-                <span className="xs:hidden">Фильтр</span>
-                {activeFiltersCount > 0 && (
-                  <span className={`rounded-full w-6 h-6 sm:w-7 sm:h-7 flex items-center justify-center text-xs sm:text-sm font-black ${
-                    showFilters || hasActiveFilters
-                      ? 'bg-white/30 text-white'
-                      : 'bg-emerald-600 text-white'
-                  }`}>
-                    {activeFiltersCount}
-                  </span>
-                )}
-              </button>
+            <div className="space-y-8 p-4 sm:p-6 md:p-8">
+              <div>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-black uppercase tracking-wider text-emerald-800">Категория</span>
+                  {activeFiltersCount > 0 ? (
+                    <span className="rounded-full bg-emerald-600 px-2.5 py-0.5 text-[11px] font-black text-white">
+                      активных: {activeFiltersCount}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {CATEGORIES.filter((c) => c.value).map((cat) => (
+                    <button
+                      key={cat.value}
+                      type="button"
+                      onClick={() => {
+                        setCategory(category === cat.value ? '' : cat.value);
+                        setPage(1);
+                      }}
+                      className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-bold transition sm:py-3 sm:text-base ${
+                        category === cat.value
+                          ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/25 ring-2 ring-emerald-400/60'
+                          : 'border-2 border-gray-100 bg-gray-50 text-gray-800 hover:border-emerald-200 hover:bg-emerald-50/80'
+                      }`}
+                    >
+                      <span className="text-lg leading-none">{cat.icon}</span>
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-              {/* Быстрый выбор типа */}
-              {TOUR_TYPES.filter(t => t.value).map((type) => (
-                <button
-                  key={type.value}
-                  onClick={() => {
-                    setTourType(tourType === type.value ? '' : type.value);
-                    setPage(1);
-                  }}
-                  className={`px-5 py-3.5 sm:px-6 sm:py-4 rounded-xl sm:rounded-2xl font-bold text-sm sm:text-base transition-all duration-300 flex items-center gap-2.5 shadow-md hover:shadow-lg ${
-                    tourType === type.value
-                      ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white border-2 border-emerald-400 shadow-emerald-500/50'
-                      : 'bg-white text-gray-700 hover:bg-emerald-50 border-2 border-gray-200 hover:border-emerald-300'
-                  }`}
-                >
-                  <span className="text-xl sm:text-2xl">{type.icon}</span>
-                  <span>{type.label}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* Расширенные фильтры */}
-            {showFilters && (
-              <div className="pt-6 sm:pt-8 border-t-2 border-gray-200">
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
-                  {/* Категория */}
-                  <div>
-                    <label className="block text-lg sm:text-xl font-black text-gray-900 mb-4">
-                      Категория
-                    </label>
-                    <div className="flex flex-wrap gap-2.5">
-                      {CATEGORIES.filter(c => c.value).map((cat) => (
-                        <button
-                          key={cat.value}
-                          onClick={() => {
-                            setCategory(category === cat.value ? '' : cat.value);
-                            setPage(1);
-                          }}
-                          className={`px-4 py-2.5 rounded-xl text-sm sm:text-base font-bold transition-all duration-300 shadow-sm hover:shadow-md ${
-                            category === cat.value
-                              ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow-emerald-500/50'
-                              : 'bg-gray-100 text-gray-700 hover:bg-emerald-50 hover:text-emerald-700 border-2 border-transparent hover:border-emerald-300'
-                          }`}
-                        >
-                          <span className="text-base sm:text-lg mr-1.5">{cat.icon}</span>
-                          {cat.label}
-                        </button>
-                      ))}
-                    </div>
+              <div className="grid grid-cols-1 gap-5 lg:grid-cols-12 lg:gap-6">
+                <div className="lg:col-span-5">
+                  <div className="mb-2 flex items-center gap-2 text-emerald-800">
+                    <Coins className="h-5 w-5 shrink-0" />
+                    <span className="text-sm font-black uppercase tracking-wide">Цена за человека, ₽</span>
                   </div>
-
-                  {/* Город */}
-                  <div className="relative city-search-container">
-                    <label className="block text-lg sm:text-xl font-black text-gray-900 mb-4">
-                      Город
-                    </label>
-                    <div className="relative">
-                      <MapPin className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
-                      <input
-                        type="text"
-                        value={citySearch}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setCitySearch(value);
-                          if (selectedCity && value !== selectedCity.name) {
-                            setSelectedCity(null);
-                            setCityId('');
-                          }
-                          if (value.length >= 2) {
-                            setShowCityDropdown(true);
-                          } else {
-                            setShowCityDropdown(false);
-                          }
-                        }}
-                        onFocus={() => {
-                          if (citySearch.length >= 2 && cities.length > 0) {
-                            setShowCityDropdown(true);
-                          }
-                        }}
-                        placeholder="Введите название города..."
-                        className="w-full pl-12 pr-10 py-3.5 sm:py-4 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-base bg-gray-50 hover:bg-white shadow-sm hover:shadow-md"
-                      />
-                      {selectedCity && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCityClear();
-                          }}
-                          className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-                        >
-                          <X className="w-5 h-5" />
-                        </button>
-                      )}
-                    </div>
-                    {showCityDropdown && citySearch.length >= 2 && (
-                      <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-300 rounded-xl shadow-2xl max-h-60 overflow-y-auto">
-                        {cities.length > 0 ? (
-                          cities.map((city) => (
-                            <button
-                              key={city.id}
-                              type="button"
-                              onClick={() => handleCitySelect(city)}
-                              className="w-full px-4 py-3.5 text-left hover:bg-emerald-50 transition-colors flex items-center gap-3 border-b border-gray-100 last:border-b-0 font-medium"
-                            >
-                              <MapPin className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-                              <span className="flex-1">{escapeHtml(city.name)}</span>
-                            </button>
-                          ))
-                        ) : (
-                          <div className="px-4 py-4 text-base text-gray-500 text-center font-medium">
-                            Город не найден
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Цена */}
-                  <div>
-                    <label className="block text-lg sm:text-xl font-black text-gray-900 mb-4">
-                      Цена (₽)
-                    </label>
-                    <div className="flex gap-3">
+                  <div className="flex items-end gap-3">
+                    <label className="min-w-0 flex-1">
+                      <span className="mb-1 block text-xs font-bold text-gray-500">От</span>
                       <input
                         type="number"
+                        inputMode="decimal"
+                        min={0}
                         value={minPrice}
                         onChange={(e) => {
                           setMinPrice(e.target.value);
                           setPage(1);
                         }}
-                        placeholder="От"
-                        min="0"
-                        className="flex-1 px-4 py-3.5 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-base bg-gray-50 hover:bg-white shadow-sm hover:shadow-md font-medium"
+                        placeholder="0"
+                        className="w-full rounded-2xl border-2 border-gray-200 bg-gray-50/80 px-4 py-3 text-base font-bold text-gray-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15"
                       />
+                    </label>
+                    <span className="pb-3 font-bold text-gray-400">—</span>
+                    <label className="min-w-0 flex-1">
+                      <span className="mb-1 block text-xs font-bold text-gray-500">До</span>
                       <input
                         type="number"
+                        inputMode="decimal"
+                        min={0}
                         value={maxPrice}
                         onChange={(e) => {
                           setMaxPrice(e.target.value);
                           setPage(1);
                         }}
-                        placeholder="До"
-                        min="0"
-                        className="flex-1 px-4 py-3.5 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-base bg-gray-50 hover:bg-white shadow-sm hover:shadow-md font-medium"
+                        placeholder="∞"
+                        className="w-full rounded-2xl border-2 border-gray-200 bg-gray-50/80 px-4 py-3 text-base font-bold text-gray-900 outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15"
                       />
-                    </div>
-                  </div>
-
-                  {/* Сортировка */}
-                  <div>
-                    <label className="block text-lg sm:text-xl font-black text-gray-900 mb-4 flex items-center gap-2.5">
-                      <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600" />
-                      Сортировка
                     </label>
-                    <div className="relative">
-                      <select
-                        value={sortBy}
-                        onChange={(e) => {
-                          setSortBy(e.target.value);
-                          setPage(1);
-                        }}
-                        className="w-full appearance-none pl-4 pr-11 py-3.5 sm:py-4 border-2 border-gray-300 rounded-xl bg-white hover:bg-white text-base font-bold text-gray-900 transition-colors focus:outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/25"
-                      >
-                        {SORT_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown
-                        className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500"
-                        aria-hidden
-                      />
-                    </div>
                   </div>
                 </div>
 
-                {/* Сброс фильтров */}
-                {hasActiveFilters && (
-                  <div className="mt-6 sm:mt-8 flex justify-end">
-                    <button
-                      onClick={resetFilters}
-                      className="px-6 py-3 sm:px-8 sm:py-4 text-base sm:text-lg text-gray-700 hover:text-red-600 font-bold flex items-center gap-2.5 transition-all duration-300 hover:bg-red-50 rounded-xl sm:rounded-2xl border-2 border-gray-200 hover:border-red-300 shadow-sm hover:shadow-md"
-                    >
-                      <X className="w-5 h-5 sm:w-6 sm:h-6" />
-                      Сбросить все фильтры
-                    </button>
+                <div className="relative city-search-container lg:col-span-4">
+                  <div className="mb-2 flex items-center gap-2 text-emerald-800">
+                    <MapPin className="h-5 w-5 shrink-0" />
+                    <span className="text-sm font-black uppercase tracking-wide">Город</span>
                   </div>
-                )}
+                  <div className="relative">
+                    <MapPin className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-emerald-600" />
+                    <input
+                      type="text"
+                      value={citySearch}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setCitySearch(value);
+                        if (selectedCity && value !== selectedCity.name) {
+                          setSelectedCity(null);
+                          setCityId('');
+                        }
+                        setShowCityDropdown(value.length >= 2);
+                      }}
+                      onFocus={() => {
+                        if (citySearch.length >= 2 && cities.length > 0) setShowCityDropdown(true);
+                      }}
+                      placeholder="Начните вводить название…"
+                      className="w-full rounded-2xl border-2 border-gray-200 bg-gray-50/80 py-3 pl-11 pr-10 text-base font-medium outline-none transition focus:border-emerald-500 focus:bg-white focus:ring-2 focus:ring-emerald-500/15"
+                    />
+                    {selectedCity ? (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCityClear();
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    ) : null}
+                  </div>
+                  {showCityDropdown && citySearch.length >= 2 ? (
+                    <div className="absolute z-50 mt-2 max-h-56 w-full overflow-y-auto rounded-2xl border-2 border-emerald-100 bg-white shadow-xl">
+                      {cities.length > 0 ? (
+                        cities.map((city) => (
+                          <button
+                            key={city.id}
+                            type="button"
+                            onClick={() => handleCitySelect(city)}
+                            className="flex w-full items-center gap-3 border-b border-gray-50 px-4 py-3 text-left font-medium last:border-0 hover:bg-emerald-50"
+                          >
+                            <MapPin className="h-5 w-5 shrink-0 text-emerald-600" />
+                            <span>{escapeHtml(city.name)}</span>
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-4 py-4 text-center text-sm text-gray-500">Город не найден</div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="lg:col-span-3">
+                  <div className="mb-2 flex items-center gap-2 text-emerald-800">
+                    <TrendingUp className="h-5 w-5 shrink-0" />
+                    <span className="text-sm font-black uppercase tracking-wide">Сортировка</span>
+                  </div>
+                  <div className="relative">
+                    <select
+                      value={sortBy}
+                      onChange={(e) => {
+                        setSortBy(e.target.value);
+                        setPage(1);
+                      }}
+                      className="w-full appearance-none rounded-2xl border-2 border-gray-200 bg-white py-3 pl-4 pr-11 text-sm font-bold text-gray-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15 sm:text-base"
+                    >
+                      {SORT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-500" />
+                  </div>
+                </div>
               </div>
-            )}
+
+              <div>
+                <span className="mb-3 block text-xs font-black uppercase tracking-wider text-emerald-800">
+                  Тип тура
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {TOUR_TYPES.filter((t) => t.value).map((type) => (
+                    <button
+                      key={type.value}
+                      type="button"
+                      onClick={() => {
+                        setTourType(tourType === type.value ? '' : type.value);
+                        setPage(1);
+                      }}
+                      className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-bold sm:px-4 sm:py-2.5 sm:text-base ${
+                        tourType === type.value
+                          ? 'bg-teal-700 text-white shadow-md'
+                          : 'border border-gray-200 bg-white text-gray-800 hover:border-emerald-300 hover:bg-emerald-50/60'
+                      }`}
+                    >
+                      <span>{type.icon}</span>
+                      {type.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {hasActiveFilters ? (
+                <div className="flex justify-end border-t border-gray-100 pt-6">
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="inline-flex items-center gap-2 rounded-2xl border-2 border-gray-200 px-5 py-3 text-sm font-bold text-gray-700 transition hover:border-red-200 hover:bg-red-50 hover:text-red-700 sm:text-base"
+                  >
+                    <X className="h-5 w-5" />
+                    Сбросить фильтры
+                  </button>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       </section>
@@ -592,6 +587,9 @@ function ToursPageContent() {
                       short_desc={sanitizeText(tour.short_desc)}
                       cover_image={tour.cover_image || ''}
                       price_per_person={tour.price_per_person}
+                      catalog_price_from={tour.catalog_price_from}
+                      catalog_price_to={tour.catalog_price_to}
+                      catalog_variant_count={tour.catalog_variant_count}
                       start_date={tour.start_date}
                       end_date={tour.end_date || tour.start_date}
                       max_participants={tour.max_participants}

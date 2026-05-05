@@ -12,6 +12,10 @@ interface TourCardProps {
   short_desc: string;
   cover_image: string;
   price_per_person: number;
+  /** Если несколько выездов одного продукта — диапазон и подпись на карточке */
+  catalog_price_from?: number;
+  catalog_price_to?: number;
+  catalog_variant_count?: number;
   start_date: string;
   end_date: string;
   max_participants: number;
@@ -46,6 +50,9 @@ export default function TourCard({
   short_desc,
   cover_image,
   price_per_person,
+  catalog_price_from,
+  catalog_price_to,
+  catalog_variant_count = 1,
   start_date,
   end_date,
   max_participants,
@@ -57,6 +64,17 @@ export default function TourCard({
   const isFullyBooked = availableSpots <= 0;
   const titleSingleLine = title.replace(/\s+/g, ' ').trim();
   const descSingleLine = short_desc.replace(/\s+/g, ' ').trim();
+
+  const pf =
+    catalog_price_from !== undefined && Number.isFinite(catalog_price_from)
+      ? catalog_price_from
+      : price_per_person;
+  const pt =
+    catalog_price_to !== undefined && Number.isFinite(catalog_price_to)
+      ? catalog_price_to
+      : price_per_person;
+  const showPriceRange =
+    catalog_variant_count > 1 && pf !== pt && Number.isFinite(pf) && Number.isFinite(pt);
 
   // Форматирование даты
   const formatDate = (dateString: string) => {
@@ -165,10 +183,30 @@ export default function TourCard({
           {/* Цена и кнопка */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 pt-3 sm:pt-4 md:pt-5 border-t-2 border-gray-100">
             <div className="w-full sm:w-auto">
-              <div className="text-2xl sm:text-3xl md:text-4xl font-black text-emerald-700">
-                {price_per_person.toLocaleString('ru-RU')} ₽
+              <div className="text-2xl sm:text-3xl md:text-4xl font-black text-emerald-700 leading-tight">
+                {showPriceRange ? (
+                  <>
+                    {pf.toLocaleString('ru-RU')} — {pt.toLocaleString('ru-RU')} ₽
+                  </>
+                ) : (
+                  <>{pf.toLocaleString('ru-RU')} ₽</>
+                )}
               </div>
-              <div className="text-xs sm:text-sm md:text-base text-gray-600 font-medium mt-0.5 sm:mt-1">за человека</div>
+              <div className="text-xs sm:text-sm md:text-base text-gray-600 font-medium mt-0.5 sm:mt-1 space-y-0.5">
+                <div>за человека</div>
+                {catalog_variant_count > 1 && (
+                  <div className="text-emerald-700/90 font-semibold">
+                    {(() => {
+                      const n = catalog_variant_count;
+                      const k = n % 10;
+                      const kk = n % 100;
+                      const w =
+                        kk >= 11 && kk <= 14 ? 'выездов' : k === 1 ? 'выезд' : k >= 2 && k <= 4 ? 'выезда' : 'выездов';
+                      return `${n} ${w} · разные даты или гиды`;
+                    })()}
+                  </div>
+                )}
+              </div>
             </div>
             
             <button

@@ -16,13 +16,18 @@ import TourMapSection from '@/components/tours/TourMapSection';
 import TourReviewsSection from '@/components/tours/TourReviewsSection';
 import { ArrowLeft } from 'lucide-react';
 import { isInvalidTourSlug } from '@/lib/tours/isInvalidTourSlug';
+import TourBookingRedirectBanner from '@/components/tours/TourBookingRedirectBanner';
+import { parseBookingTourRedirectError } from '@/lib/tour/booking-tour-redirect';
 
 interface TourPageProps {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ error?: string | string[] }>;
 }
 
-export default async function TourPage({ params }: TourPageProps) {
+export default async function TourPage({ params, searchParams }: TourPageProps) {
   const { slug } = await params;
+  const sp = await searchParams;
+  const bookingRedirectError = parseBookingTourRedirectError(sp.error);
   if (isInvalidTourSlug(slug)) {
     notFound();
   }
@@ -263,6 +268,10 @@ export default async function TourPage({ params }: TourPageProps) {
           <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 group-hover:-translate-x-1 transition-transform duration-200 flex-shrink-0" />
           <span className="font-bold text-sm sm:text-base">Назад к турам</span>
         </Link>
+
+        {bookingRedirectError && (
+          <TourBookingRedirectBanner code={bookingRedirectError} />
+        )}
 
         <TourSessionsProvider sessions={tourSessions}>
         <div className="mt-4 sm:mt-6 flex flex-col md:flex-col lg:flex-row gap-6 sm:gap-8 w-full items-start">

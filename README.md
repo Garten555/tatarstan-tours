@@ -2,7 +2,7 @@
 
 > Современная web-платформа для организации и бронирования туристических туров по достопримечательностям Татарстана
 
-[![Next.js](https://img.shields.io/badge/Next.js-15-black)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)](https://www.typescriptlang.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-green)](https://supabase.com/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -18,11 +18,12 @@
 - ✅ Чат поддержки с AI-агентом (OpenRouter)
 - ✅ Административные панели для разных ролей
 - ✅ Управление медиа-контентом
+- ✅ Двухфакторная аутентификация (TOTP, **otplib**): настройка в профиле, вход «пароль → код»
 
 ## 🛠️ Технологический стек
 
 ### Frontend
-- **Next.js 15** - React framework с Server Components
+- **Next.js 16** - React framework с Server Components
 - **React 19** - UI библиотека
 - **TypeScript** - Статическая типизация
 - **Tailwind CSS** - Utility-first CSS framework
@@ -69,6 +70,8 @@ cp .env.template .env.local
 # Заполните значения:
 # - NEXT_PUBLIC_SUPABASE_URL
 # - NEXT_PUBLIC_SUPABASE_ANON_KEY
+# - SUPABASE_SERVICE_ROLE_KEY (сервер: magic link после входа с 2FA)
+# - NEXT_PUBLIC_SITE_URL (публичный URL сайта, редиректы и ссылки)
 # - OPENROUTER_API_KEY
 # - NEXT_PUBLIC_YANDEX_MAPS_API_KEY
 # - EMAIL_* (для nodemailer)
@@ -89,8 +92,7 @@ npm run dev
 npm run dev          # Запуск dev сервера
 npm run build        # Сборка для продакшена
 npm start            # Запуск prod сервера
-npm run lint         # Проверка кода
-npm run type-check   # Проверка типов TypeScript
+npm run lint         # Проверка кода (eslint)
 ```
 
 ## 🗄️ Структура проекта
@@ -121,15 +123,15 @@ tatarstan-tours/
 │   └── ui/                # UI компоненты
 ├── lib/                   # Утилиты и хелперы
 │   ├── supabase/         # Supabase клиенты
+│   ├── auth/             # TOTP / 2FA (otplib)
 │   └── ai/               # AI интеграция
 ├── types/                # TypeScript типы
 ├── public/               # Статические файлы
 │   └── uploads/         # Загруженные медиа
 ├── supabase/            # Supabase конфигурация
 │   └── migrations/      # SQL миграции
-├── DIPLOMA.md           # Документация для диплома
-├── CHAT_ARCHITECTURE.md # Архитектура чата
-└── deploy.sh            # Скрипт деплоя
+├── CHAT_ARCHITECTURE.md # Архитектура чата (если есть в репозитории)
+└── deploy.sh            # Скрипт деплоя по SSH
 ```
 
 ## 🔐 Роли пользователей
@@ -170,8 +172,8 @@ cd tatarstan-tours
 nano .env
 # Вставьте production переменные
 
-# Установка и сборка
-npm ci --production
+# Установка и сборка (для next build нужны devDependencies — без флага --production)
+npm ci
 npm run build
 
 # Запуск через PM2
@@ -182,23 +184,48 @@ pm2 save
 
 ### Последующие деплои
 
+**Вариант A — скрипт с локальной машины** (см. `deploy.sh`: SSH, `git reset` на `origin/main`, `npm ci`, `build`, `pm2`):
+
 ```bash
-# На сервере просто запустите:
 ./deploy.sh
 ```
 
-Подробная инструкция по деплою в [DIPLOMA.md](./DIPLOMA.md#развертывание)
+**Вариант B — вручную на сервере** (замени путь к проекту и имя ветки при необходимости):
+
+```bash
+cd /var/www/tatarstan-tours
+
+git fetch origin
+git checkout main
+git pull origin main
+
+npm ci
+npm run build
+
+pm2 restart tatarstan-tours
+# или: pm2 start npm --name "tatarstan-tours" -- start
+```
+
+**Docker** (если деплой через контейнер):
+
+```bash
+cd /path/to/tatarstan-tours
+git pull
+docker compose build --no-cache
+docker compose up -d
+```
+
+**Переменные окружения на проде** (минимум для 2FA и сессий): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, **`SUPABASE_SERVICE_ROLE_KEY`**, **`NEXT_PUBLIC_SITE_URL`** (полный URL сайта). В Supabase должна существовать таблица **`user_mfa`** (секрет TOTP, `enabled`, резервные коды и т.д., как ожидают маршруты `app/api/auth/2fa/`).
+
+### Двухфакторная аутентификация (2FA)
+
+- Включение: страница **`/profile/settings`**, блок «Двухфакторная аутентификация» → настроить приложение (QR) → ввести код → включить.
+- Вход: сначала **email и пароль**, затем **одноразовый код** (TOTP); после проверки выдаётся magic link (нужен **service role** в env).
+- Реализация: **`lib/auth/totp.ts`** (otplib), API — `app/api/auth/2fa/*`, `app/api/auth/login-with-2fa`.
 
 ## 📚 Документация
 
-- [DIPLOMA.md](./DIPLOMA.md) - Полная документация для защиты диплома
-  - Архитектура системы
-  - Структура БД
-  - API Endpoints
-  - Интеграции
-  - Безопасность
-  
-- [CHAT_ARCHITECTURE.md](./CHAT_ARCHITECTURE.md) - Архитектура чата
+- [CHAT_ARCHITECTURE.md](./CHAT_ARCHITECTURE.md) - Архитектура чата (если файл есть в клоне)
   - WebSocket соединение
   - AI-агент (OpenRouter)
   - Передача оператору

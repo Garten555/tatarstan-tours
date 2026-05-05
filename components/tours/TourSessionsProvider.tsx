@@ -45,12 +45,21 @@ export function TourSessionsProvider({
 
   const hasSessions = valid.length > 0;
 
-  const initialId = useMemo(() => pickDefaultSessionId(valid), [valid]);
+  const defaultId = useMemo(() => pickDefaultSessionId(valid), [valid]);
 
-  const [selectedId, setSelectedIdState] = useState(initialId);
+  /** Выбор пользователя; если слот пропал из списка — снова берём defaultId без эффекта */
+  const [userPickedId, setUserPickedId] = useState<string | null>(null);
+
+  const selectedId = useMemo(() => {
+    if (!valid.length) return '';
+    if (userPickedId && valid.some((s) => s.id === userPickedId)) {
+      return userPickedId;
+    }
+    return defaultId;
+  }, [valid, userPickedId, defaultId]);
 
   const setSelectedId = useCallback((id: string) => {
-    setSelectedIdState(id);
+    setUserPickedId(id);
   }, []);
 
   const selected = useMemo(() => {

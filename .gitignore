@@ -64,6 +64,10 @@ Thumbs.db
 # Temporary commit files
 commit-*.txt
 
+# Python
+__pycache__/
+*.pyc
+
 # Diploma scripts
 generate_diploma.py
 run_diploma.bat
