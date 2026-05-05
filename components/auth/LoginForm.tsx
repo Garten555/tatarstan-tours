@@ -9,6 +9,35 @@ import { Eye, EyeOff, Loader2, LogIn, Mail, Lock } from 'lucide-react';
 import { validateEmail } from '@/lib/validation/auth';
 import TwoFactorVerify from './TwoFactorVerify';
 
+/** Подтягивает role/имя в user_metadata в фоне — не задерживает редирект после входа. */
+function syncUserMetadataFromProfile(
+  supabase: ReturnType<typeof createClient>,
+  userId: string
+) {
+  void (async () => {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, first_name, last_name, avatar_url')
+        .eq('id', userId)
+        .single();
+
+      if (profile) {
+        await supabase.auth.updateUser({
+          data: {
+            role: (profile as { role?: string }).role,
+            first_name: (profile as { first_name?: string | null }).first_name,
+            last_name: (profile as { last_name?: string | null }).last_name,
+            avatar_url: (profile as { avatar_url?: string | null }).avatar_url,
+          },
+        });
+      }
+    } catch (e) {
+      console.warn('syncUserMetadataFromProfile:', e);
+    }
+  })();
+}
+
 export default function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -104,22 +133,7 @@ export default function LoginForm() {
           return;
         }
 
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role, first_name, last_name, avatar_url')
-          .eq('id', data.user.id)
-          .single();
-
-        if (profile) {
-          await supabase.auth.updateUser({
-            data: {
-              role: (profile as any).role,
-              first_name: (profile as any).first_name,
-              last_name: (profile as any).last_name,
-              avatar_url: (profile as any).avatar_url,
-            },
-          });
-        }
+        syncUserMetadataFromProfile(supabase, data.user.id);
 
         router.push(redirectPath);
         router.refresh();
@@ -176,22 +190,7 @@ export default function LoginForm() {
         throw new Error(signInError?.message || 'Не удалось создать сессию');
       }
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, first_name, last_name, avatar_url')
-        .eq('id', signInData.user.id)
-        .single();
-
-      if (profile) {
-        await supabase.auth.updateUser({
-          data: {
-            role: (profile as any).role,
-            first_name: (profile as any).first_name,
-            last_name: (profile as any).last_name,
-            avatar_url: (profile as any).avatar_url,
-          },
-        });
-      }
+      syncUserMetadataFromProfile(supabase, signInData.user.id);
 
       router.push(redirectPath);
       router.refresh();

@@ -7,12 +7,16 @@ import { Logo } from '@/components/ui/Logo';
 import { Button } from '@/components/ui/Button';
 import UserMenu from './UserMenu';
 import NotificationBell from '@/components/notifications/NotificationBell';
+import { createClient } from '@/lib/supabase/client';
 import { MapPin, Info, Phone, Menu, X } from 'lucide-react';
 
 export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  /** Колокольчик только для авторизованных; один источник правды для десктопа и моб. меню. */
+  const [notificationAuthReady, setNotificationAuthReady] = useState(false);
+  const [notificationShowBell, setNotificationShowBell] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -21,6 +25,21 @@ export function Header() {
 
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setNotificationShowBell(!!session);
+      setNotificationAuthReady(true);
+    });
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setNotificationShowBell(!!session);
+      setNotificationAuthReady(true);
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   const navLinks = [
@@ -81,10 +100,12 @@ export function Header() {
 
           {/* Правый блок: Уведомления + Аватар - компактно */}
           <div className="flex items-center gap-3 flex-shrink-0 ml-auto">
-            {/* Уведомления */}
-            <div className="hidden sm:block">
-              <NotificationBell />
-            </div>
+            {/* Уведомления — только для вошедших пользователей */}
+            {notificationAuthReady && notificationShowBell && (
+              <div className="hidden sm:block">
+                <NotificationBell />
+              </div>
+            )}
 
             {/* Меню пользователя */}
             <div className="hidden lg:block">
@@ -110,13 +131,15 @@ export function Header() {
         {isMobileMenuOpen && (
           <div className="lg:hidden border-t border-gray-200 bg-white">
             <div className="px-4 py-4 space-y-3">
-              {/* Уведомления для мобилки */}
-              <div className="sm:hidden pb-3 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-700">Уведомления</span>
-                  <NotificationBell />
+              {/* Уведомления для мобилки — только для вошедших пользователей */}
+              {notificationAuthReady && notificationShowBell && (
+                <div className="sm:hidden pb-3 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-700">Уведомления</span>
+                    <NotificationBell />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {/* Навигация */}
               <nav className="header-nav space-y-1">

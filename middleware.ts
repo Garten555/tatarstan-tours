@@ -49,6 +49,9 @@ export async function middleware(request: NextRequest) {
     error: authError,
   } = await supabase.auth.getUser();
 
+  /** Уже проверили бан (чтобы не дублировать запрос к profiles для /profile и /my-bookings). */
+  let banCheckDone = false;
+
   // Защита админских маршрутов
   if (request.nextUrl.pathname.startsWith('/admin')) {
     if (authError || !user) {
@@ -102,6 +105,8 @@ export async function middleware(request: NextRequest) {
         .eq('id', user.id)
         .single();
 
+      banCheckDone = true;
+
       if (profile?.is_banned) {
         // Проверяем, не истёк ли срок бана
         if (profile.ban_until) {
@@ -121,6 +126,7 @@ export async function middleware(request: NextRequest) {
   // Проверка бана для всех защищённых маршрутов (кроме /banned и /auth)
   if (
     user &&
+    !banCheckDone &&
     !request.nextUrl.pathname.startsWith('/banned') &&
     !request.nextUrl.pathname.startsWith('/auth') &&
     !request.nextUrl.pathname.startsWith('/api')

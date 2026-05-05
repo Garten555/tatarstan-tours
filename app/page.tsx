@@ -9,21 +9,21 @@ import { CTASection } from '@/components/home/CTASection';
 import { createServiceClient, createClient } from '@/lib/supabase/server';
 
 export default async function Home() {
-  const supabase = await createServiceClient();
+  const supabase = createServiceClient();
   const now = new Date().toISOString();
-  const { data: popularTours } = await supabase
-    .from('tours')
-    .select('title, slug, price_per_person, start_date, end_date, current_participants')
-    .eq('status', 'active')
-    .or(`end_date.is.null,end_date.gte.${now}`)
-    .order('current_participants', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(5);
-
   const supabaseAuth = await createClient();
-  const {
-    data: { user },
-  } = await supabaseAuth.auth.getUser();
+
+  const [{ data: popularTours }, { data: { user } }] = await Promise.all([
+    supabase
+      .from('tours')
+      .select('title, slug, price_per_person, start_date, end_date, current_participants')
+      .eq('status', 'active')
+      .or(`end_date.is.null,end_date.gte.${now}`)
+      .order('current_participants', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(5),
+    supabaseAuth.auth.getUser(),
+  ]);
 
   const popularTourItems = (popularTours || []).map((tour: Record<string, unknown>) => {
     const start = tour.start_date ? String(tour.start_date) : '';

@@ -22,7 +22,10 @@ export default function MaintenanceWatcher() {
 
     const checkMaintenance = async () => {
       if (!active) return;
-      
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+        return;
+      }
+
       try {
         const response = await fetch('/api/maintenance/status', { 
           cache: 'no-store',
@@ -64,11 +67,21 @@ export default function MaintenanceWatcher() {
       }
     };
 
+    const MAINTENANCE_POLL_MS = 60_000;
+
     checkMaintenance();
-    timer = setInterval(checkMaintenance, 5000);
+    timer = setInterval(checkMaintenance, MAINTENANCE_POLL_MS);
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        void checkMaintenance();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
       active = false;
+      document.removeEventListener('visibilitychange', onVisibility);
       if (timer) {
         clearInterval(timer);
       }
