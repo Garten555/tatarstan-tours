@@ -11,6 +11,7 @@ interface TwoFactorVerifyProps {
 
 export default function TwoFactorVerify({ userId, onVerify, onCancel }: TwoFactorVerifyProps) {
   const [code, setCode] = useState(['', '', '', '', '', '']);
+  const [backupCode, setBackupCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const codeInputRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -77,9 +78,10 @@ export default function TwoFactorVerify({ userId, onVerify, onCancel }: TwoFacto
   };
 
   const handleVerify = async (codeString?: string) => {
-    const finalCode = codeString || code.join('');
-    if (finalCode.length !== 6) {
-      setError('Введите 6-значный код');
+    const totpCode = codeString || code.join('');
+    const finalCode = totpCode || backupCode.trim();
+    if (!finalCode) {
+      setError('Введите 6-значный код или резервный код');
       return;
     }
 
@@ -92,6 +94,7 @@ export default function TwoFactorVerify({ userId, onVerify, onCancel }: TwoFacto
       setError(err.message || 'Неверный код. Попробуйте еще раз.');
       // Очищаем код при ошибке
       setCode(['', '', '', '', '', '']);
+      setBackupCode('');
       codeInputRefs.current[0]?.focus();
     } finally {
       setVerifying(false);
@@ -136,12 +139,25 @@ export default function TwoFactorVerify({ userId, onVerify, onCancel }: TwoFacto
         <p className="text-xs text-gray-500 text-center">
           Не можете получить код? Используйте резервный код
         </p>
+        <div className="mt-3">
+          <input
+            type="text"
+            value={backupCode}
+            onChange={(e) => {
+              setBackupCode(e.target.value.trim());
+              setError(null);
+            }}
+            placeholder="Резервный код (8 цифр)"
+            className="w-full px-4 py-3 text-center text-base font-semibold border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all text-gray-900 bg-white"
+            disabled={verifying}
+          />
+        </div>
       </div>
       
       <div className="flex gap-3">
         <button
           onClick={() => handleVerify()}
-          disabled={verifying || code.join('').length !== 6}
+          disabled={verifying || (code.join('').length !== 6 && backupCode.trim().length === 0)}
           className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 disabled:from-emerald-300 disabled:to-emerald-400 !text-white font-semibold py-3 px-6 rounded-xl transition-all duration-200 flex items-center justify-center gap-2 shadow-md hover:shadow-xl disabled:opacity-70 disabled:cursor-not-allowed"
         >
           {verifying ? (

@@ -7,7 +7,10 @@ const LOCK_DURATION_MINUTES = 15;
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, code } = await request.json();
+    const { email, password, code, redirectPath } = await request.json();
+    const safeRedirectPath =
+      typeof redirectPath === 'string' && redirectPath.startsWith('/') ? redirectPath : '/';
+
 
     if (!email || !password || !code) {
       return NextResponse.json(
@@ -118,7 +121,7 @@ export async function POST(request: NextRequest) {
         type: 'magiclink',
         email: user.email!,
         options: {
-          redirectTo: `${siteUrl}/`,
+          redirectTo: `${siteUrl}${safeRedirectPath}`,
         },
       });
 

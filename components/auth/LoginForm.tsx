@@ -149,6 +149,7 @@ export default function LoginForm() {
           email: formData.email.trim(),
           password: formData.password,
           code,
+          redirectPath,
         }),
       });
 
