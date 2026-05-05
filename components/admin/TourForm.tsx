@@ -732,7 +732,8 @@ export default function TourForm({
             const row = extraDateRanges.find((r) => r.id === s.id);
             if (
               row &&
-              (row.start_date !== sliceIso(s.start_at) || row.end_date !== sliceIso(s.end_at ?? ''))
+              (row.start_date !== isoToDatetimeLocal(s.start_at) ||
+                row.end_date !== isoToDatetimeLocal(s.end_at ?? ''))
             ) {
               return true;
             }
