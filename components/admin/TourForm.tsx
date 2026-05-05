@@ -18,6 +18,18 @@ import {
 /** Согласовано с подписью в форме и лимитом в app/api/upload/route.ts */
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 
+/**
+ * ISO / timestamptz из БД → значение для input[type="datetime-local"].
+ * Нельзя использовать toISOString().slice(0,16): там UTC, а datetime-local — локальная «стена времени».
+ */
+function isoToDatetimeLocal(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 type SessionDraft = {
   id: string;
   start_at: string;
@@ -82,8 +94,8 @@ export default function TourForm({
     if (mode !== 'edit' || !initialSessions || initialSessions.length <= 1) return [];
     return initialSessions.slice(1).map((s) => ({
       id: s.id,
-      start_date: s.start_at ? new Date(s.start_at).toISOString().slice(0, 16) : '',
-      end_date: s.end_at ? new Date(s.end_at).toISOString().slice(0, 16) : '',
+      start_date: isoToDatetimeLocal(s.start_at),
+      end_date: isoToDatetimeLocal(s.end_at),
       guide_id: s.guide_id ? String(s.guide_id) : '',
     }));
   });
@@ -115,15 +127,15 @@ export default function TourForm({
 
   const primaryStart =
     mode === 'edit' && initialSessions?.[0]?.start_at
-      ? new Date(initialSessions[0].start_at).toISOString().slice(0, 16)
+      ? isoToDatetimeLocal(initialSessions[0].start_at)
       : initialData?.start_date
-        ? new Date(initialData.start_date).toISOString().slice(0, 16)
+        ? isoToDatetimeLocal(initialData.start_date)
         : '';
   const primaryEnd =
     mode === 'edit' && initialSessions?.[0]?.end_at
-      ? new Date(initialSessions[0].end_at).toISOString().slice(0, 16)
+      ? isoToDatetimeLocal(initialSessions[0].end_at)
       : initialData?.end_date
-        ? new Date(initialData.end_date).toISOString().slice(0, 16)
+        ? isoToDatetimeLocal(initialData.end_date)
         : '';
 
   // Form data
@@ -671,18 +683,17 @@ export default function TourForm({
       return;
     }
 
-    const sliceIso = (iso?: string | null) => (iso ? new Date(iso).toISOString().slice(0, 16) : '');
     const initialPrimaryStart =
       mode === 'edit' && initialSessions?.[0]?.start_at
-        ? sliceIso(initialSessions[0].start_at)
+        ? isoToDatetimeLocal(initialSessions[0].start_at)
         : mode === 'edit' && initialData?.start_date
-          ? sliceIso(initialData.start_date)
+          ? isoToDatetimeLocal(initialData.start_date)
           : '';
     const initialPrimaryEnd =
       mode === 'edit' && initialSessions?.[0]?.end_at
-        ? sliceIso(initialSessions[0].end_at)
+        ? isoToDatetimeLocal(initialSessions[0].end_at)
         : mode === 'edit' && initialData?.end_date
-          ? sliceIso(initialData.end_date)
+          ? isoToDatetimeLocal(initialData.end_date)
           : '';
 
     const normExtra = (pairs: { start: string; end: string }[]) =>
@@ -693,8 +704,8 @@ export default function TourForm({
     const initialExtraPairs =
       mode === 'edit' && initialSessions && initialSessions.length > 1
         ? initialSessions.slice(1).map((s) => ({
-            start: sliceIso(s.start_at),
-            end: sliceIso(s.end_at ?? ''),
+            start: isoToDatetimeLocal(s.start_at),
+            end: isoToDatetimeLocal(s.end_at ?? ''),
           }))
         : [];
     const currentExtraPairs = extraDateRanges.map((r) => ({
