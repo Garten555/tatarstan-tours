@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Search, UserPlus, MessageCircle, Loader2, Users, Star, X, UserCheck, UserX, Clock, CheckCircle } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { createClient } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
 import toast from 'react-hot-toast';
 import { formatLastSeen } from '@/lib/utils/presence';
 
@@ -37,19 +37,20 @@ export default function FriendsPage() {
   const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set());
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [activityByUserId, setActivityByUserId] = useState<Record<string, string | null>>({});
-  const supabase = createClient();
 
   useEffect(() => {
     const getCurrentUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setCurrentUserId(user?.id || null);
       if (user) {
-        loadFriends();
+        // Прогружаем сразу обе вкладки, чтобы при первом открытии
+        // не было "Пока нет друзей/заявок", пока не переключишь подпункты.
+        loadFriendsList();
         loadRequests();
       }
     };
     getCurrentUser();
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'friends' && currentUserId) {
