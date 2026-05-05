@@ -13,6 +13,7 @@ export async function FeaturedTours() {
   const now = new Date().toISOString();
   
   let tours = null;
+  let totalAvailableTours = 0;
   let error = null;
   
   try {
@@ -41,9 +42,14 @@ export async function FeaturedTours() {
     
     const raw = result.data;
     error = result.error;
-    tours = raw
-      ? dedupeTourRowsForCatalog(raw as TourRowForDedupe[]).slice(0, 6)
-      : null;
+    if (raw) {
+      const deduped = dedupeTourRowsForCatalog(raw as TourRowForDedupe[]);
+      totalAvailableTours = deduped.length;
+      // На главной показываем только 3 карточки.
+      tours = deduped.slice(0, 3);
+    } else {
+      tours = null;
+    }
   } catch (err) {
     console.error('Error fetching tours (catch):', err);
     error = err as any;
@@ -114,7 +120,7 @@ export async function FeaturedTours() {
           <div className="flex items-center gap-2 sm:gap-3 px-4 py-2 sm:px-5 sm:py-3 rounded-lg sm:rounded-xl bg-white border border-emerald-200/50 shadow-sm">
             <span className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
             <span className="text-sm sm:text-base md:text-lg lg:text-xl text-gray-700 font-bold">
-              Доступно {tours.length} туров
+              Доступно {totalAvailableTours} туров
             </span>
           </div>
         </div>

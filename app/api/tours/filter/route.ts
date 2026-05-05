@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const sortBy = sanitizeText(searchParams.get('sort_by') || 'created_at').trim();
     const sortOrder = searchParams.get('sort_order') === 'asc' ? 'asc' : 'desc';
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
-    const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') || '12')), 50); // Максимум 50, минимум 1
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') || '10')), 50); // Максимум 50, минимум 1
     const offset = (page - 1) * limit;
 
     // Начинаем запрос

@@ -112,7 +112,7 @@ function ToursPageContent() {
       params.set('sort_by', sortField);
       params.set('sort_order', sortOrder);
       params.set('page', page.toString());
-      params.set('limit', '12');
+      params.set('limit', '10');
 
       const response = await fetch(`/api/tours/filter?${params.toString()}`);
       if (!response.ok) throw new Error('Ошибка загрузки туров');
