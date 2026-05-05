@@ -13,8 +13,7 @@ export type TourRowForDedupe = {
   price_per_person?: number | string | null;
 };
 
-/** Один «продукт» в каталоге: название + город (несколько строк tours / выездов склеиваются). */
-export function catalogTourGroupKey(t: TourRowForDedupe): string {
+function groupKey(t: TourRowForDedupe): string {
   const title = (t.title || '').trim().toLowerCase().replace(/\s+/g, ' ');
   return `${title}|${t.city_id ?? ''}`;
 }
@@ -39,7 +38,7 @@ export function dedupeTourRowsForCatalog<T extends TourRowForDedupe>(rows: T[]):
   const firstIdx = new Map<string, number>();
 
   rows.forEach((row, index) => {
-    const k = catalogTourGroupKey(row);
+    const k = groupKey(row);
     if (!firstIdx.has(k)) firstIdx.set(k, index);
     const prev = winners.get(k);
     winners.set(k, prev ? pickCanonicalTour(prev, row) : row);
@@ -48,7 +47,7 @@ export function dedupeTourRowsForCatalog<T extends TourRowForDedupe>(rows: T[]):
   const seen = new Set<string>();
   const out: T[] = [];
   for (const row of rows) {
-    const k = catalogTourGroupKey(row);
+    const k = groupKey(row);
     if (seen.has(k)) continue;
     seen.add(k);
     const w = winners.get(k)!;

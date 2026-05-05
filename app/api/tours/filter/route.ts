@@ -3,10 +3,6 @@ import { createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
 import { dedupeTourRowsForCatalog } from '@/lib/tours/listing-dedupe';
 import { sortCatalogTourRows } from '@/lib/tours/catalog-sort';
-import {
-  attachCatalogProductPricing,
-  filterTourRowsByProductPrice,
-} from '@/lib/tours/catalog-price-groups';
 
 // Динамический роут (использует searchParams)
 export const dynamic = 'force-dynamic';
@@ -125,7 +121,13 @@ export async function GET(request: NextRequest) {
       query = query.eq('city_id', cityId);
     }
 
-    // Цена «от/до» применяется на уровне группы продукта (несколько выездов / строк tours)
+    // Фильтр по цене
+    if (minPrice !== null && minPrice >= 0) {
+      query = query.gte('price_per_person', minPrice);
+    }
+    if (maxPrice !== null && maxPrice >= 0) {
+      query = query.lte('price_per_person', maxPrice);
+    }
 
     // Фильтр по дате начала
     if (startDate) {
@@ -166,11 +168,16 @@ export async function GET(request: NextRequest) {
       return endDate >= currentTime;
     });
 
-    const productPriceFiltered = filterTourRowsByProductPrice(activeTours as any, minPrice, maxPrice);
+    const priceFiltered = activeTours.filter((tour: any) => {
+      const p = Number(tour.price_per_person);
+      if (!Number.isFinite(p)) return false;
+      if (minPrice !== null && minPrice >= 0 && p < minPrice) return false;
+      if (maxPrice !== null && maxPrice >= 0 && p > maxPrice) return false;
+      return true;
+    });
 
-    const deduped = dedupeTourRowsForCatalog(productPriceFiltered);
-    const withPricing = attachCatalogProductPricing(deduped as any, productPriceFiltered as any);
-    const catalogTours = sortCatalogTourRows(withPricing as any, sortField, sortOrder);
+    const deduped = dedupeTourRowsForCatalog(priceFiltered);
+    const catalogTours = sortCatalogTourRows(deduped, sortField, sortOrder);
     const total = catalogTours.length;
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
     const pageSlice = catalogTours.slice(offset, offset + limit);

@@ -41,10 +41,8 @@ export function sortCatalogTourRows<T extends Record<string, unknown>>(
       return cmp * dir;
     }
     if (field === 'price_per_person') {
-      const fromA = (a as { catalog_price_from?: unknown }).catalog_price_from;
-      const fromB = (b as { catalog_price_from?: unknown }).catalog_price_from;
-      const na = Number(fromA ?? a.price_per_person);
-      const nb = Number(fromB ?? b.price_per_person);
+      const na = Number(a.price_per_person);
+      const nb = Number(b.price_per_person);
       const safeA = Number.isFinite(na) ? na : 0;
       const safeB = Number.isFinite(nb) ? nb : 0;
       return (safeA - safeB) * dir;
