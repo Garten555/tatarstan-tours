@@ -183,10 +183,27 @@ export default function UserMenu() {
       setAuthResolved(true);
       if (initialUser) {
         const cached = readCachedProfile(initialUser.id);
-        if (cached && (cached.role || cached.first_name || cached.last_name)) {
+        if (
+          cached &&
+          (cached.role ||
+            cached.first_name ||
+            cached.last_name ||
+            cached.avatar_url)
+        ) {
           setProfile(cached);
+        } else {
+          // Показываем имя/аватар сразу из user_metadata (если есть),
+          // а в БД синхронизируем позже.
+          const fallback = {
+            first_name: initialUser.user_metadata?.first_name,
+            last_name: initialUser.user_metadata?.last_name,
+            avatar_url: initialUser.user_metadata?.avatar_url ?? null,
+            role: initialUser.user_metadata?.role,
+            username: initialUser.user_metadata?.username,
+          };
+          setProfile(fallback);
+          writeCachedProfile(fallback, initialUser.id);
         }
-        hydrateProfileFromDb(initialUser);
       }
     });
 
@@ -205,9 +222,29 @@ export default function UserMenu() {
         return;
       }
       const cachedProfile = readCachedProfile(sUser.id);
-      if (cachedProfile && cachedProfile.role) {
+      if (
+        cachedProfile &&
+        (cachedProfile.role ||
+          cachedProfile.first_name ||
+          cachedProfile.last_name ||
+          cachedProfile.avatar_url)
+      ) {
+        // Кэш достаточно заполнен — лишний запрос к profiles не делаем.
         setProfile(cachedProfile);
+        return;
       }
+
+      // Сразу показываем данные из user_metadata, чтобы шапка не "подвисала"
+      // в ожидании запроса к БД.
+      const fallback = {
+        first_name: sUser.user_metadata?.first_name,
+        last_name: sUser.user_metadata?.last_name,
+        avatar_url: sUser.user_metadata?.avatar_url ?? null,
+        role: sUser.user_metadata?.role,
+        username: sUser.user_metadata?.username,
+      };
+      setProfile(fallback);
+      writeCachedProfile(fallback, sUser.id);
       supabase
         .from('profiles')
         .select('first_name, last_name, avatar_url, role, username')
