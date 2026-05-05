@@ -150,6 +150,7 @@ export default function LoginForm() {
           password: formData.password,
           code,
           redirectPath,
+          redirectOrigin: typeof window !== 'undefined' ? window.location.origin : undefined,
         }),
       });
 

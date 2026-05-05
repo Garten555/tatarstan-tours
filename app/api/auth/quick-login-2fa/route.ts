@@ -7,9 +7,13 @@ const LOCK_DURATION_MINUTES = 15;
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, code, redirectPath } = await request.json();
+    const { email, code, redirectPath, redirectOrigin } = await request.json();
     const safeRedirectPath =
       typeof redirectPath === 'string' && redirectPath.startsWith('/') ? redirectPath : '/';
+    const safeRedirectOrigin =
+      typeof redirectOrigin === 'string' && /^https?:\/\/[^/]+$/i.test(redirectOrigin)
+        ? redirectOrigin
+        : null;
 
 
     if (!email || !code || !code.trim()) {
@@ -100,10 +104,13 @@ export async function POST(request: NextRequest) {
       const host = request.headers.get('host');
       const protocol = request.headers.get('x-forwarded-proto') || 'http';
       
-      let siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
-      if (!siteUrl) {
-        siteUrl = origin || `${protocol}://${host}`;
-      }
+      let siteUrl =
+        safeRedirectOrigin ||
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        process.env.NEXT_PUBLIC_APP_URL ||
+        origin ||
+        `${protocol}://${host}`;
+      siteUrl = siteUrl.replace(/\/+$/, '');
 
       const { data: magicLinkData, error: magicLinkError } = await supabase.auth.admin.generateLink({
         type: 'magiclink',
