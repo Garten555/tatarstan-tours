@@ -31,8 +31,10 @@ export default function FriendsPage() {
   const [incomingRequests, setIncomingRequests] = useState<any[]>([]);
   const [outgoingRequests, setOutgoingRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [loadingFriends, setLoadingFriends] = useState(false);
-  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [loadingFriends, setLoadingFriends] = useState(true);
+  const [loadingRequests, setLoadingRequests] = useState(true);
+  const [friendsInitialLoaded, setFriendsInitialLoaded] = useState(false);
+  const [requestsInitialLoaded, setRequestsInitialLoaded] = useState(false);
   const [friends, setFriends] = useState<Set<string>>(new Set());
   const [pendingRequests, setPendingRequests] = useState<Set<string>>(new Set());
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -47,6 +49,11 @@ export default function FriendsPage() {
         // не было "Пока нет друзей/заявок", пока не переключишь подпункты.
         loadFriendsList();
         loadRequests();
+      } else {
+        setLoadingFriends(false);
+        setLoadingRequests(false);
+        setFriendsInitialLoaded(true);
+        setRequestsInitialLoaded(true);
       }
     };
     getCurrentUser();
@@ -54,11 +61,16 @@ export default function FriendsPage() {
 
   useEffect(() => {
     if (activeTab === 'friends' && currentUserId) {
-      loadFriendsList();
+      // После первого прелоада обновляем только при реальном возврате на вкладку.
+      if (friendsInitialLoaded) {
+        loadFriendsList();
+      }
     } else if (activeTab === 'requests' && currentUserId) {
-      loadRequests();
+      if (requestsInitialLoaded) {
+        loadRequests();
+      }
     }
-  }, [activeTab, currentUserId]);
+  }, [activeTab, currentUserId, friendsInitialLoaded, requestsInitialLoaded]);
 
   const loadFriends = async () => {
     try {
@@ -115,6 +127,7 @@ export default function FriendsPage() {
       toast.error('Не удалось загрузить список друзей');
     } finally {
       setLoadingFriends(false);
+      setFriendsInitialLoaded(true);
     }
   };
 
@@ -148,6 +161,7 @@ export default function FriendsPage() {
       toast.error('Не удалось загрузить запросы');
     } finally {
       setLoadingRequests(false);
+      setRequestsInitialLoaded(true);
     }
   };
 
@@ -520,7 +534,7 @@ export default function FriendsPage() {
       {/* Контент вкладок */}
       {activeTab === 'friends' && (
         <div className="space-y-6">
-          {loadingFriends ? (
+          {!friendsInitialLoaded || loadingFriends ? (
             <div className="flex flex-col items-center justify-center py-20">
               <div className="relative">
                 <Loader2 className="w-16 h-16 animate-spin text-blue-600" />
@@ -665,7 +679,7 @@ export default function FriendsPage() {
 
       {activeTab === 'requests' && (
         <div className="space-y-8">
-          {loadingRequests ? (
+          {!requestsInitialLoaded || loadingRequests ? (
             <div className="flex flex-col items-center justify-center py-20">
               <div className="relative">
                 <Loader2 className="w-16 h-16 animate-spin text-purple-600" />
