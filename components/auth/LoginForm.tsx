@@ -160,11 +160,41 @@ export default function LoginForm() {
         throw new Error(data.error || 'Неверный код');
       }
 
-      if (data.loginLink) {
-        window.location.href = data.loginLink;
-      } else {
-        setError('Ошибка при создании сессии');
+      // Надёжно создаём сессию напрямую после успешной проверки 2FA,
+      // чтобы не зависеть от magic-link редиректов/настроек URL.
+      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+        email: formData.email,
+        password: formData.password,
+      });
+
+      if (signInError || !signInData.user) {
+        if (data.loginLink) {
+          // Fallback на старый сценарий через magic link
+          window.location.href = data.loginLink;
+          return;
+        }
+        throw new Error(signInError?.message || 'Не удалось создать сессию');
       }
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, first_name, last_name, avatar_url')
+        .eq('id', signInData.user.id)
+        .single();
+
+      if (profile) {
+        await supabase.auth.updateUser({
+          data: {
+            role: (profile as any).role,
+            first_name: (profile as any).first_name,
+            last_name: (profile as any).last_name,
+            avatar_url: (profile as any).avatar_url,
+          },
+        });
+      }
+
+      router.push(redirectPath);
+      router.refresh();
     } catch (err: any) {
       setError(err.message || 'Ошибка при проверке кода');
       throw err;
