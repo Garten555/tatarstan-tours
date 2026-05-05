@@ -73,6 +73,11 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
 
   // Функция для загрузки аватара
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (isViewMode) {
+      setUploadError('В режиме просмотра нельзя изменять аватар другого пользователя');
+      return;
+    }
+
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -599,18 +604,20 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
                 </div>
               )}
               {/* Кнопка загрузки аватара */}
-              <button
-                onClick={handleAvatarClick}
-                disabled={isUploading}
-                className="absolute bottom-0 right-0 w-12 h-12 md:w-14 md:h-14 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center justify-center shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed border-4 border-white"
-                title="Загрузить аватар"
-              >
-                {isUploading ? (
-                  <Loader2 className="w-6 h-6 animate-spin" />
-                ) : (
-                  <Upload className="w-6 h-6" />
-                )}
-              </button>
+              {!isViewMode && (
+                <button
+                  onClick={handleAvatarClick}
+                  disabled={isUploading}
+                  className="absolute bottom-0 right-0 w-12 h-12 md:w-14 md:h-14 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl flex items-center justify-center shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed border-4 border-white"
+                  title="Загрузить аватар"
+                >
+                  {isUploading ? (
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  ) : (
+                    <Upload className="w-6 h-6" />
+                  )}
+                </button>
+              )}
               {/* Скрытый input для выбора файла */}
               <input
                 ref={fileInputRef}
