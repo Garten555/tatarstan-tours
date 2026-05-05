@@ -708,7 +708,28 @@ export default function TourForm({
         formData.end_date !== initialPrimaryEnd ||
         JSON.stringify(normExtra(initialExtraPairs)) !== JSON.stringify(normExtra(currentExtraPairs)));
 
-    if (datesChanged && mode === 'edit' && initialData?.id) {
+    /** Только смена/удаление уже существующих слотов — это может затронуть брони и письма о переносе. Новые доп. выезды — не «перенос». */
+    const existingSessionsDatesAffected =
+      mode === 'edit' &&
+      (formData.start_date !== initialPrimaryStart || formData.end_date !== initialPrimaryEnd ||
+        (() => {
+          const initialExtras = initialSessions?.slice(1) ?? [];
+          const currentIds = new Set(extraDateRanges.map((r) => r.id).filter(Boolean) as string[]);
+          for (const s of initialExtras) {
+            if (!s.id) continue;
+            if (!currentIds.has(s.id)) return true;
+            const row = extraDateRanges.find((r) => r.id === s.id);
+            if (
+              row &&
+              (row.start_date !== sliceIso(s.start_at) || row.end_date !== sliceIso(s.end_at ?? ''))
+            ) {
+              return true;
+            }
+          }
+          return false;
+        })());
+
+    if (existingSessionsDatesAffected && mode === 'edit' && initialData?.id) {
       try {
         const impactRes = await fetch(`/api/admin/tours/${initialData.id}`);
         if (impactRes.ok) {
@@ -716,8 +737,8 @@ export default function TourForm({
           const n = typeof impact.activeBookingsCount === 'number' ? impact.activeBookingsCount : 0;
           if (n > 0) {
             const proceed = await confirm(
-              `У тура есть ${n} активных бронирований. После сохранения участники получат письмо о переносе дат. Продолжить?`,
-              'Изменение дат тура',
+              `У тура есть ${n} активных бронирований. Вы изменили даты первого выезда, правите дополнительный слот или удалили выезд — затронутые участники получат письмо о переносе (если менялись даты слота с бронью). Продолжить?`,
+              'Изменение существующих выездов',
               'warning',
               'Сохранить',
               'Назад'

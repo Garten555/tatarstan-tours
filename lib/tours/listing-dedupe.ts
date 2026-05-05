@@ -10,6 +10,7 @@ export type TourRowForDedupe = {
   city_id?: string | null;
   start_date?: string | null;
   created_at?: string | null;
+  price_per_person?: number | string | null;
 };
 
 function groupKey(t: TourRowForDedupe): string {
@@ -21,6 +22,11 @@ function pickCanonicalTour<T extends TourRowForDedupe>(a: T, b: T): T {
   const ta = a.start_date ? new Date(a.start_date).getTime() : Number.POSITIVE_INFINITY;
   const tb = b.start_date ? new Date(b.start_date).getTime() : Number.POSITIVE_INFINITY;
   if (ta !== tb) return ta <= tb ? a : b;
+  const pa = Number(a.price_per_person);
+  const pb = Number(b.price_per_person);
+  if (Number.isFinite(pa) && Number.isFinite(pb) && pa !== pb) {
+    return pa <= pb ? a : b;
+  }
   const ca = a.created_at ? new Date(a.created_at).getTime() : 0;
   const cb = b.created_at ? new Date(b.created_at).getTime() : 0;
   return cb >= ca ? b : a;

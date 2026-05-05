@@ -1,4 +1,22 @@
 /**
+ * Разбор значения селекта вида `price_per_person-asc` (нельзя делить простым split('-')).
+ */
+export function parseClientSortParam(sortBy: string): {
+  sortField: string;
+  sortOrder: 'asc' | 'desc';
+} {
+  const s = sortBy.trim();
+  const lastDash = s.lastIndexOf('-');
+  if (lastDash <= 0) {
+    return { sortField: 'created_at', sortOrder: 'desc' };
+  }
+  const sortField = s.slice(0, lastDash);
+  const tail = s.slice(lastDash + 1);
+  const sortOrder = tail === 'asc' ? 'asc' : 'desc';
+  return { sortField, sortOrder };
+}
+
+/**
  * Сортировка карточек каталога после dedupe (Postgres order теряется при склейке дубликатов).
  */
 const SORT_FIELDS = ['created_at', 'price_per_person', 'start_date', 'title'] as const;

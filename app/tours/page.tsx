@@ -19,6 +19,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { sanitizeText, escapeHtml } from '@/lib/utils/sanitize';
+import { parseClientSortParam } from '@/lib/tours/catalog-sort';
 
 interface Tour {
   id: string;
@@ -106,10 +107,12 @@ function ToursPageContent() {
       if (tourType) params.set('tour_type', tourType);
       if (category) params.set('category', category);
       if (cityId) params.set('city_id', cityId);
-      if (minPrice) params.set('min_price', minPrice);
-      if (maxPrice) params.set('max_price', maxPrice);
-      
-      const [sortField, sortOrder] = sortBy.split('-');
+      const minTrim = minPrice.trim().replace(',', '.');
+      const maxTrim = maxPrice.trim().replace(',', '.');
+      if (minTrim !== '') params.set('min_price', minTrim);
+      if (maxTrim !== '') params.set('max_price', maxTrim);
+
+      const { sortField, sortOrder } = parseClientSortParam(sortBy);
       params.set('sort_by', sortField);
       params.set('sort_order', sortOrder);
       params.set('page', page.toString());

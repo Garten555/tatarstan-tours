@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
     const maxPrice = Number.isFinite(maxParsed) ? maxParsed : null;
     const startDate = sanitizeText(searchParams.get('start_date') || '').trim();
     const endDate = sanitizeText(searchParams.get('end_date') || '').trim();
-    const sortBy = sanitizeText(searchParams.get('sort_by') || 'created_at').trim();
+    let sortBy = sanitizeText(searchParams.get('sort_by') || 'created_at').trim();
+    if (sortBy === 'price') sortBy = 'price_per_person';
     const sortOrder = searchParams.get('sort_order') === 'asc' ? 'asc' : 'desc';
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') || '10')), 50); // Максимум 50, минимум 1
@@ -167,7 +168,15 @@ export async function GET(request: NextRequest) {
       return endDate >= currentTime;
     });
 
-    const deduped = dedupeTourRowsForCatalog(activeTours);
+    const priceFiltered = activeTours.filter((tour: any) => {
+      const p = Number(tour.price_per_person);
+      if (!Number.isFinite(p)) return false;
+      if (minPrice !== null && minPrice >= 0 && p < minPrice) return false;
+      if (maxPrice !== null && maxPrice >= 0 && p > maxPrice) return false;
+      return true;
+    });
+
+    const deduped = dedupeTourRowsForCatalog(priceFiltered);
     const catalogTours = sortCatalogTourRows(deduped, sortField, sortOrder);
     const total = catalogTours.length;
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);

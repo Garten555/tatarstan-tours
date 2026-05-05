@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Edit, Trash2, Calendar, Users, Coins, Search, X, ChevronLeft, ChevronRight, Filter, Map, Ban } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useDialog } from '@/hooks/useDialog';
+import { parseClientSortParam } from '@/lib/tours/catalog-sort';
 
 interface Tour {
   id: string;
@@ -89,7 +90,7 @@ export default function TourAdminList() {
       if (tourType) params.set('tour_type', tourType);
       if (category) params.set('category', category);
       
-      const [sortField, sortOrder] = sortBy.split('-');
+      const { sortField, sortOrder } = parseClientSortParam(sortBy);
       params.set('sort_by', sortField);
       params.set('sort_order', sortOrder);
       params.set('page', page.toString());
