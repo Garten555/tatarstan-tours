@@ -118,7 +118,8 @@ export default function FriendsPage() {
             setFriendsList(data.friends || []);
             const friendIds = new Set<string>(data.friends.map((f: any) => f.friend_id));
             setFriends(friendIds);
-            await loadUsersActivity(data.friends.map((f: any) => f.friend_id).filter(Boolean));
+            // Не блокируем первичный рендер друзей из-за отдельной активности.
+            void loadUsersActivity(data.friends.map((f: any) => f.friend_id).filter(Boolean));
           }
         }
       }
@@ -151,7 +152,8 @@ export default function FriendsPage() {
               .map((r: any) => r.friend_id)
               .filter(Boolean);
             if (ids.length > 0) {
-              await loadUsersActivity(ids);
+              // Активность догружаем фоном, чтобы вкладка открывалась быстрее.
+              void loadUsersActivity(ids);
             }
           }
         }
