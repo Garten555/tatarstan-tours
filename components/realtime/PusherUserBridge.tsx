@@ -12,6 +12,11 @@ import { supabase } from '@/lib/supabase/client';
 import { resolveAuthUserForUi } from '@/lib/supabase/auth-quick-client';
 import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
 import { dispatchPusherBridge } from '@/lib/pusher/user-bridge-events';
+import {
+  ADMIN_SYNC_PUSHER_EVENT,
+  adminSyncChannelName,
+  type AdminSyncPayload,
+} from '@/lib/pusher/admin-sync-payload';
 
 type AchievementPayload = {
   id: string;
@@ -43,6 +48,7 @@ export default function PusherUserBridge() {
   const channelUserRef = useRef<ReturnType<Pusher['subscribe']> | null>(null);
   const channelNotificationsRef = useRef<ReturnType<Pusher['subscribe']> | null>(null);
   const channelAchievementsRef = useRef<ReturnType<Pusher['subscribe']> | null>(null);
+  const channelAdminSyncRef = useRef<ReturnType<Pusher['subscribe']> | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -52,10 +58,12 @@ export default function PusherUserBridge() {
         channelUserRef.current,
         channelNotificationsRef.current,
         channelAchievementsRef.current,
+        channelAdminSyncRef.current,
       ]);
       channelUserRef.current = null;
       channelNotificationsRef.current = null;
       channelAchievementsRef.current = null;
+      channelAdminSyncRef.current = null;
       pusherRef.current = null;
     };
 
@@ -114,6 +122,22 @@ export default function PusherUserBridge() {
           });
         }
       );
+
+      const chAdminSync = pusher.subscribe(adminSyncChannelName(user.id));
+      channelAdminSyncRef.current = chAdminSync;
+      chAdminSync.bind(ADMIN_SYNC_PUSHER_EVENT, (payload: AdminSyncPayload) => {
+        if (payload.kind === 'profile_role') {
+          dispatchPusherBridge({ channel: 'admin-sync', event: 'profile-role', role: payload.role });
+          return;
+        }
+        if (payload.kind === 'forced_reload') {
+          dispatchPusherBridge({
+            channel: 'admin-sync',
+            event: 'forced-reload',
+            reason: payload.reason,
+          });
+        }
+      });
     };
 
     subscribe();

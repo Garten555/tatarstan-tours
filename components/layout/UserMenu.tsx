@@ -105,6 +105,26 @@ export default function UserMenu() {
     } catch {}
   };
 
+  const refreshProfileRole = async (forUserId?: string) => {
+    const uid = forUserId || user?.id;
+    if (!uid) return;
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('first_name, last_name, avatar_url, role, username')
+      .eq('id', uid)
+      .single();
+    if (error || !data) return;
+    const next = {
+      first_name: (data as any).first_name,
+      last_name: (data as any).last_name,
+      avatar_url: (data as any).avatar_url ?? null,
+      role: (data as any).role,
+      username: (data as any).username ?? undefined,
+    };
+    setProfile((prev: any) => ({ ...prev, ...next }));
+    writeCachedProfile(next, uid);
+  };
+
   useEffect(() => {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent).detail;
@@ -418,6 +438,12 @@ export default function UserMenu() {
       if (!d) return;
       if (d.channel === 'user' && d.event === 'new-message') handleRefresh();
       if (d.channel === 'notifications' && d.event === 'new-notification') handleRefresh();
+      if (d.channel === 'admin-sync' && d.event === 'profile-role') {
+        void refreshProfileRole();
+      }
+      if (d.channel === 'admin-sync' && d.event === 'forced-reload' && d.reason === 'banned') {
+        window.location.assign('/banned');
+      }
     };
     window.addEventListener(PUSHER_BRIDGE_EVENT, onPusherBridge);
 
@@ -701,6 +727,7 @@ export default function UserMenu() {
                 )}
                 <Link
                   href="/admin"
+                  prefetch={false}
                   onClick={() => setIsOpen(false)}
                   className="header-user-dropdown-item header-user-dropdown-item-admin"
                 >
