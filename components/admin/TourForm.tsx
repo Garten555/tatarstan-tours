@@ -30,6 +30,16 @@ function isoToDatetimeLocal(iso: string | null | undefined): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** Сравнение значений из datetime-local: одно мгновение времени (без ложных «изменений» из-за формата строки). */
+function sameLocalDateTimeField(a: string, b: string): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  const ta = new Date(a).getTime();
+  const tb = new Date(b).getTime();
+  if (Number.isNaN(ta) || Number.isNaN(tb)) return a === b;
+  return ta === tb;
+}
+
 type SessionDraft = {
   id: string;
   start_at: string;
@@ -713,33 +723,40 @@ export default function TourForm({
       end: r.end_date,
     }));
 
+    const primaryDatesChanged =
+      !sameLocalDateTimeField(formData.start_date, initialPrimaryStart) ||
+      !sameLocalDateTimeField(formData.end_date, initialPrimaryEnd);
+
+    let existingExtraSessionsAffected = false;
+    if (mode === 'edit') {
+      const initialExtras = initialSessions?.slice(1) ?? [];
+      const currentIds = new Set(extraDateRanges.map((r) => r.id).filter(Boolean) as string[]);
+      for (const s of initialExtras) {
+        if (!s.id) continue;
+        if (!currentIds.has(s.id)) {
+          existingExtraSessionsAffected = true;
+          break;
+        }
+        const row = extraDateRanges.find((r) => r.id === s.id);
+        if (
+          row &&
+          (!sameLocalDateTimeField(row.start_date, isoToDatetimeLocal(s.start_at)) ||
+            !sameLocalDateTimeField(row.end_date, isoToDatetimeLocal(s.end_at ?? '')))
+        ) {
+          existingExtraSessionsAffected = true;
+          break;
+        }
+      }
+    }
+
     const datesChanged =
       mode === 'edit' &&
-      (formData.start_date !== initialPrimaryStart ||
-        formData.end_date !== initialPrimaryEnd ||
+      (primaryDatesChanged ||
         JSON.stringify(normExtra(initialExtraPairs)) !== JSON.stringify(normExtra(currentExtraPairs)));
 
-    /** Только смена/удаление уже существующих слотов — это может затронуть брони и письма о переносе. Новые доп. выезды — не «перенос». */
+    /** Смена первого выезда или уже существующих доп. слотов (новые строки без id не считаются). */
     const existingSessionsDatesAffected =
-      mode === 'edit' &&
-      (formData.start_date !== initialPrimaryStart || formData.end_date !== initialPrimaryEnd ||
-        (() => {
-          const initialExtras = initialSessions?.slice(1) ?? [];
-          const currentIds = new Set(extraDateRanges.map((r) => r.id).filter(Boolean) as string[]);
-          for (const s of initialExtras) {
-            if (!s.id) continue;
-            if (!currentIds.has(s.id)) return true;
-            const row = extraDateRanges.find((r) => r.id === s.id);
-            if (
-              row &&
-              (row.start_date !== isoToDatetimeLocal(s.start_at) ||
-                row.end_date !== isoToDatetimeLocal(s.end_at ?? ''))
-            ) {
-              return true;
-            }
-          }
-          return false;
-        })());
+      mode === 'edit' && (primaryDatesChanged || existingExtraSessionsAffected);
 
     if (existingSessionsDatesAffected && mode === 'edit' && initialData?.id) {
       try {
@@ -748,8 +765,13 @@ export default function TourForm({
           const impact = await impactRes.json();
           const n = typeof impact.activeBookingsCount === 'number' ? impact.activeBookingsCount : 0;
           if (n > 0) {
+            const detailParts: string[] = [];
+            if (primaryDatesChanged) detailParts.push('изменили даты первого выезда');
+            if (existingExtraSessionsAffected) {
+              detailParts.push('изменили даты или удалили уже существующий дополнительный выезд');
+            }
             const proceed = await confirm(
-              `У тура есть ${n} активных бронирований. Вы изменили даты первого выезда, правите дополнительный слот или удалили выезд — затронутые участники получат письмо о переносе (если менялись даты слота с бронью). Продолжить?`,
+              `У тура есть ${n} активных бронирований. ${detailParts.join('; ')}. Участники с затронутым слотом могут получить письмо о переносе. Продолжить?`,
               'Изменение существующих выездов',
               'warning',
               'Сохранить',

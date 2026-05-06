@@ -3,6 +3,7 @@
 
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { effectiveBookingStartIso } from '@/lib/booking/booking-display-dates';
 
 interface Booking {
   id: string;
@@ -13,6 +14,8 @@ interface Booking {
   payment_status: string;
   payment_method: string;
   created_at: string;
+  /** Слот выезда; даты на билете берутся отсюда, если есть */
+  tour_session?: { start_at: string; end_at?: string | null } | null;
   tour: {
     id: string;
     title: string;
@@ -107,6 +110,12 @@ export async function generateTicketPDF(booking: Booking) {
 
   const bookingId = booking.id.substring(0, 8).toUpperCase();
   const qrCode = generateQRCode(booking.id);
+  const tourStartIso = effectiveBookingStartIso({
+    sessionSlot: booking.tour_session?.start_at
+      ? { start_at: booking.tour_session.start_at, end_at: booking.tour_session.end_at ?? null }
+      : null,
+    tourStart: booking.tour.start_date,
+  });
 
   // HTML содержимое билета - оптимизированный для одной страницы
   ticketElement.innerHTML = `
@@ -163,8 +172,8 @@ export async function generateTicketPDF(booking: Booking) {
             ` : ''}
             <div style="padding: 12px; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 10px; border: 2px solid #10b981;">
               <div style="font-size: 9px; color: #047857; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 800;">📅 Дата</div>
-              <div style="font-size: 16px; font-weight: 900; color: #065f46;">${formatDateShort(booking.tour.start_date)}</div>
-              <div style="font-size: 11px; color: #047857; margin-top: 2px; font-weight: 600;">${new Date(booking.tour.start_date).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</div>
+              <div style="font-size: 16px; font-weight: 900; color: #065f46;">${formatDateShort(tourStartIso)}</div>
+              <div style="font-size: 11px; color: #047857; margin-top: 2px; font-weight: 600;">${new Date(tourStartIso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</div>
             </div>
             <div style="padding: 12px; background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border-radius: 10px; border: 2px solid #10b981;">
               <div style="font-size: 9px; color: #047857; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 800;">👥 Участники</div>
@@ -231,7 +240,7 @@ ${qrCode}
           <div style="text-align: right;">
             <div style="font-size: 8px; color: #475569; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">Дата</div>
             <div style="font-size: 14px; font-weight: 900; color: #0f766e;">
-              ${formatDateShort(booking.tour.start_date)}
+              ${formatDateShort(tourStartIso)}
             </div>
           </div>
         </div>

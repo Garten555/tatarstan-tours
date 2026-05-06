@@ -45,6 +45,10 @@ export async function GET(request: NextRequest) {
           status,
           city:cities(id, name)
         ),
+        tour_session:tour_sessions!bookings_session_id_fkey(
+          start_at,
+          end_at
+        ),
         review:reviews!reviews_booking_id_fkey(
           id,
           rating

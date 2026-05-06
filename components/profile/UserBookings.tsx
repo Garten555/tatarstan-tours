@@ -28,6 +28,7 @@ interface Booking {
   tour_id: string;
   /** Слот выезда; если null — бронь по старой схеме без слотов */
   session_id?: string | null;
+  tour_session?: { start_at: string; end_at?: string | null } | null;
   num_people: number;
   total_price: number;
   status: string;
@@ -111,8 +112,18 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
         if (data.bookings) {
           const normalized = data.bookings.map((booking: any) => {
             const tour = Array.isArray(booking.tour) ? booking.tour[0] || null : booking.tour || null;
+            const rawSlot = booking.tour_session;
+            const tour_session = rawSlot
+              ? (Array.isArray(rawSlot) ? rawSlot[0] ?? null : rawSlot)
+              : null;
             return {
               ...booking,
+              tour_session: tour_session
+                ? {
+                    start_at: tour_session.start_at,
+                    end_at: tour_session.end_at ?? null,
+                  }
+                : null,
               review: Array.isArray(booking.review) ? booking.review[0] || null : booking.review || null,
               tour: tour ? {
                 ...tour,
