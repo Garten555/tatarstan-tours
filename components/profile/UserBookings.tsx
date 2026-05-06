@@ -446,7 +446,7 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
                       Отзыв отправлен
                     </span>
                   )}
-                  {effectiveStatus !== 'cancelled' && (
+                  {!isViewMode && effectiveStatus !== 'cancelled' && (
                     <button
                       onClick={() => handleDownloadTicket(booking)}
                       disabled={generatingPDF === booking.id}
