@@ -83,10 +83,13 @@ export default function TourCard({
   };
 
   return (
-    <Link href={`/tours/${slug}`} prefetch={true} className="group">
-      <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm hover:shadow-2xl transition-all duration-300 overflow-hidden h-full flex flex-col min-w-0">
-        {/* Фото + градиент: высота растёт вместе с полным заголовком (без line-clamp на названии) */}
-        <div className="relative isolate min-w-0 overflow-hidden">
+    <Link href={`/tours/${slug}`} prefetch={true} className="group block h-full min-w-0">
+      <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm hover:shadow-2xl transition-all duration-300 overflow-hidden h-full flex flex-col min-w-0 max-w-full">
+        {/* Фото фиксированного соотношения сторон — узкая колонка + фильтры не ломают сетку */}
+        <div
+          className="relative isolate w-full min-w-0 overflow-hidden bg-gray-100 aspect-[16/10]"
+          style={{ aspectRatio: '16 / 10' }}
+        >
           <Image
             src={cover_image}
             alt={titleSingleLine}
@@ -95,7 +98,7 @@ export default function TourCard({
             loading="lazy"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
 
           {isFullyBooked && (
             <div className="absolute top-2 sm:top-3 md:top-4 right-2 sm:right-3 md:right-4 z-20">
@@ -105,8 +108,8 @@ export default function TourCard({
             </div>
           )}
 
-          <div className="relative z-10 flex min-h-[11rem] min-w-0 flex-col justify-end p-3 sm:min-h-[12rem] sm:p-4 md:min-h-[13rem] md:p-5 lg:min-h-[14rem]">
-            <h3 className="text-lg font-black leading-tight text-white drop-shadow-lg transition-colors duration-300 group-hover:text-emerald-300 [overflow-wrap:anywhere] break-words sm:text-xl md:text-2xl lg:text-3xl">
+          <div className="absolute inset-x-0 bottom-0 z-10 p-3 sm:p-4 md:p-5">
+            <h3 className="text-base font-black leading-snug text-white drop-shadow-md transition-colors duration-300 group-hover:text-emerald-300 [overflow-wrap:anywhere] break-words line-clamp-3 sm:text-lg md:text-xl">
               {titleSingleLine}
             </h3>
           </div>
@@ -136,24 +139,21 @@ export default function TourCard({
             </ClampedText>
           </div>
 
-          {/* Метаданные */}
+          {/* Метаданные: без truncate — в узкой колонке текст переносится */}
           <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-5">
-            {/* Даты */}
-            <div className="flex items-center gap-1.5 sm:gap-2 md:gap-2.5 text-xs sm:text-sm md:text-base lg:text-lg text-gray-700 bg-gray-50 rounded-lg sm:rounded-xl px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 font-medium">
-              <Calendar className="w-4 h-4 sm:w-5 sm:h-5 md:w-5 md:h-5 text-emerald-600 flex-shrink-0" />
-              <span className="truncate">{formatDate(start_date)}</span>
+            <div className="flex items-start gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-700 bg-gray-50 rounded-lg sm:rounded-xl px-2 sm:px-3 py-2 sm:py-2.5 font-medium min-w-0">
+              <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <span className="min-w-0 leading-snug break-words">{formatDate(start_date)}</span>
             </div>
 
-            {/* Продолжительность */}
-            <div className="flex items-center gap-1.5 sm:gap-2 md:gap-2.5 text-xs sm:text-sm md:text-base lg:text-lg text-gray-700 bg-gray-50 rounded-lg sm:rounded-xl px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 font-medium">
-              <Clock className="w-4 h-4 sm:w-5 sm:h-5 md:w-5 md:h-5 text-emerald-600 flex-shrink-0" />
-              <span className="truncate">{getDuration()}</span>
+            <div className="flex items-start gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-700 bg-gray-50 rounded-lg sm:rounded-xl px-2 sm:px-3 py-2 sm:py-2.5 font-medium min-w-0">
+              <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <span className="min-w-0 leading-snug break-words">{getDuration()}</span>
             </div>
 
-            {/* Участники */}
-            <div className="flex items-center gap-1.5 sm:gap-2 md:gap-2.5 text-xs sm:text-sm md:text-base lg:text-lg text-gray-700 bg-gray-50 rounded-lg sm:rounded-xl px-2 sm:px-3 md:px-4 py-2 sm:py-2.5 md:py-3 col-span-2 font-medium">
-              <Users className="w-4 h-4 sm:w-5 sm:h-5 md:w-5 md:h-5 text-emerald-600 flex-shrink-0" />
-              <span className="truncate">
+            <div className="flex items-start gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-700 bg-gray-50 rounded-lg sm:rounded-xl px-2 sm:px-3 py-2 sm:py-2.5 col-span-2 font-medium min-w-0">
+              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <span className="min-w-0 leading-snug break-words">
                 {availableSpots > 0 
                   ? `Осталось ${availableSpots} ${availableSpots === 1 ? 'место' : availableSpots < 5 ? 'места' : 'мест'}`
                   : 'Мест нет'
@@ -162,25 +162,25 @@ export default function TourCard({
             </div>
           </div>
 
-          {/* Цена и кнопка */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 pt-3 sm:pt-4 md:pt-5 border-t-2 border-gray-100">
-            <div className="w-full sm:w-auto">
-              <div className="text-2xl sm:text-3xl md:text-4xl font-black text-emerald-700">
+          {/* Цена и CTA: не режем кнопку у края карточки */}
+          <div className="mt-auto flex flex-col gap-3 pt-3 sm:pt-4 border-t-2 border-gray-100 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-4">
+            <div className="min-w-0 flex-1">
+              <div className="text-xl sm:text-2xl md:text-3xl font-black text-emerald-700 tabular-nums">
                 {price_per_person.toLocaleString('ru-RU')} ₽
               </div>
-              <div className="text-xs sm:text-sm md:text-base text-gray-600 font-medium mt-0.5 sm:mt-1">за человека</div>
+              <div className="text-xs sm:text-sm text-gray-600 font-medium mt-0.5">за человека</div>
             </div>
-            
-            <button
-              className={`w-full sm:w-auto px-4 sm:px-5 md:px-6 lg:px-8 py-2.5 sm:py-3 md:py-4 rounded-lg sm:rounded-xl text-sm sm:text-base md:text-lg font-bold transition-all ${
+
+            <span
+              className={`inline-flex w-full shrink-0 items-center justify-center px-4 py-2.5 sm:w-auto sm:min-w-[9rem] sm:px-6 sm:py-3 rounded-lg sm:rounded-xl text-sm sm:text-base font-bold transition-all pointer-events-none select-none ${
                 isFullyBooked
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-emerald-600 text-white hover:bg-emerald-700 hover:shadow-xl hover:scale-105'
+                  ? 'bg-gray-300 text-gray-500'
+                  : 'bg-emerald-600 text-white group-hover:bg-emerald-700 group-hover:shadow-lg'
               }`}
-              disabled={isFullyBooked}
+              aria-hidden
             >
               {isFullyBooked ? 'Недоступно' : 'Подробнее'}
-            </button>
+            </span>
           </div>
         </div>
       </div>

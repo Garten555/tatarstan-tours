@@ -1,6 +1,15 @@
 import type { NextConfig } from 'next';
 import { buildContentSecurityPolicy } from './lib/security/csp';
 
+/** Доп. хосты для Next 16 dev-origin guard (`next dev` по LAN/IP). Через запятую, без схемы: `186.246.1.41,my.local`. */
+function parseAllowedDevOrigins(): string[] {
+  const extra =
+    process.env.NEXT_ALLOWED_DEV_ORIGINS?.split(',')
+      .map((s) => s.trim())
+      .filter(Boolean) ?? [];
+  return ['192.168.56.1', ...extra];
+}
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
@@ -55,8 +64,7 @@ const nextConfig: NextConfig = {
      */
     proxyClientMaxBodySize: '110mb',
   },
-  // Разрешаем cross-origin запросы в dev режиме
-  allowedDevOrigins: ['192.168.56.1'],
+  allowedDevOrigins: parseAllowedDevOrigins(),
   async redirects() {
     return [
       {
@@ -125,16 +133,13 @@ const nextConfig: NextConfig = {
     });
 
     /**
-     * CSP / COOP / CORP не вешаем на `/_next/*`: иначе при открытии по IP, редиректах или
-     * особенностях хоста браузер может не применить CSS/JS чанки — «голый» HTML без стилей.
+     * Security только вне `/_next/*` — иначе дубли CSP/nosniff на статике.
+     * Отдельный `nosniff` для `/_next` не вешаем: если прокси по ошибке даёт
+     * `text/plain`, браузер с nosniff полностью блокирует CSS/JS.
      */
     return [
       {
-        source: '/_next/:path*',
-        headers: [{ key: 'X-Content-Type-Options', value: 'nosniff' }],
-      },
-      {
-        source: '/:path*',
+        source: '/((?!_next/).*)',
         headers: securityHeaders,
       },
     ];
