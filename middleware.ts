@@ -6,6 +6,11 @@ import { validateApiMutationOrigin } from '@/lib/security/csrf';
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
+  /** Никогда не гоняем Supabase через middleware для статики Next — только лишняя работа и риск поломок чанков. */
+  if (pathname.startsWith('/_next/')) {
+    return NextResponse.next();
+  }
+
   if (pathname.startsWith('/api/')) {
     const csrfReason = validateApiMutationOrigin(request);
     if (csrfReason) {
@@ -164,7 +169,7 @@ export const config = {
     '/messenger/:path*',
     '/banned',
     // Исключаем публичные маршруты
-    '/((?!api|_next/static|_next/image|favicon.ico|auth|terms|privacy|contacts|about|tours|$).*)',
+    '/((?!api|_next/|favicon.ico|auth|terms|privacy|contacts|about|tours|$).*)',
   ],
 };
 

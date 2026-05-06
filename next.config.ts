@@ -124,7 +124,15 @@ const nextConfig: NextConfig = {
       value: buildContentSecurityPolicy(),
     });
 
+    /**
+     * CSP / COOP / CORP не вешаем на `/_next/*`: иначе при открытии по IP, редиректах или
+     * особенностях хоста браузер может не применить CSS/JS чанки — «голый» HTML без стилей.
+     */
     return [
+      {
+        source: '/_next/:path*',
+        headers: [{ key: 'X-Content-Type-Options', value: 'nosniff' }],
+      },
       {
         source: '/:path*',
         headers: securityHeaders,

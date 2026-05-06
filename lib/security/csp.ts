@@ -89,7 +89,7 @@ export function buildContentSecurityPolicy(): string {
     `frame-src ${frameSrcParts.join(' ')}`,
     "object-src 'none'",
     `img-src ${imgParts.join(' ')}`,
-    "font-src 'self' data:",
+    "font-src 'self' data: https://fonts.gstatic.com",
     "style-src 'self' 'unsafe-inline'",
     scriptSrc,
     `connect-src ${connectParts.join(' ')}`,
