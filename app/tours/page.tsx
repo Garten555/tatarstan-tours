@@ -356,17 +356,22 @@ function ToursPageContent() {
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-md sm:p-5">
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <span className="text-sm font-black text-gray-900">Цена, ₽</span>
-                  <span className="text-xs font-semibold text-gray-500">от и до</span>
+              <div className="rounded-2xl border-2 border-emerald-200/70 bg-gradient-to-b from-emerald-50/90 to-white p-4 shadow-md sm:p-5">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-base font-black text-gray-900">Цена за человека</span>
+                  <span className="rounded-full bg-emerald-600/10 px-2.5 py-1 text-xs font-black uppercase tracking-wide text-emerald-800">
+                    от — до, ₽
+                  </span>
                 </div>
-                <div className="flex gap-2 sm:gap-3">
-                  <div className="min-w-0 flex-1">
-                    <label className="mb-1 block text-xs font-bold text-gray-600">От</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="min-w-0">
+                    <label htmlFor="tours-price-from" className="mb-1.5 block text-sm font-black text-gray-800">
+                      От
+                    </label>
                     <input
+                      id="tours-price-from"
                       type="number"
-                      inputMode="decimal"
+                      inputMode="numeric"
                       min={0}
                       step={1}
                       value={minPrice}
@@ -374,16 +379,18 @@ function ToursPageContent() {
                         setMinPrice(e.target.value);
                         setPage(1);
                       }}
-                      placeholder="0"
-                      className="w-full min-w-0 rounded-xl border-2 border-gray-300 bg-gray-50 py-2.5 pl-3 pr-3 text-sm font-semibold tabular-nums text-gray-900 shadow-sm transition-all hover:bg-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 sm:py-3"
+                      placeholder="Напр. 1000"
+                      className="w-full rounded-xl border-2 border-gray-300 bg-white py-2.5 pl-3 pr-2 text-sm font-black tabular-nums text-gray-900 shadow-sm transition-all focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 sm:py-3"
                     />
                   </div>
-                  <div className="flex shrink-0 items-end pb-2 text-gray-400">—</div>
-                  <div className="min-w-0 flex-1">
-                    <label className="mb-1 block text-xs font-bold text-gray-600">До</label>
+                  <div className="min-w-0">
+                    <label htmlFor="tours-price-to" className="mb-1.5 block text-sm font-black text-gray-800">
+                      До
+                    </label>
                     <input
+                      id="tours-price-to"
                       type="number"
-                      inputMode="decimal"
+                      inputMode="numeric"
                       min={0}
                       step={1}
                       value={maxPrice}
@@ -391,8 +398,8 @@ function ToursPageContent() {
                         setMaxPrice(e.target.value);
                         setPage(1);
                       }}
-                      placeholder="Без лимита"
-                      className="w-full min-w-0 rounded-xl border-2 border-gray-300 bg-gray-50 py-2.5 pl-3 pr-3 text-sm font-semibold tabular-nums text-gray-900 shadow-sm transition-all hover:bg-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 sm:py-3"
+                      placeholder="Напр. 15000"
+                      className="w-full rounded-xl border-2 border-gray-300 bg-white py-2.5 pl-3 pr-2 text-sm font-black tabular-nums text-gray-900 shadow-sm transition-all focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/25 sm:py-3"
                     />
                   </div>
                 </div>
@@ -724,6 +731,50 @@ function ToursPageContent() {
               </button>
             </div>
             <div className="min-h-0 flex-1 space-y-6 overflow-y-auto overscroll-contain px-4 py-4">
+              <div className="rounded-2xl border-2 border-emerald-200/70 bg-emerald-50/50 p-4">
+                <p className="mb-3 text-sm font-black text-gray-900">Цена за человека, ₽</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="sheet-price-from" className="mb-1 block text-xs font-bold text-gray-700">
+                      От
+                    </label>
+                    <input
+                      id="sheet-price-from"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      step={1}
+                      value={minPrice}
+                      onChange={(e) => {
+                        setMinPrice(e.target.value);
+                        setPage(1);
+                      }}
+                      placeholder="От"
+                      className="w-full rounded-xl border-2 border-gray-300 bg-white py-2.5 pl-3 pr-2 text-sm font-black tabular-nums focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="sheet-price-to" className="mb-1 block text-xs font-bold text-gray-700">
+                      До
+                    </label>
+                    <input
+                      id="sheet-price-to"
+                      type="number"
+                      inputMode="numeric"
+                      min={0}
+                      step={1}
+                      value={maxPrice}
+                      onChange={(e) => {
+                        setMaxPrice(e.target.value);
+                        setPage(1);
+                      }}
+                      placeholder="До"
+                      className="w-full rounded-xl border-2 border-gray-300 bg-white py-2.5 pl-3 pr-2 text-sm font-black tabular-nums focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div>
                 <p className="mb-3 text-sm font-black text-gray-900">Категория</p>
                 <div className="flex flex-wrap gap-2">
