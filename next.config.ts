@@ -139,6 +139,13 @@ const nextConfig: NextConfig = {
      */
     return [
       {
+        // Иначе браузеры/прокси могут держать старый HTML со старыми хэшами чанков.
+        source: '/tours',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, max-age=0' },
+        ],
+      },
+      {
         source: '/((?!_next/).*)',
         headers: securityHeaders,
       },
