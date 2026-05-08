@@ -3,6 +3,7 @@
 
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import QRCode from 'qrcode';
 import { effectiveBookingStartIso } from '@/lib/booking/booking-display-dates';
 
 interface Booking {
@@ -27,26 +28,6 @@ interface Booking {
       name: string;
     };
   };
-}
-
-// Генерация простого QR-кода (текстовый паттерн)
-function generateQRCode(text: string): string {
-  // Простой текстовый QR-код паттерн для демонстрации
-  // В реальном проекте можно использовать библиотеку qrcode
-  const qrPattern = `
-█████████████████████████████████
-█                               █
-█   ████  ██  ████  ██  ████   █
-█   █  █  ██  █  █  ██  █  █   █
-█   ████  ██  ████  ██  ████   █
-█                               █
-█   ████  ████  ████  ████     █
-█   █  █  █  █  █  █  █  █     █
-█   ████  ████  ████  ████     █
-█                               █
-█████████████████████████████████
-  `.trim();
-  return qrPattern;
 }
 
 export async function generateTicketPDF(booking: Booking) {
@@ -109,7 +90,23 @@ export async function generateTicketPDF(booking: Booking) {
   }
 
   const bookingId = booking.id.substring(0, 8).toUpperCase();
-  const qrCode = generateQRCode(booking.id);
+  const qrPayload = JSON.stringify({
+    type: 'tatarstan-tour-ticket',
+    booking_id: booking.id,
+    booking_short_id: bookingId,
+    tour_id: booking.tour_id,
+    total_price: booking.total_price,
+    created_at: booking.created_at,
+  });
+  const qrCodeDataUrl = await QRCode.toDataURL(qrPayload, {
+    width: 180,
+    margin: 1,
+    errorCorrectionLevel: 'M',
+    color: {
+      dark: '#111827',
+      light: '#ffffff',
+    },
+  });
   const tourStartIso = effectiveBookingStartIso({
     sessionSlot: booking.tour_session?.start_at
       ? { start_at: booking.tour_session.start_at, end_at: booking.tour_session.end_at ?? null }
@@ -198,8 +195,8 @@ export async function generateTicketPDF(booking: Booking) {
         <div style="position: relative; z-index: 1; display: flex; gap: 14px; align-items: flex-start;">
           <div style="flex: 1; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); padding: 14px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.4);">
             <div style="font-size: 10px; color: white; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 800;">QR-код для проверки</div>
-            <div style="background: white; padding: 8px; border-radius: 8px; display: inline-block; font-family: monospace; font-size: 6px; line-height: 1.1; color: #111827; white-space: pre; border: 2px solid #e5e7eb;">
-${qrCode}
+            <div style="background: white; padding: 8px; border-radius: 8px; display: inline-block; border: 2px solid #e5e7eb;">
+              <img src="${qrCodeDataUrl}" alt="QR Ticket" style="display:block; width: 116px; height: 116px;" />
             </div>
             <div style="margin-top: 8px; font-size: 9px; color: white; font-family: monospace; letter-spacing: 0.5px; font-weight: 600;">
               ID: ${bookingId}
