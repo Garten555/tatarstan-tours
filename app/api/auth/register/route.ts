@@ -8,6 +8,11 @@ import {
   normalizeAuthEmail,
 } from '@/lib/validation/auth';
 
+function hasCompletedRegistrationInApp(user: { app_metadata?: object | null }): boolean {
+  const app = user.app_metadata as Record<string, unknown> | undefined;
+  return app?.registration_completed === true;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -60,6 +65,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (hasCompletedRegistrationInApp(authUser)) {
+      return NextResponse.json(
+        { error: 'Пользователь с таким email уже зарегистрирован' },
+        { status: 400 }
+      );
+    }
+
     const prevApp = (authUser.app_metadata || {}) as Record<string, unknown>;
     const prevMeta = (authUser.user_metadata || {}) as Record<string, unknown>;
 
@@ -86,17 +98,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { error: profileErr } = await supabase.from('profiles').upsert(
-      {
-        id: authUser.id,
-        email: normEmail,
-        first_name: firstName.trim(),
-        last_name: lastName.trim(),
-        middle_name: middleName,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'id' }
-    );
+    const nowIso = new Date().toISOString();
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('id', authUser.id)
+      .maybeSingle();
+
+    const profilePayload = {
+      email: normEmail,
+      first_name: firstName.trim(),
+      last_name: lastName.trim(),
+      middle_name: middleName,
+      updated_at: nowIso,
+    };
+
+    const profileMutation = existingProfile
+      ? supabase.from('profiles').update(profilePayload).eq('id', authUser.id)
+      : supabase.from('profiles').insert({
+          id: authUser.id,
+          role: 'user',
+          ...profilePayload,
+        });
+
+    const { error: profileErr } = await profileMutation;
 
     if (profileErr) {
       console.error('[register] profiles upsert:', profileErr);

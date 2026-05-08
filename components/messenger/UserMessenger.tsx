@@ -132,19 +132,41 @@ export default function UserMessenger() {
     }
   }, []);
 
-  // Получаем текущего пользователя
+  // Получаем текущего пользователя + реагируем на смену аккаунта без перезагрузки
   useEffect(() => {
-    const getCurrentUser = async () => {
-      const user = await resolveAuthUserForUi(supabase);
-      setCurrentUserId(user?.id || null);
+    let mounted = true;
+    const syncCurrentUser = async () => {
+      const authUser = await resolveAuthUserForUi(supabase);
+      if (!mounted) return;
+      setCurrentUserId(authUser?.id || null);
     };
-    void getCurrentUser();
+
+    void syncCurrentUser();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUserId(session?.user?.id ?? null);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [supabase]);
 
   // Загружаем список бесед
   useEffect(() => {
-    loadConversations();
-  }, []);
+    if (!currentUserId) {
+      setConversations([]);
+      setSelectedConversation(null);
+      setMessages([]);
+      return;
+    }
+    setSelectedConversation(null);
+    setMessages([]);
+    setSearchQuery('');
+    void loadConversations();
+  }, [currentUserId]);
 
   // Открываем чат с пользователем из URL параметра
   useEffect(() => {
@@ -532,6 +554,15 @@ export default function UserMessenger() {
   });
 
   const selectedConv = conversations.find((c) => c.other_user.id === selectedConversation);
+
+  useEffect(() => {
+    if (!selectedConversation) return;
+    const existsInCurrentList = conversations.some((c) => c.other_user.id === selectedConversation);
+    if (!existsInCurrentList) {
+      setSelectedConversation(null);
+      setMessages([]);
+    }
+  }, [selectedConversation, conversations]);
 
   return (
     <>

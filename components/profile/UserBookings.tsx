@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -66,6 +66,7 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [cancelBooking, setCancelBooking] = useState<Booking | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const cancelInFlightRef = useRef<string | null>(null);
 
   useEffect(() => {
     const loadBookings = async () => {
@@ -218,6 +219,8 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
   // Генерация PDF билета
   const handleConfirmCancelBooking = async () => {
     if (!cancelBooking) return;
+    if (cancelInFlightRef.current === cancelBooking.id) return;
+    cancelInFlightRef.current = cancelBooking.id;
     setCancellingId(cancelBooking.id);
     try {
       const response = await fetch(`/api/user/bookings/${cancelBooking.id}`, {
@@ -245,6 +248,7 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
       });
       setCancelBooking(null);
     } finally {
+      cancelInFlightRef.current = null;
       setCancellingId(null);
     }
   };

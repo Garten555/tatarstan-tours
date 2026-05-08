@@ -71,6 +71,13 @@ export async function PATCH(
       total_price: number;
     };
 
+    if (booking.status === 'cancelled') {
+      return NextResponse.json({
+        success: true,
+        message: 'Бронирование уже было отменено',
+      });
+    }
+
     if (!['pending', 'confirmed'].includes(booking.status)) {
       return NextResponse.json(
         { error: 'Это бронирование нельзя отменить' },
