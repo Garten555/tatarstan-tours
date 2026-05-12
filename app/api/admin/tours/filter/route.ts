@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
-import { dedupeTourRowsForCatalog } from '@/lib/tours/listing-dedupe';
-import { sortCatalogTourRows } from '@/lib/tours/catalog-sort';
 
 export async function GET(request: NextRequest) {
   try {
@@ -100,14 +98,12 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const toursDeduped = sortCatalogTourRows(
-      dedupeTourRowsForCatalog(toursRaw || []),
-      sortField,
-      sortOrder
-    );
-    const total = toursDeduped.length;
+    // В админке показываем все записи туров без дедупликации.
+    // Дедуп используется только в публичном каталоге, где объединяются похожие карточки.
+    const toursAll = toursRaw || [];
+    const total = toursAll.length;
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
-    const tours = toursDeduped.slice(offset, offset + limit);
+    const tours = toursAll.slice(offset, offset + limit);
 
     return NextResponse.json({
       tours,

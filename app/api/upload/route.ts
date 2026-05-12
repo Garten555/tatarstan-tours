@@ -37,17 +37,26 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File;
     const folder = formData.get('folder') as string; // tours/covers, tours/gallery, tours/videos, diaries/covers, diaries/media
 
-    // Роль читаем service role: иначе при RLS/сбоях anon-клиента `.single()` даёт пусто → ложный 403 даже у super_admin
+    // Сначала пробуем роль через service role (если есть), но при любом сбое
+    // обязательно делаем fallback через cookie-клиент, чтобы не ловить ложный 403.
     let profile: { role: string } | null = null;
     if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      const svc = createServiceClient();
-      const { data } = await svc
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .maybeSingle();
-      profile = data as { role: string } | null;
-    } else {
+      try {
+        const svc = createServiceClient();
+        const { data, error } = await svc
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+        if (!error && data) {
+          profile = data as { role: string } | null;
+        }
+      } catch (err) {
+        console.error('[upload] service role lookup failed, fallback to cookie client', err);
+      }
+    }
+
+    if (!profile) {
       const { data } = await supabase
         .from('profiles')
         .select('role')
