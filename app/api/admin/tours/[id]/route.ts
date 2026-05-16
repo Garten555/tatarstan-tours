@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { deleteFileFromS3 } from '@/lib/s3/upload';
 import { sendTourRemovedEmail } from '@/lib/email/tour-notifications';
+import { countBookingsAffectedByDateChange } from '@/lib/bookings/active-bookings-for-date-change';
 
 /** GET — число активных бронирований (для предупреждения при смене дат) */
 export async function GET(
@@ -25,18 +26,12 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const { count, error } = await serviceClient
-      .from('bookings')
-      .select('id', { count: 'exact', head: true })
-      .eq('tour_id', id)
-      .in('status', ['pending', 'confirmed']);
+    const activeBookingsCount = await countBookingsAffectedByDateChange(
+      serviceClient,
+      id
+    );
 
-    if (error) {
-      console.error('GET tour booking count:', error);
-      return NextResponse.json({ error: 'Failed to count bookings' }, { status: 500 });
-    }
-
-    return NextResponse.json({ activeBookingsCount: count ?? 0 });
+    return NextResponse.json({ activeBookingsCount });
   } catch (e) {
     console.error('GET /api/admin/tours/[id]', e);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

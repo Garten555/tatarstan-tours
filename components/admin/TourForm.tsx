@@ -758,7 +758,17 @@ export default function TourForm({
     const existingSessionsDatesAffected =
       mode === 'edit' && (primaryDatesChanged || existingExtraSessionsAffected);
 
-    if (existingSessionsDatesAffected && mode === 'edit' && initialData?.id) {
+    const tourAlreadyFinished =
+      mode === 'edit' &&
+      (initialData?.status === 'completed' ||
+        initialData?.status === 'cancelled');
+
+    if (
+      existingSessionsDatesAffected &&
+      mode === 'edit' &&
+      initialData?.id &&
+      !tourAlreadyFinished
+    ) {
       try {
         const impactRes = await fetch(`/api/admin/tours/${initialData.id}`);
         if (impactRes.ok) {
