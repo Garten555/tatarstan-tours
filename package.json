@@ -1,6 +1,6 @@
 {
   "name": "turrrr",
-  "version": "0.4.43",
+  "version": "0.4.44",
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",

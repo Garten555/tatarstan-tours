@@ -829,13 +829,28 @@ export default function TourForm({
       setLoadingStatus(mode === 'create' ? 'Создание тура...' : 'Обновление тура...');
       
       let effectiveStatus = formData.status;
-      if (
-        mode === 'edit' &&
-        datesChanged &&
-        formData.status !== 'cancelled' &&
-        formData.status !== 'completed'
-      ) {
-        effectiveStatus = 'active';
+      if (mode === 'edit' && datesChanged && formData.status !== 'cancelled') {
+        const nowMs = Date.now();
+        const startMs = formData.start_date
+          ? new Date(formData.start_date).getTime()
+          : NaN;
+        const endMs = formData.end_date
+          ? new Date(formData.end_date).getTime()
+          : NaN;
+        const hasFutureDeparture =
+          Number.isFinite(startMs) && startMs > nowMs;
+        const isOngoing =
+          Number.isFinite(startMs) &&
+          startMs <= nowMs &&
+          (!formData.end_date || (Number.isFinite(endMs) && endMs >= nowMs));
+
+        if (
+          hasFutureDeparture ||
+          isOngoing ||
+          formData.status !== 'completed'
+        ) {
+          effectiveStatus = 'active';
+        }
       }
 
       const tourData = {

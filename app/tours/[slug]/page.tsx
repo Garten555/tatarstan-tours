@@ -131,6 +131,25 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
 
   tourSessions = filterUpcomingSessions(tourSessions);
 
+  if (tourSessions.length === 0 && t.start_date) {
+    const now = new Date();
+    const start = new Date(t.start_date);
+    const futureStart = start > now;
+    const ongoing =
+      start <= now && (!t.end_date || new Date(t.end_date) >= now);
+    if (futureStart || ongoing) {
+      tourSessions = [
+        {
+          id: LEGACY_TOUR_SESSION_ID,
+          start_at: t.start_date,
+          end_at: t.end_date ?? null,
+          max_participants: t.max_participants,
+          current_participants: t.current_participants ?? 0,
+        },
+      ];
+    }
+  }
+
   const { data: reviewsData } = await supabase
     .from('reviews')
     .select('id, rating, text, created_at, user_id')

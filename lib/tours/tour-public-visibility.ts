@@ -29,6 +29,16 @@ export function isUpcomingSession(
   return new Date(startAt) > now;
 }
 
+/** Будущий старт по полям строки tours (повторный запуск после прошлых слотов). */
+export function hasScheduledFutureStart(
+  tour: TourDates,
+  now: Date = new Date()
+): boolean {
+  if (!tour.start_date) return false;
+  const startMs = new Date(tour.start_date).getTime();
+  return Number.isFinite(startMs) && startMs > now.getTime();
+}
+
 /** Только будущие слоты (для страницы тура и выбора даты). */
 export function filterUpcomingSessions<T extends { start_at: string }>(
   sessions: T[],
@@ -38,8 +48,9 @@ export function filterUpcomingSessions<T extends { start_at: string }>(
 }
 
 /**
- * Тур с реальными слотами в БД доступен только если есть хотя бы один будущий выезд.
- * Без слотов — по датам строки тура (как в каталоге по end_date).
+ * Каталог и страница тура: end_date в прошлом — скрываем.
+ * Есть будущий start_date в tours — показываем (даже если в БД остались только прошлые слоты).
+ * Иначе — по будущим tour_sessions или по текущему периоду тура без слотов.
  */
 export function isTourVisibleInPublicCatalog(
   tour: TourDates,
@@ -47,6 +58,8 @@ export function isTourVisibleInPublicCatalog(
   now: Date = new Date()
 ): boolean {
   if (isTourEndedByEndDate(tour, now)) return false;
+
+  if (hasScheduledFutureStart(tour, now)) return true;
 
   const realSessions = sessions.filter((s) => s.id !== LEGACY_TOUR_SESSION_ID);
   if (realSessions.length > 0) {
