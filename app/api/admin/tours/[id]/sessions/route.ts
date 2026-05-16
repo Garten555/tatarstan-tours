@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { ensureTourRoomForSession } from '@/lib/tour/ensure-session-room';
-import {
-  clearSessionCapacityForNewDeparture,
-  isNewDepartureAfterPastSchedule,
-  syncSessionCurrentParticipants,
-} from '@/lib/tour/session-participants';
+import { syncSessionCurrentParticipants } from '@/lib/tour/session-participants';
 import { sendTourRescheduleEmail } from '@/lib/email/tour-notifications';
 
 type IncomingSession = {
@@ -224,11 +220,6 @@ export async function POST(
             isoNorm(prev.start_at) !== isoNorm(start_at) ||
             isoNorm(prev.end_at) !== isoNorm(end_at);
           if (changed) {
-            if (isNewDepartureAfterPastSchedule(prev.start_at, start_at)) {
-              await clearSessionCapacityForNewDeparture(serviceClient, s.id);
-            } else {
-              await syncSessionCurrentParticipants(serviceClient, s.id);
-            }
             rescheduleNotify.push({
               sessionId: s.id,
               oldStart: prev.start_at,

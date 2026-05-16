@@ -31,6 +31,9 @@ interface Booking {
   payment_method: string;
   payment_status: string;
   created_at: string;
+  departure_start_at?: string | null;
+  departure_end_at?: string | null;
+  schedule_superseded_at?: string | null;
   user: {
     id: string;
     first_name: string;
@@ -325,7 +328,14 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
                         {booking.tour?.title}
                       </Link>
                       <div className="text-sm text-gray-600 mt-1">
-                        {formatDate(booking.tour?.start_date || '')}
+                        {booking.departure_start_at
+                          ? formatDate(booking.departure_start_at)
+                          : formatDate(booking.tour?.start_date || '')}
+                        {booking.schedule_superseded_at && (
+                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-xs font-semibold">
+                            прошлый выезд
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-base text-gray-700">

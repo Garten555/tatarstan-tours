@@ -138,22 +138,7 @@ export async function PUT(
         isoNorm(String(tourData.end_date ?? '')) !==
           isoNorm(String((currentTour as { end_date?: string }).end_date ?? '')));
 
-    if (isRelaunch) {
-      const { error: closeOldBookingsError } = await serviceClient
-        .from('bookings')
-        .update({ status: 'cancelled' })
-        .eq('tour_id', id)
-        .in('status', ['pending', 'confirmed']);
-
-      if (closeOldBookingsError) {
-        console.error('Error cancelling old bookings on tour relaunch:', closeOldBookingsError);
-      }
-
-      await serviceClient
-        .from('tour_sessions')
-        .update({ current_participants: 0 })
-        .eq('tour_id', id);
-    } else if (tourDatesChanged) {
+    if (isRelaunch || tourDatesChanged) {
       await syncAllTourSessionParticipants(serviceClient, id);
     }
 

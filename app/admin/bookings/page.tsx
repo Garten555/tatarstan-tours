@@ -39,6 +39,9 @@ export default async function BookingsPage() {
     .from('bookings')
     .select(`
       *,
+      departure_start_at,
+      departure_end_at,
+      schedule_superseded_at,
       user:profiles!bookings_user_id_fkey(
         id,
         first_name,

@@ -256,6 +256,13 @@ export async function POST(request: NextRequest) {
         ? payment_data?.qr_payment_ref || generatePaymentRef()
         : null;
 
+    const departureStartAt = sessionRow
+      ? sessionRow.start_at
+      : (tour as { start_date?: string | null }).start_date ?? null;
+    const departureEndAt = sessionRow
+      ? sessionRow.end_at ?? null
+      : (tour as { end_date?: string | null }).end_date ?? null;
+
     // Создаем бронирование
     // Когда билет создан, статус оплаты сразу "оплачен"
     const { data: booking, error: bookingError } = await (serviceClient as any)
@@ -264,6 +271,8 @@ export async function POST(request: NextRequest) {
         user_id: user.id,
         tour_id,
         ...(session_id ? { session_id } : {}),
+        ...(departureStartAt ? { departure_start_at: departureStartAt } : {}),
+        ...(departureEndAt ? { departure_end_at: departureEndAt } : {}),
         booking_date: new Date().toISOString(),
         num_people,
         total_price,
