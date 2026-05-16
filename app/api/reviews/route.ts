@@ -9,6 +9,24 @@ type ReviewMediaInput = {
   order_index?: number | null;
 };
 
+type TourRelation = {
+  status?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+};
+
+type TourSessionRelation = {
+  start_at?: string | null;
+  end_at?: string | null;
+};
+
+/** Supabase join может вернуть объект или массив из одного элемента. */
+function unwrapRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (value == null) return null;
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
@@ -78,30 +96,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const tour = Array.isArray((booking as { tour?: unknown }).tour)
-      ? (booking as { tour: unknown[] }).tour[0]
-      : (booking as { tour?: Record<string, unknown> | null }).tour;
-    const tourSession = Array.isArray((booking as { tour_session?: unknown }).tour_session)
-      ? (booking as { tour_session: unknown[] }).tour_session[0]
-      : (booking as { tour_session?: Record<string, unknown> | null }).tour_session;
+    const bookingRow = booking as {
+      status: string;
+      session_id?: string | null;
+      tour?: TourRelation | TourRelation[] | null;
+      tour_session?: TourSessionRelation | TourSessionRelation[] | null;
+    };
+    const tour = unwrapRelation(bookingRow.tour);
+    const tourSession = unwrapRelation(bookingRow.tour_session);
 
     if (
       !canLeaveReviewForBooking({
         status: booking.status,
-        session_id: (booking as { session_id?: string | null }).session_id,
-        tour_session: tourSession
-          ? {
-              start_at: tourSession.start_at as string | null,
-              end_at: tourSession.end_at as string | null,
-            }
-          : null,
-        tour: tour
-          ? {
-              status: tour.status as string | null,
-              start_date: tour.start_date as string | null,
-              end_date: tour.end_date as string | null,
-            }
-          : null,
+        session_id: bookingRow.session_id,
+        tour_session: tourSession,
+        tour,
       })
     ) {
       return NextResponse.json(
