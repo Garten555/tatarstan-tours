@@ -21,6 +21,7 @@ import {
   Phone
 } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
+import PaymentQrDisplay from '@/components/booking/PaymentQrDisplay';
 
 interface BookingFormProps {
   tour: any;
@@ -71,6 +72,7 @@ export default function BookingForm({ tour, session = null, user, savedCards }: 
   const [profile, setProfile] = useState<any>(null);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [hasExistingBooking, setHasExistingBooking] = useState(false);
+  const [qrPaymentRef, setQrPaymentRef] = useState<string | null>(null);
   
   // Данные формы
   const [formData, setFormData] = useState({
@@ -142,6 +144,12 @@ export default function BookingForm({ tour, session = null, user, savedCards }: 
     
     return formatted;
   };
+
+  useEffect(() => {
+    if (formData.payment_method === 'qr_code' && !qrPaymentRef) {
+      setQrPaymentRef(crypto.randomUUID());
+    }
+  }, [formData.payment_method, qrPaymentRef]);
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -309,6 +317,13 @@ export default function BookingForm({ tour, session = null, user, savedCards }: 
         })),
       };
 
+      if (formData.payment_method === 'qr_code') {
+        bookingData.payment_data = {
+          qr_payment_ref: qrPaymentRef || crypto.randomUUID(),
+          qr_demo: true,
+        };
+      }
+
       // Если выбрана сохраненная карта
       if (formData.selected_card_id) {
         bookingData.payment_data = {
@@ -356,8 +371,7 @@ export default function BookingForm({ tour, session = null, user, savedCards }: 
         throw new Error(result.error || 'Не удалось создать бронирование');
       }
 
-      // Перенаправляем на страницу успеха
-      router.push(`/booking/success?id=${result.booking.id}`);
+      router.replace(`/booking/success?id=${result.booking.id}`);
     } catch (err: any) {
       setError(err.message || 'Произошла ошибка при бронировании');
     } finally {
@@ -1024,21 +1038,19 @@ export default function BookingForm({ tour, session = null, user, savedCards }: 
                 </div>
               )}
 
-              {/* Информация для QR-кода */}
-              {formData.payment_method === 'qr_code' && (
+              {/* QR-код оплаты (демо) */}
+              {formData.payment_method === 'qr_code' && qrPaymentRef && (
                 <div className="border-t-2 border-gray-200 pt-6">
-                  <div className="p-5 bg-gradient-to-br from-blue-50 to-blue-100/50 border-2 border-blue-200 rounded-2xl">
-                    <p className="text-base font-medium text-blue-900 mb-5">
-                      📱 После подтверждения бронирования вам будет отправлен QR-код для оплаты.
+                  <div className="p-5 bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-2 border-emerald-200 rounded-2xl">
+                    <p className="text-base font-medium text-emerald-900 mb-5">
+                      Уникальный QR для демо-оплаты (реального списания нет). После «Забронировать» бронь создаётся сразу.
                     </p>
-                    <div className="bg-white p-6 rounded-xl border-2 border-blue-200 shadow-sm">
-                      <div className="w-48 h-48 bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex items-center justify-center mx-auto">
-                        <QrCode className="w-24 h-24 text-gray-400" />
-                      </div>
-                      <p className="text-sm text-center text-gray-600 mt-4 font-medium">
-                        QR-код будет сгенерирован после подтверждения
-                      </p>
-                    </div>
+                    <PaymentQrDisplay
+                      paymentRef={qrPaymentRef}
+                      tourId={tour.id}
+                      tourTitle={tour.title}
+                      amount={totalPrice}
+                    />
                   </div>
                 </div>
               )}

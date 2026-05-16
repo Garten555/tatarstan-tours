@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
-import { CheckCircle2, Calendar, Users, MapPin, CreditCard, ArrowLeft } from 'lucide-react';
+import { CheckCircle2, Calendar, Users, MapPin, CreditCard } from 'lucide-react';
 import Link from 'next/link';
+import BookingSuccessQr from '@/components/booking/BookingSuccessQr';
 
 interface BookingSuccessPageProps {
   searchParams: Promise<{ id?: string }>;
@@ -12,7 +13,6 @@ export default async function BookingSuccessPage({ searchParams }: BookingSucces
   const supabase = await createClient();
   const serviceClient = await createServiceClient();
 
-  // Проверяем авторизацию
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -25,7 +25,6 @@ export default async function BookingSuccessPage({ searchParams }: BookingSucces
     redirect('/tours');
   }
 
-  // Загружаем данные бронирования
   const { data: booking, error: bookingError } = await serviceClient
     .from('bookings')
     .select(`
@@ -48,8 +47,11 @@ export default async function BookingSuccessPage({ searchParams }: BookingSucces
 
   const b = booking as any;
   const tour = b.tour as any;
+  const paymentData =
+    b.payment_data && typeof b.payment_data === 'object' ? b.payment_data : {};
+  const qrPaymentRef =
+    typeof paymentData.qr_payment_ref === 'string' ? paymentData.qr_payment_ref : null;
 
-  // Форматирование даты
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('ru-RU', {
@@ -61,7 +63,6 @@ export default async function BookingSuccessPage({ searchParams }: BookingSucces
     });
   };
 
-  // Определяем способ оплаты
   const getPaymentMethodLabel = (method: string) => {
     const methods: Record<string, string> = {
       card: 'Банковская карта',
@@ -75,7 +76,6 @@ export default async function BookingSuccessPage({ searchParams }: BookingSucces
     <div className="min-h-screen bg-gray-50 py-12">
       <div className="container mx-auto px-4">
         <div className="max-w-2xl mx-auto">
-          {/* Успех */}
           <div className="bg-white rounded-2xl shadow-sm p-8 text-center mb-6">
             <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 className="w-12 h-12 text-emerald-600" />
@@ -88,7 +88,6 @@ export default async function BookingSuccessPage({ searchParams }: BookingSucces
             </p>
           </div>
 
-          {/* Детали бронирования */}
           <div className="bg-white rounded-2xl shadow-sm p-8 mb-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">
               Детали бронирования
@@ -151,10 +150,20 @@ export default async function BookingSuccessPage({ searchParams }: BookingSucces
                   </span>
                 </div>
               </div>
+
+              {b.payment_method === 'qr_code' && (
+                <BookingSuccessQr
+                  bookingId={b.id}
+                  tourId={tour.id}
+                  tourTitle={tour.title}
+                  amount={parseFloat(b.total_price)}
+                  createdAt={b.created_at}
+                  paymentRef={qrPaymentRef}
+                />
+              )}
             </div>
           </div>
 
-          {/* Действия */}
           <div className="flex gap-4">
             <Link
               href={`/tours/${tour.slug}`}
@@ -174,4 +183,3 @@ export default async function BookingSuccessPage({ searchParams }: BookingSucces
     </div>
   );
 }
-

@@ -22,6 +22,11 @@ import toast from 'react-hot-toast';
 import { generateTicketPDF } from '@/lib/pdf/ticket';
 import ReviewModal from '@/components/reviews/ReviewModal';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import {
+  canLeaveReviewForBooking,
+  getEffectiveBookingStatus,
+  isTourCompletedForReview,
+} from '@/lib/bookings/review-eligibility';
 
 interface Booking {
   id: string;
@@ -190,19 +195,7 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
     return labels[status] || status;
   };
 
-  // Определяем завершение тура по фактической дате окончания,
-  // чтобы метка не зависела только от синхронизации статуса в БД.
-  const isTourCompleted = (booking: Booking) => {
-    if (booking.tour?.status === 'completed') {
-      return true;
-    }
-    // Если end_date нет, считаем датой завершения start_date
-    // (для однодневных туров без отдельной даты окончания).
-    const completionDate = booking.tour?.end_date || booking.tour?.start_date;
-    if (!completionDate) return false;
-    const endDate = new Date(completionDate);
-    return !Number.isNaN(endDate.getTime()) && endDate.getTime() <= Date.now();
-  };
+  const isTourCompleted = (booking: Booking) => isTourCompletedForReview(booking);
 
   // Получение иконки статуса
   const getStatusIcon = (status: string) => {
@@ -312,9 +305,8 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
           }
 
           const completedByDate = isTourCompleted(booking);
-          const effectiveStatus = completedByDate && booking.status === 'confirmed'
-            ? 'completed'
-            : booking.status;
+          const effectiveStatus = getEffectiveBookingStatus(booking);
+          const canLeaveReview = canLeaveReviewForBooking(booking);
 
           const canCancelBooking =
             !isViewMode &&
@@ -435,7 +427,7 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
                       Комната тура
                     </Link>
                   )}
-                  {['completed', 'cancelled'].includes(effectiveStatus) && !booking.review?.id && (
+                  {canLeaveReview && !booking.review?.id && (
                     <button
                       onClick={() => setReviewBooking(booking)}
                       className="px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"

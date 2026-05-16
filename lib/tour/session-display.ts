@@ -49,8 +49,11 @@ export function sessionAvailableSpots(s: TourSessionOption): number {
   return s.max_participants - (s.current_participants ?? 0);
 }
 
-/** Первая доступная по местам сессия или первая в списке */
+/** Ближайший будущий выезд с местами, иначе первый будущий */
 export function pickDefaultSessionId(sessions: TourSessionOption[]): string {
-  const withSpots = sessions.find((s) => sessionAvailableSpots(s) > 0);
-  return (withSpots ?? sessions[0])?.id ?? '';
+  const now = new Date();
+  const upcoming = sessions.filter((s) => new Date(s.start_at) > now);
+  const pool = upcoming.length > 0 ? upcoming : sessions;
+  const withSpots = pool.find((s) => sessionAvailableSpots(s) > 0);
+  return (withSpots ?? pool[0])?.id ?? '';
 }

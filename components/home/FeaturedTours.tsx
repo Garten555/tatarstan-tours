@@ -4,6 +4,8 @@ import {
   dedupeTourRowsForCatalog,
   type TourRowForDedupe,
 } from '@/lib/tours/listing-dedupe';
+import { filterCatalogToursByUpcomingSessions } from '@/lib/tours/tour-public-visibility';
+import { FeaturedToursCountBadge } from '@/components/home/FeaturedToursCountBadge';
 import Link from 'next/link';
 import { ArrowRight, Sparkles } from 'lucide-react';
 
@@ -38,12 +40,16 @@ export async function FeaturedTours() {
       .eq('status', 'active')
       .or(`end_date.is.null,end_date.gte.${now}`)
       .order('created_at', { ascending: false })
-      .limit(48);
+      .limit(8000);
     
     const raw = result.data;
     error = result.error;
     if (raw) {
-      const deduped = dedupeTourRowsForCatalog(raw as TourRowForDedupe[]);
+      const bookable = await filterCatalogToursByUpcomingSessions(
+        supabase,
+        raw as TourRowForDedupe[]
+      );
+      const deduped = dedupeTourRowsForCatalog(bookable);
       totalAvailableTours = deduped.length;
       // На главной показываем только 3 карточки.
       tours = deduped.slice(0, 3);
@@ -117,12 +123,7 @@ export async function FeaturedTours() {
             </p>
           </div>
           
-          <div className="flex items-center gap-2 sm:gap-3 px-4 py-2 sm:px-5 sm:py-3 rounded-lg sm:rounded-xl bg-white border border-emerald-200/50 shadow-sm">
-            <span className="h-2.5 w-2.5 sm:h-3 sm:w-3 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
-            <span className="text-sm sm:text-base md:text-lg lg:text-xl text-gray-700 font-bold">
-              Доступно {totalAvailableTours} туров
-            </span>
-          </div>
+          <FeaturedToursCountBadge initialCount={totalAvailableTours} />
         </div>
 
         {/* Сетка туров */}

@@ -18,6 +18,10 @@ import { ArrowLeft } from 'lucide-react';
 import { isInvalidTourSlug } from '@/lib/tours/isInvalidTourSlug';
 import TourBookingRedirectBanner from '@/components/tours/TourBookingRedirectBanner';
 import { parseBookingTourRedirectError } from '@/lib/tour/booking-tour-redirect';
+import {
+  filterUpcomingSessions,
+  isTourVisibleInPublicCatalog,
+} from '@/lib/tours/tour-public-visibility';
 
 interface TourPageProps {
   params: Promise<{ slug: string }>;
@@ -115,6 +119,17 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
       ];
     }
   }
+
+  if (
+    !isTourVisibleInPublicCatalog(
+      { start_date: t.start_date, end_date: t.end_date },
+      tourSessions
+    )
+  ) {
+    notFound();
+  }
+
+  tourSessions = filterUpcomingSessions(tourSessions);
 
   const { data: reviewsData } = await supabase
     .from('reviews')

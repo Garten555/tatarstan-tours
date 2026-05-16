@@ -246,6 +246,11 @@ export async function POST(request: NextRequest) {
       profileData?.first_name && profileData?.last_name
         ? `${profileData.first_name} ${profileData.last_name}`
         : profileData?.email || user.email;
+    const qrPaymentRef =
+      payment_method === 'qr_code'
+        ? payment_data?.qr_payment_ref || crypto.randomUUID()
+        : null;
+
     // Создаем бронирование
     // Когда билет создан, статус оплаты сразу "оплачен"
     const { data: booking, error: bookingError } = await (serviceClient as any)
@@ -262,6 +267,9 @@ export async function POST(request: NextRequest) {
         payment_data: {
           ...payment_data,
           card_id: cardId || payment_data?.card_id || null,
+          ...(qrPaymentRef
+            ? { qr_payment_ref: qrPaymentRef, qr_demo: true }
+            : {}),
         },
         status: 'confirmed', // Подтверждено сразу, так как оплачено
       })
@@ -489,41 +497,59 @@ export async function POST(request: NextRequest) {
       console.error('Ошибка добавления в участники комнаты:', participantError);
     }
 
-    // Отправляем email уведомление о создании бронирования
-    try {
-      const userProfile = userProfileResult.data;
-      const tourData = tourDataResult.data;
-
-      if (userProfile?.email && tourData) {
-        const userName = userProfile.first_name && userProfile.last_name
-          ? `${userProfile.first_name} ${userProfile.last_name}`
-          : userProfile.email;
-        
-        const tourDate = new Date(tourData.start_date).toLocaleDateString('ru-RU', {
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
-
-        const { sendEmail, getBookingConfirmationEmail } = await import('@/lib/email/send-email');
-        await sendEmail({
-          to: userProfile.email,
-          subject: `Бронирование подтверждено: ${tourData.title}`,
-          html: getBookingConfirmationEmail(
-            userName,
-            tourData.title,
-            tourDate,
-            num_people,
-            parseFloat(total_price.toString())
-          ),
-        });
-      }
-    } catch (emailError) {
-      // Не прерываем выполнение если email не отправился
-      console.error('Ошибка отправки email уведомления:', emailError);
+    if (qrPaymentRef && booking?.id) {
+      void serviceClient
+        .from('bookings')
+        .update({
+          payment_data: {
+            ...(payment_data || {}),
+            qr_payment_ref: qrPaymentRef,
+            qr_demo: true,
+            booking_id: booking.id,
+          },
+        })
+        .eq('id', booking.id);
     }
+
+    // Email в фоне — не задерживаем ответ клиенту
+    void (async () => {
+      try {
+        const userProfile = userProfileResult.data;
+        const tourData = tourDataResult.data;
+
+        if (userProfile?.email && tourData) {
+          const userName =
+            userProfile.first_name && userProfile.last_name
+              ? `${userProfile.first_name} ${userProfile.last_name}`
+              : userProfile.email;
+
+          const tourDate = new Date(tourData.start_date).toLocaleDateString('ru-RU', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+
+          const { sendEmail, getBookingConfirmationEmail } = await import(
+            '@/lib/email/send-email'
+          );
+          await sendEmail({
+            to: userProfile.email,
+            subject: `Бронирование подтверждено: ${tourData.title}`,
+            html: getBookingConfirmationEmail(
+              userName,
+              tourData.title,
+              tourDate,
+              num_people,
+              parseFloat(total_price.toString())
+            ),
+          });
+        }
+      } catch (emailError) {
+        console.error('Ошибка отправки email уведомления:', emailError);
+      }
+    })();
 
     return NextResponse.json({
       success: true,

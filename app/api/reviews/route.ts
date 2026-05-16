@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { canLeaveReviewForBooking } from '@/lib/bookings/review-eligibility';
 
 type ReviewMediaInput = {
   media_type: 'image' | 'video';
@@ -48,7 +49,11 @@ export async function POST(request: NextRequest) {
 
     const { data: booking, error: bookingError } = await serviceClient
       .from('bookings')
-      .select('id, user_id, tour_id, status')
+      .select(`
+        id, user_id, tour_id, status, session_id,
+        tour:tours(id, status, start_date, end_date),
+        tour_session:tour_sessions(start_at, end_at)
+      `)
       .eq('id', bookingId)
       .single();
 
@@ -73,7 +78,32 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!['completed', 'cancelled'].includes(booking.status)) {
+    const tour = Array.isArray((booking as { tour?: unknown }).tour)
+      ? (booking as { tour: unknown[] }).tour[0]
+      : (booking as { tour?: Record<string, unknown> | null }).tour;
+    const tourSession = Array.isArray((booking as { tour_session?: unknown }).tour_session)
+      ? (booking as { tour_session: unknown[] }).tour_session[0]
+      : (booking as { tour_session?: Record<string, unknown> | null }).tour_session;
+
+    if (
+      !canLeaveReviewForBooking({
+        status: booking.status,
+        session_id: (booking as { session_id?: string | null }).session_id,
+        tour_session: tourSession
+          ? {
+              start_at: tourSession.start_at as string | null,
+              end_at: tourSession.end_at as string | null,
+            }
+          : null,
+        tour: tour
+          ? {
+              status: tour.status as string | null,
+              start_date: tour.start_date as string | null,
+              end_date: tour.end_date as string | null,
+            }
+          : null,
+      })
+    ) {
       return NextResponse.json(
         { error: 'Отзыв можно оставить только после завершения тура' },
         { status: 400 }

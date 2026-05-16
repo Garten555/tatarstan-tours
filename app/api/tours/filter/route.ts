@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
 import { dedupeTourRowsForCatalog } from '@/lib/tours/listing-dedupe';
 import { sortCatalogTourRows } from '@/lib/tours/catalog-sort';
+import { filterCatalogToursByUpcomingSessions } from '@/lib/tours/tour-public-visibility';
 
 // Динамический роут (использует searchParams)
 export const dynamic = 'force-dynamic';
@@ -176,7 +177,12 @@ export async function GET(request: NextRequest) {
       return true;
     });
 
-    const deduped = dedupeTourRowsForCatalog(priceFiltered);
+    const bookableTours = await filterCatalogToursByUpcomingSessions(
+      supabase,
+      priceFiltered
+    );
+
+    const deduped = dedupeTourRowsForCatalog(bookableTours);
     const catalogTours = sortCatalogTourRows(deduped, sortField, sortOrder);
     const total = catalogTours.length;
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);

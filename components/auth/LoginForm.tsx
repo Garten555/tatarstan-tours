@@ -121,6 +121,26 @@ export default function LoginForm() {
       if (signInError) throw signInError;
 
       if (data.user) {
+        if (data.session) {
+          await supabase.auth.setSession({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+          });
+        }
+
+        let sessionReady = false;
+        for (let attempt = 0; attempt < 8; attempt += 1) {
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (sessionData.session) {
+            sessionReady = true;
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 80));
+        }
+        if (!sessionReady) {
+          throw new Error('Не удалось установить сессию. Попробуйте ещё раз.');
+        }
+
         const mfaRes = await fetch('/api/auth/2fa/status', { credentials: 'include' });
         const mfaJson = await mfaRes.json().catch(() => ({}));
 
@@ -135,8 +155,8 @@ export default function LoginForm() {
 
         syncUserMetadataFromProfile(supabase, data.user.id);
 
-        router.push(redirectPath);
-        router.refresh();
+        window.location.assign(redirectPath);
+        return;
       }
     } catch (err) {
       console.error('Ошибка входа:', err);
