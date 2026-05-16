@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { canLeaveReviewForBooking } from '@/lib/bookings/review-eligibility';
+import { shouldAutoPublishReview } from '@/lib/reviews/staff-auto-publish';
 
 type ReviewMediaInput = {
   media_type: 'image' | 'video';
@@ -132,6 +133,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const { data: authorProfile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    const autoPublish = shouldAutoPublishReview(
+      (authorProfile as { role?: string | null } | null)?.role
+    );
+
     const { data: review, error: reviewError } = await serviceClient
       .from('reviews')
       .insert({
@@ -140,8 +151,8 @@ export async function POST(request: NextRequest) {
         booking_id: bookingId,
         rating,
         text,
-        is_approved: false,
-        is_published: false,
+        is_approved: autoPublish,
+        is_published: autoPublish,
       })
       .select()
       .single();
@@ -176,7 +187,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, review });
+    return NextResponse.json({
+      success: true,
+      review,
+      auto_published: autoPublish,
+    });
   } catch (error) {
     console.error('Ошибка API отзывов:', error);
     return NextResponse.json(

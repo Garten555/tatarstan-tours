@@ -54,25 +54,25 @@ export default async function ReviewDetailPage({
       is_reported,
       reported_at,
       report_reason,
-      user:profiles!reviews_user_id_fkey(
+      profiles (
         first_name,
         last_name,
         email
       ),
-      tour:tours!reviews_tour_id_fkey(
+      tours (
         title
       ),
-      review_media:review_media(
+      review_media (
         media_type,
         media_url
       ),
-      review_comments:review_comments(
+      review_comments (
         id,
         message,
         created_at,
         is_reported,
         report_reason,
-        user:profiles!review_comments_user_id_fkey(
+        profiles (
           id,
           first_name,
           last_name,
@@ -90,8 +90,10 @@ export default async function ReviewDetailPage({
   }
 
   // Преобразуем данные для компонента
-  const userData = Array.isArray(review.user) ? review.user[0] : review.user;
-  const tourData = Array.isArray(review.tour) ? review.tour[0] : review.tour;
+  const userData = Array.isArray(review.profiles)
+    ? review.profiles[0]
+    : review.profiles;
+  const tourData = Array.isArray(review.tours) ? review.tours[0] : review.tours;
   
   const reviewData = {
     id: review.id,
@@ -116,9 +118,9 @@ export default async function ReviewDetailPage({
       created_at: string;
       is_reported: boolean;
       report_reason: string | null;
-      user?: { id: string; first_name: string; last_name: string; email: string; avatar_url: string | null; is_banned: boolean } | { id: string; first_name: string; last_name: string; email: string; avatar_url: string | null; is_banned: boolean }[] | null;
+      profiles?: { id: string; first_name: string; last_name: string; email: string; avatar_url: string | null; is_banned: boolean } | { id: string; first_name: string; last_name: string; email: string; avatar_url: string | null; is_banned: boolean }[] | null;
     }) => {
-      const commentUser = Array.isArray(c.user) ? c.user[0] : c.user;
+      const commentUser = Array.isArray(c.profiles) ? c.profiles[0] : c.profiles;
       return {
         id: c.id,
         message: c.message,

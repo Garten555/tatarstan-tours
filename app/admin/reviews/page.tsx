@@ -8,7 +8,18 @@ export const metadata = {
   description: 'Модерация отзывов',
 };
 
-export default async function ReviewsPage() {
+type ReviewsPageProps = {
+  searchParams: Promise<{ status?: string }>;
+};
+
+export default async function ReviewsPage({ searchParams }: ReviewsPageProps) {
+  const sp = await searchParams;
+  const initialStatusFilter =
+    sp.status === 'pending' ||
+    sp.status === 'approved' ||
+    sp.status === 'reported'
+      ? sp.status
+      : 'all';
   const supabase = await createClient();
   const serviceClient = await createServiceClient();
 
@@ -35,8 +46,7 @@ export default async function ReviewsPage() {
     redirect('/admin');
   }
 
-  // Загружаем отзывы
-  const { data: reviews } = await serviceClient
+  const { data: reviews, error: reviewsError } = await serviceClient
     .from('reviews')
     .select(`
       id,
@@ -48,20 +58,24 @@ export default async function ReviewsPage() {
       is_published,
       is_reported,
       created_at,
-      user:profiles!reviews_user_id_fkey(
+      profiles (
         first_name,
         last_name,
         email
       ),
-      tour:tours!reviews_tour_id_fkey(
+      tours (
         title
       ),
-      review_media:review_media(
+      review_media (
         media_type,
         media_url
       )
     `)
     .order('created_at', { ascending: false });
+
+  if (reviewsError) {
+    console.error('[admin/reviews] load:', reviewsError.message);
+  }
 
   // Преобразуем данные для компонента
   interface ReviewData {
@@ -74,13 +88,15 @@ export default async function ReviewsPage() {
     is_published: boolean;
     is_reported: boolean;
     created_at: string;
-    user?: { first_name: string; last_name: string; email: string } | { first_name: string; last_name: string; email: string }[] | null;
-    tour?: { title: string } | { title: string }[] | null;
+    profiles?: { first_name: string; last_name: string; email: string } | { first_name: string; last_name: string; email: string }[] | null;
+    tours?: { title: string } | { title: string }[] | null;
     review_media?: { media_type: string; media_url: string }[] | null;
   }
   const reviewsData = (reviews || []).map((review: ReviewData) => {
-    const userData = Array.isArray(review.user) ? review.user[0] : review.user;
-    const tourData = Array.isArray(review.tour) ? review.tour[0] : review.tour;
+    const userData = Array.isArray(review.profiles)
+      ? review.profiles[0]
+      : review.profiles;
+    const tourData = Array.isArray(review.tours) ? review.tours[0] : review.tours;
     
     return {
       id: review.id,
@@ -120,7 +136,10 @@ export default async function ReviewsPage() {
         </p>
       </div>
 
-      <ReviewsTable initialReviews={reviewsData} />
+      <ReviewsTable
+        initialReviews={reviewsData}
+        initialStatusFilter={initialStatusFilter}
+      />
     </div>
   );
 }

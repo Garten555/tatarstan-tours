@@ -24,9 +24,13 @@ type ReviewRow = {
 
 type ReviewsTableProps = {
   initialReviews: ReviewRow[];
+  initialStatusFilter?: 'all' | 'pending' | 'approved' | 'reported';
 };
 
-export default function ReviewsTable({ initialReviews }: ReviewsTableProps) {
+export default function ReviewsTable({
+  initialReviews,
+  initialStatusFilter = 'all',
+}: ReviewsTableProps) {
   const [reviews, setReviews] = useState<ReviewRow[]>(initialReviews);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [actionId, setActionId] = useState<string | null>(null);
@@ -34,7 +38,9 @@ export default function ReviewsTable({ initialReviews }: ReviewsTableProps) {
   const [viewerImages, setViewerImages] = useState<string[]>([]);
   const [viewerIndex, setViewerIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'reported'>('all');
+  const [statusFilter, setStatusFilter] = useState<
+    'all' | 'pending' | 'approved' | 'reported'
+  >(initialStatusFilter);
 
   const openViewer = (images: string[], index: number) => {
     setViewerImages(images);
