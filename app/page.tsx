@@ -62,8 +62,8 @@ export default async function Home() {
             <div className="container mx-auto px-4 sm:px-5 md:px-6 lg:px-8 relative z-10">
               <div className="h-10 w-56 bg-gray-100 rounded animate-pulse mb-6" />
               <div className="h-6 w-96 bg-gray-100 rounded animate-pulse mb-10" />
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {Array.from({ length: 2 }).map((_, i) => (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Array.from({ length: 3 }).map((_, i) => (
                   <div
                     key={i}
                     className="h-52 bg-gray-50 border border-gray-100 rounded-xl animate-pulse"

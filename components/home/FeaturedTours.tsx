@@ -1,64 +1,31 @@
+import { unstable_noStore as noStore } from 'next/cache';
 import { createServiceClient } from '@/lib/supabase/server';
 import TourCard from '@/components/tours/TourCard';
 import {
-  dedupeTourRowsForCatalog,
-  type TourRowForDedupe,
-} from '@/lib/tours/listing-dedupe';
-import { filterCatalogToursByUpcomingSessions } from '@/lib/tours/tour-public-visibility';
+  fetchActiveCatalogTourRows,
+  pickHomeFeaturedTours,
+} from '@/lib/tours/active-catalog-listing';
 import { FeaturedToursCountBadge } from '@/components/home/FeaturedToursCountBadge';
 import Link from 'next/link';
 import { ArrowRight, Sparkles } from 'lucide-react';
 
 export async function FeaturedTours() {
+  noStore();
+
   const supabase = createServiceClient();
 
-  const now = new Date().toISOString();
-  
-  let tours = null;
+  let tours: Awaited<ReturnType<typeof pickHomeFeaturedTours>>['tours'] = [];
   let totalAvailableTours = 0;
-  let error = null;
-  
+  let error: unknown = null;
+
   try {
-    const result = await supabase
-      .from('tours')
-      .select(`
-        id,
-        title,
-        slug,
-        short_desc,
-        cover_image,
-        price_per_person,
-        start_date,
-        end_date,
-        max_participants,
-        current_participants,
-        tour_type,
-        category,
-        city_id,
-        created_at
-      `)
-      .eq('status', 'active')
-      .or(`end_date.is.null,end_date.gte.${now}`)
-      .order('created_at', { ascending: false })
-      .limit(8000);
-    
-    const raw = result.data;
-    error = result.error;
-    if (raw) {
-      const bookable = await filterCatalogToursByUpcomingSessions(
-        supabase,
-        raw as TourRowForDedupe[]
-      );
-      const deduped = dedupeTourRowsForCatalog(bookable);
-      totalAvailableTours = deduped.length;
-      // На главной показываем только 3 карточки.
-      tours = deduped.slice(0, 3);
-    } else {
-      tours = null;
-    }
+    const catalogRows = await fetchActiveCatalogTourRows(supabase);
+    const picked = pickHomeFeaturedTours(catalogRows);
+    tours = picked.tours;
+    totalAvailableTours = picked.total;
   } catch (err) {
     console.error('Error fetching tours (catch):', err);
-    error = err as any;
+    error = err;
   }
 
   if (error) {
@@ -79,7 +46,7 @@ export async function FeaturedTours() {
     );
   }
 
-  if (!tours || tours.length === 0) {
+  if (tours.length === 0) {
     return (
       <section className="py-16 md:py-20 relative overflow-hidden bg-white">
         <div className="container mx-auto px-4 md:px-6 lg:px-8 text-center relative z-10">
@@ -123,22 +90,22 @@ export async function FeaturedTours() {
             </p>
           </div>
           
-          <FeaturedToursCountBadge initialCount={totalAvailableTours} />
+          <FeaturedToursCountBadge count={totalAvailableTours} />
         </div>
 
         {/* Сетка туров */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 md:gap-6 mb-8 sm:mb-10 md:mb-12">
-          {(tours as any[]).map((tour) => (
+          {tours.map((tour) => (
             <div key={tour.id} className="min-w-0">
               <TourCard
                 id={tour.id}
                 title={tour.title}
                 slug={tour.slug}
-                short_desc={tour.short_desc}
+                short_desc={tour.short_desc || ''}
                 cover_image={tour.cover_image}
-                price_per_person={tour.price_per_person}
-                start_date={tour.start_date}
-                end_date={tour.end_date}
+                price_per_person={Number(tour.price_per_person)}
+                start_date={tour.start_date || ''}
+                end_date={tour.end_date || tour.start_date || ''}
                 max_participants={tour.max_participants}
                 current_participants={tour.current_participants || 0}
                 tour_type={tour.tour_type}
