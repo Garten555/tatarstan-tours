@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Loader2, QrCode } from 'lucide-react';
-import { createPaymentQrDataUrl } from '@/lib/payment/payment-qr';
+import { buildPaymentQrPayload } from '@/lib/payment/payment-qr';
 
 type PaymentQrDisplayProps = {
   paymentRef: string;
@@ -34,13 +34,20 @@ export default function PaymentQrDisplay({
       setError(null);
       setDataUrl(null);
       try {
-        const url = await createPaymentQrDataUrl({
+        const payload = buildPaymentQrPayload({
           payment_ref: paymentRef,
           tour_id: tourId,
           tour_title: tourTitle,
           amount,
           booking_id: bookingId,
           created_at: createdAt ?? new Date().toISOString(),
+        });
+        const QRCode = (await import('qrcode')).default;
+        const url = await QRCode.toDataURL(payload, {
+          width: 280,
+          margin: 2,
+          errorCorrectionLevel: 'M',
+          color: { dark: '#065f46', light: '#ffffff' },
         });
         if (!cancelled) setDataUrl(url);
       } catch {

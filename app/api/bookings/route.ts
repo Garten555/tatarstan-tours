@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import type { TourSessionRow } from '@/lib/types/tour-session';
 import { ensureTourRoomForSession } from '@/lib/tour/ensure-session-room';
+import { generatePaymentRef } from '@/lib/payment/payment-ref';
 
 export async function POST(request: NextRequest) {
   try {
@@ -248,7 +249,7 @@ export async function POST(request: NextRequest) {
         : profileData?.email || user.email;
     const qrPaymentRef =
       payment_method === 'qr_code'
-        ? payment_data?.qr_payment_ref || crypto.randomUUID()
+        ? payment_data?.qr_payment_ref || generatePaymentRef()
         : null;
 
     // Создаем бронирование

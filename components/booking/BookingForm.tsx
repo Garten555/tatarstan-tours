@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import PaymentQrDisplay from '@/components/booking/PaymentQrDisplay';
+import { generatePaymentRef } from '@/lib/payment/payment-ref';
 
 interface BookingFormProps {
   tour: any;
@@ -147,7 +148,7 @@ export default function BookingForm({ tour, session = null, user, savedCards }: 
 
   useEffect(() => {
     if (formData.payment_method === 'qr_code' && !qrPaymentRef) {
-      setQrPaymentRef(crypto.randomUUID());
+      setQrPaymentRef(generatePaymentRef());
     }
   }, [formData.payment_method, qrPaymentRef]);
 
@@ -319,7 +320,7 @@ export default function BookingForm({ tour, session = null, user, savedCards }: 
 
       if (formData.payment_method === 'qr_code') {
         bookingData.payment_data = {
-          qr_payment_ref: qrPaymentRef || crypto.randomUUID(),
+          qr_payment_ref: qrPaymentRef || generatePaymentRef(),
           qr_demo: true,
         };
       }
