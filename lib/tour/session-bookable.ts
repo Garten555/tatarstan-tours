@@ -18,6 +18,15 @@ export function isTourSessionStillBookable(
  * Выезд уже закончился по времени (дата конца или начала без конца).
  * Совпадает с логикой «просрочено» на /booking для слотов без слотов — по туру.
  */
+/** Выезд ещё не состоялся (для предупреждений админки при смене дат). */
+export function isDepartureStillInFuture(
+  start_at: string,
+  nowMs: number = Date.now()
+): boolean {
+  const startMs = new Date(start_at).getTime();
+  return Number.isFinite(startMs) && startMs > nowMs;
+}
+
 export function isTourInstanceTimeEnded(
   params: {
     session?: { start_at: string; end_at: string | null } | null;

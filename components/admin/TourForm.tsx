@@ -14,6 +14,7 @@ import {
   uploadFormDataWithProgress,
   type UploadFormProgressOptions,
 } from '@/lib/http/upload-form-progress';
+import { isDepartureStillInFuture } from '@/lib/tour/session-bookable';
 
 /** Согласовано с подписью в форме и лимитом в app/api/upload/route.ts */
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
@@ -763,11 +764,24 @@ export default function TourForm({
       (initialData?.status === 'completed' ||
         initialData?.status === 'cancelled');
 
+    const nowMs = Date.now();
+    const allDeparturesInPast =
+      mode === 'edit' &&
+      (initialSessions.length > 0
+        ? initialSessions.every(
+            (s) => s.start_at && !isDepartureStillInFuture(s.start_at, nowMs)
+          )
+        : !!(
+            initialData?.start_date &&
+            !isDepartureStillInFuture(initialData.start_date, nowMs)
+          ));
+
     if (
       existingSessionsDatesAffected &&
       mode === 'edit' &&
       initialData?.id &&
-      !tourAlreadyFinished
+      !tourAlreadyFinished &&
+      !allDeparturesInPast
     ) {
       try {
         const impactRes = await fetch(`/api/admin/tours/${initialData.id}`);
@@ -780,8 +794,14 @@ export default function TourForm({
             if (existingExtraSessionsAffected) {
               detailParts.push('изменили даты или удалили уже существующий дополнительный выезд');
             }
+            const bookingWord =
+              n === 1
+                ? 'активное бронирование'
+                : n >= 2 && n <= 4
+                  ? 'активных бронирования'
+                  : 'активных бронирований';
             const proceed = await confirm(
-              `У тура есть ${n} активных бронирований. ${detailParts.join('; ')}. Участники с затронутым слотом могут получить письмо о переносе. Продолжить?`,
+              `У тура есть ${n} ${bookingWord}. ${detailParts.join('; ')}. Участники с затронутым слотом могут получить письмо о переносе. Продолжить?`,
               'Изменение существующих выездов',
               'warning',
               'Сохранить',

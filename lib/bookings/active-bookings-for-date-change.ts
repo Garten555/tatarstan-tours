@@ -1,13 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import {
+  isDepartureStillInFuture,
   isTourInstanceTimeEnded,
-  isTourSessionStillBookable,
 } from '@/lib/tour/session-bookable';
 
 /**
  * Брони, из‑за которых нужно предупреждение при смене дат в админке:
- * pending/confirmed на ещё не прошедших выездах (не «зависшие» confirmed после тура).
+ * pending/confirmed на выездах, которые ещё не начались (по start_at).
  */
 export async function countBookingsAffectedByDateChange(
   serviceClient: SupabaseClient,
@@ -24,6 +24,25 @@ export async function countBookingsAffectedByDateChange(
 
   if (tour.status === 'completed' || tour.status === 'cancelled') {
     return 0;
+  }
+
+  const { data: tourSessions } = await serviceClient
+    .from('tour_sessions')
+    .select('start_at, end_at')
+    .eq('tour_id', tourId)
+    .eq('status', 'active');
+
+  if (tourSessions && tourSessions.length > 0) {
+    const hasUpcomingDeparture = tourSessions.some((s) =>
+      isDepartureStillInFuture(s.start_at, nowMs)
+    );
+    if (!hasUpcomingDeparture) return 0;
+  } else if (tour.start_date) {
+    const tourEnded = isTourInstanceTimeEnded(
+      { tourStart: tour.start_date, tourEnd: tour.end_date },
+      nowMs
+    );
+    if (tourEnded) return 0;
   }
 
   const { data: bookings, error: bookingsError } = await serviceClient
@@ -65,24 +84,13 @@ export async function countBookingsAffectedByDateChange(
   for (const booking of bookings) {
     if (booking.session_id) {
       const session = sessionsById.get(booking.session_id);
-      if (
-        session &&
-        isTourSessionStillBookable(session.start_at, session.end_at, nowMs)
-      ) {
+      if (session && isDepartureStillInFuture(session.start_at, nowMs)) {
         count += 1;
       }
       continue;
     }
 
-    if (
-      !isTourInstanceTimeEnded(
-        {
-          tourStart: tour.start_date,
-          tourEnd: tour.end_date,
-        },
-        nowMs
-      )
-    ) {
+    if (tour.start_date && isDepartureStillInFuture(tour.start_date, nowMs)) {
       count += 1;
     }
   }
