@@ -6,9 +6,11 @@
  * Победитель группы: ближайшая дата start_date; при равенстве — более новый created_at.
  */
 export type TourRowForDedupe = {
+  id: string;
   title: string;
   city_id?: string | null;
   start_date?: string | null;
+  end_date?: string | null;
   created_at?: string | null;
   price_per_person?: number | string | null;
 };

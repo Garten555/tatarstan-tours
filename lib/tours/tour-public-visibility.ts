@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { LEGACY_TOUR_SESSION_ID } from '@/lib/tour/legacy-session';
+import type { TourRowForDedupe } from '@/lib/tours/listing-dedupe';
 
 type TourDates = {
   start_date?: string | null;
@@ -60,7 +61,7 @@ export function isTourVisibleInPublicCatalog(
   return true;
 }
 
-type CatalogTourRow = TourDates & { id: string };
+export type CatalogTourRow = TourDates & Pick<TourRowForDedupe, 'id'>;
 
 /** Оставляет в каталоге только туры с актуальными выездами (если слоты есть в БД). */
 export async function filterCatalogToursByUpcomingSessions<T extends CatalogTourRow>(
