@@ -30,6 +30,43 @@ interface Booking {
   };
 }
 
+const TICKET_HTML2CANVAS_SCALE = 2;
+const TICKET_QR_PX = 116;
+const TICKET_QR_PAD_PX = 8;
+
+function loadDataUrlImage(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Не удалось загрузить QR для билета'));
+    img.src = dataUrl;
+  });
+}
+
+/** html2canvas не рисует backdrop-filter и часто пропускает img — дорисовываем QR на canvas. */
+async function paintQrOntoTicketCanvas(
+  canvas: HTMLCanvasElement,
+  ticketRoot: HTMLElement,
+  qrSlot: HTMLElement,
+  qrDataUrl: string
+): Promise<void> {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const rootRect = ticketRoot.getBoundingClientRect();
+  const slotRect = qrSlot.getBoundingClientRect();
+  const scale = TICKET_HTML2CANVAS_SCALE;
+  const pad = TICKET_QR_PAD_PX * scale;
+  const size = TICKET_QR_PX * scale;
+  const x = (slotRect.left - rootRect.left) * scale + pad;
+  const y = (slotRect.top - rootRect.top) * scale + pad;
+
+  const qrImg = await loadDataUrlImage(qrDataUrl);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x - pad, y - pad, size + pad * 2, size + pad * 2);
+  ctx.drawImage(qrImg, x, y, size, size);
+}
+
 export async function generateTicketPDF(booking: Booking) {
   // Создаем временный элемент для рендеринга билета
   const ticketElement = document.createElement('div');
@@ -37,9 +74,11 @@ export async function generateTicketPDF(booking: Booking) {
   ticketElement.style.padding = '0';
   ticketElement.style.backgroundColor = '#f8fafc';
   ticketElement.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
-  ticketElement.style.position = 'absolute';
-  ticketElement.style.left = '-9999px';
+  ticketElement.style.position = 'fixed';
+  ticketElement.style.left = '0';
   ticketElement.style.top = '0';
+  ticketElement.style.zIndex = '-1';
+  ticketElement.style.pointerEvents = 'none';
 
   // Форматирование даты
   const formatDate = (dateString: string) => {
@@ -199,14 +238,20 @@ export async function generateTicketPDF(booking: Booking) {
 
         <!-- QR-код и дополнительная информация -->
         <div style="position: relative; z-index: 1; display: flex; gap: 14px; align-items: flex-start;">
-          <div style="flex: 1; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); padding: 14px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.4);">
+          <div style="flex: 1; background: rgba(255,255,255,0.28); padding: 14px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.4);">
             <div style="font-size: 10px; color: white; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 800;">QR-код для проверки</div>
-            <div id="ticket-qr-slot" style="background: white; padding: 8px; border-radius: 8px; display: inline-block; border: 2px solid #e5e7eb; width: 116px; height: 116px; box-sizing: content-box;"></div>
+            <div id="ticket-qr-slot" style="background: white; padding: 8px; border-radius: 8px; display: inline-block; border: 2px solid #e5e7eb; width: 116px; height: 116px; box-sizing: content-box; overflow: hidden;">
+              ${
+                qrCodeDataUrl
+                  ? `<img src="${qrCodeDataUrl}" alt="QR" width="116" height="116" style="display:block;width:116px;height:116px;" />`
+                  : ''
+              }
+            </div>
             <div style="margin-top: 8px; font-size: 9px; color: white; font-family: monospace; letter-spacing: 0.5px; font-weight: 600;">
               ID: ${bookingId}
             </div>
           </div>
-          <div style="flex: 1; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); padding: 14px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.4);">
+          <div style="flex: 1; background: rgba(255,255,255,0.28); padding: 14px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.4);">
             <div style="font-size: 10px; color: white; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 800;">Информация</div>
             <div style="margin-bottom: 10px;">
               <div style="font-size: 9px; color: rgba(255,255,255,0.85); margin-bottom: 4px; font-weight: 600;">Дата бронирования</div>
@@ -261,53 +306,49 @@ export async function generateTicketPDF(booking: Booking) {
 
   document.body.appendChild(ticketElement);
 
-  const qrSlot = ticketElement.querySelector('#ticket-qr-slot');
-  if (qrSlot) {
-    if (qrCodeDataUrl) {
-      const qrImg = document.createElement('img');
-      qrImg.alt = 'QR Ticket';
-      qrImg.width = 116;
-      qrImg.height = 116;
-      qrImg.style.display = 'block';
-      qrImg.style.width = '116px';
-      qrImg.style.height = '116px';
-      qrSlot.appendChild(qrImg);
-      await new Promise<void>((resolve, reject) => {
-        qrImg.onload = () => resolve();
-        qrImg.onerror = () => reject(new Error('Не удалось загрузить QR в билет'));
-        qrImg.src = qrCodeDataUrl;
-        if (qrImg.complete && qrImg.naturalWidth > 0) resolve();
+  const qrSlot = ticketElement.querySelector('#ticket-qr-slot') as HTMLElement | null;
+  if (qrSlot && !qrCodeDataUrl) {
+    try {
+      qrCodeDataUrl = await QRCode.toDataURL(qrPayload, {
+        width: 180,
+        margin: 1,
+        errorCorrectionLevel: 'M',
+        color: { dark: '#111827', light: '#ffffff' },
       });
-    } else {
-      const qrCanvas = document.createElement('canvas');
-      qrCanvas.width = 116;
-      qrCanvas.height = 116;
-      try {
-        await QRCode.toCanvas(qrCanvas, qrPayload, {
-          width: 116,
-          margin: 1,
-          errorCorrectionLevel: 'M',
-          color: { dark: '#111827', light: '#ffffff' },
-        });
-        qrSlot.appendChild(qrCanvas);
-      } catch (canvasErr) {
-        console.error('QRCode.toCanvas failed:', canvasErr);
-      }
+    } catch (retryErr) {
+      console.error('QR retry failed:', retryErr);
     }
   }
 
+  if (qrSlot && qrCodeDataUrl) {
+    const existing = qrSlot.querySelector('img');
+    if (!existing) {
+      const qrImg = document.createElement('img');
+      qrImg.src = qrCodeDataUrl;
+      qrImg.alt = 'QR';
+      qrImg.width = 116;
+      qrImg.height = 116;
+      qrImg.style.cssText = 'display:block;width:116px;height:116px;';
+      qrSlot.appendChild(qrImg);
+    }
+    await loadDataUrlImage(qrCodeDataUrl);
+  }
+
   try {
-    // Конвертируем HTML в canvas
     const canvas = await html2canvas(ticketElement, {
-      scale: 2,
+      scale: TICKET_HTML2CANVAS_SCALE,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#f8fafc',
       logging: false,
-      imageTimeout: 15000,
+      imageTimeout: 20000,
       height: ticketElement.scrollHeight,
       windowHeight: ticketElement.scrollHeight,
     });
+
+    if (qrSlot && qrCodeDataUrl) {
+      await paintQrOntoTicketCanvas(canvas, ticketElement, qrSlot, qrCodeDataUrl);
+    }
 
     // Создаем PDF
     const imgData = canvas.toDataURL('image/png');
