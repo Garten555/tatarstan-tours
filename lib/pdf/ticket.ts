@@ -98,15 +98,21 @@ export async function generateTicketPDF(booking: Booking) {
     total_price: booking.total_price,
     created_at: booking.created_at,
   });
-  const qrCodeDataUrl = await QRCode.toDataURL(qrPayload, {
-    width: 180,
-    margin: 1,
-    errorCorrectionLevel: 'M',
-    color: {
-      dark: '#111827',
-      light: '#ffffff',
-    },
-  });
+
+  let qrCodeDataUrl = '';
+  try {
+    qrCodeDataUrl = await QRCode.toDataURL(qrPayload, {
+      width: 180,
+      margin: 1,
+      errorCorrectionLevel: 'M',
+      color: {
+        dark: '#111827',
+        light: '#ffffff',
+      },
+    });
+  } catch (qrErr) {
+    console.error('QRCode.toDataURL failed:', qrErr);
+  }
   const tourStartIso = effectiveBookingStartIso({
     sessionSlot: booking.tour_session?.start_at
       ? { start_at: booking.tour_session.start_at, end_at: booking.tour_session.end_at ?? null }
@@ -195,9 +201,7 @@ export async function generateTicketPDF(booking: Booking) {
         <div style="position: relative; z-index: 1; display: flex; gap: 14px; align-items: flex-start;">
           <div style="flex: 1; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); padding: 14px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.4);">
             <div style="font-size: 10px; color: white; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 800;">QR-код для проверки</div>
-            <div style="background: white; padding: 8px; border-radius: 8px; display: inline-block; border: 2px solid #e5e7eb;">
-              <img src="${qrCodeDataUrl}" alt="QR Ticket" style="display:block; width: 116px; height: 116px;" />
-            </div>
+            <div id="ticket-qr-slot" style="background: white; padding: 8px; border-radius: 8px; display: inline-block; border: 2px solid #e5e7eb; width: 116px; height: 116px; box-sizing: content-box;"></div>
             <div style="margin-top: 8px; font-size: 9px; color: white; font-family: monospace; letter-spacing: 0.5px; font-weight: 600;">
               ID: ${bookingId}
             </div>
@@ -257,13 +261,50 @@ export async function generateTicketPDF(booking: Booking) {
 
   document.body.appendChild(ticketElement);
 
+  const qrSlot = ticketElement.querySelector('#ticket-qr-slot');
+  if (qrSlot) {
+    if (qrCodeDataUrl) {
+      const qrImg = document.createElement('img');
+      qrImg.alt = 'QR Ticket';
+      qrImg.width = 116;
+      qrImg.height = 116;
+      qrImg.style.display = 'block';
+      qrImg.style.width = '116px';
+      qrImg.style.height = '116px';
+      qrSlot.appendChild(qrImg);
+      await new Promise<void>((resolve, reject) => {
+        qrImg.onload = () => resolve();
+        qrImg.onerror = () => reject(new Error('Не удалось загрузить QR в билет'));
+        qrImg.src = qrCodeDataUrl;
+        if (qrImg.complete && qrImg.naturalWidth > 0) resolve();
+      });
+    } else {
+      const qrCanvas = document.createElement('canvas');
+      qrCanvas.width = 116;
+      qrCanvas.height = 116;
+      try {
+        await QRCode.toCanvas(qrCanvas, qrPayload, {
+          width: 116,
+          margin: 1,
+          errorCorrectionLevel: 'M',
+          color: { dark: '#111827', light: '#ffffff' },
+        });
+        qrSlot.appendChild(qrCanvas);
+      } catch (canvasErr) {
+        console.error('QRCode.toCanvas failed:', canvasErr);
+      }
+    }
+  }
+
   try {
     // Конвертируем HTML в canvas
     const canvas = await html2canvas(ticketElement, {
       scale: 2,
       useCORS: true,
+      allowTaint: true,
       backgroundColor: '#f8fafc',
       logging: false,
+      imageTimeout: 15000,
       height: ticketElement.scrollHeight,
       windowHeight: ticketElement.scrollHeight,
     });

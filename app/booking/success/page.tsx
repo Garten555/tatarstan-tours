@@ -172,7 +172,7 @@ export default async function BookingSuccessPage({ searchParams }: BookingSucces
               Вернуться к туру
             </Link>
             <Link
-              href="/profile"
+              href="/profile/bookings"
               className="flex-1 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold transition-colors text-center"
             >
               Мои бронирования

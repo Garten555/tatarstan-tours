@@ -90,12 +90,7 @@ export default function PaymentQrDisplay({
           />
         )}
       </div>
-      <p className="text-sm text-center text-gray-600 mt-4 font-medium">
-        {bookingId
-          ? 'Уникальный QR для этого бронирования'
-          : 'Уникальный QR для оплаты (демо, без списания средств)'}
-      </p>
-      <p className="text-xs text-center text-gray-400 mt-1 font-mono break-all">
+      <p className="text-xs text-center text-gray-400 mt-4 font-mono break-all">
         {paymentRef.slice(0, 8).toUpperCase()}
       </p>
     </div>
