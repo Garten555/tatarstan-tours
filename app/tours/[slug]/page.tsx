@@ -22,6 +22,7 @@ import {
   filterUpcomingSessions,
   isTourVisibleInPublicCatalog,
 } from '@/lib/tours/tour-public-visibility';
+import { syncSessionCurrentParticipants } from '@/lib/tour/session-participants';
 
 interface TourPageProps {
   params: Promise<{ slug: string }>;
@@ -97,6 +98,21 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
     max_participants: number;
     current_participants: number | null;
   }[];
+
+  if (tourSessions.length > 0) {
+    await Promise.all(
+      tourSessions.map((s) => syncSessionCurrentParticipants(supabase, s.id))
+    );
+    const refreshed = await supabase
+      .from('tour_sessions')
+      .select('id, start_at, end_at, max_participants, current_participants')
+      .eq('tour_id', t.id)
+      .eq('status', 'active')
+      .order('start_at', { ascending: true });
+    if (!refreshed.error && refreshed.data) {
+      tourSessions = refreshed.data as typeof tourSessions;
+    }
+  }
 
   /** Нет слотов в БД — показываем дату/места из строки тура и бронь без session_id (как раньше). */
   if (tourSessions.length === 0 && t.start_date) {

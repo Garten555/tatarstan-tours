@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import type { TourSessionRow } from '@/lib/types/tour-session';
+import { syncSessionCurrentParticipants } from '@/lib/tour/session-participants';
 import BookingForm from '@/components/booking/BookingForm';
 
 export const metadata = {
@@ -79,6 +80,15 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
       redirect(`/tours/${(tour as any).slug}?error=session`);
     }
     sessionRow = srow as TourSessionRow;
+    await syncSessionCurrentParticipants(serviceClient, sessionRow.id);
+    const { data: srowFresh } = await serviceClient
+      .from('tour_sessions')
+      .select('id, start_at, end_at, max_participants, current_participants, status')
+      .eq('id', sessionRow.id)
+      .single();
+    if (srowFresh) {
+      sessionRow = srowFresh as TourSessionRow;
+    }
     const endS = sessionRow.end_at ? new Date(sessionRow.end_at) : null;
     const startS = new Date(sessionRow.start_at);
     if (endS && endS <= now) {

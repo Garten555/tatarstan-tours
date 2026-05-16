@@ -4,6 +4,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import type { TourSessionRow } from '@/lib/types/tour-session';
 import { ensureTourRoomForSession } from '@/lib/tour/ensure-session-room';
 import { generatePaymentRef } from '@/lib/payment/payment-ref';
+import { sumActiveBookingSeatsForSession } from '@/lib/tour/session-participants';
 
 export async function POST(request: NextRequest) {
   try {
@@ -115,8 +116,11 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const availableSpots =
-        sessionRow.max_participants - (sessionRow.current_participants ?? 0);
+      const bookedSeats = await sumActiveBookingSeatsForSession(
+        serviceClient,
+        session_id
+      );
+      const availableSpots = sessionRow.max_participants - bookedSeats;
       if (num_people > availableSpots) {
         return NextResponse.json(
           { error: `Доступно только ${availableSpots} мест` },
