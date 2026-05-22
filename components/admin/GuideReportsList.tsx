@@ -35,20 +35,40 @@ function roleRu(role: string | null | undefined): string {
 type Props = {
   rows: GuideReportRow[];
   viewerRole: string;
-  onRowsChange?: (rows: GuideReportRow[]) => void;
+  onGuideBanChange?: (guideUserId: string, profile: BanProfileUpdate) => void;
+  filteredEmpty?: boolean;
+  onResetFilters?: () => void;
 };
 
-export default function GuideReportsList({ rows, viewerRole, onRowsChange }: Props) {
+export default function GuideReportsList({
+  rows,
+  viewerRole,
+  onGuideBanChange,
+  filteredEmpty = false,
+  onResetFilters,
+}: Props) {
   const handleBanChange = (guideUserId: string) => (profile: BanProfileUpdate) => {
-    if (!onRowsChange) return;
-    onRowsChange(
-      rows.map((r) =>
-        r.guide_user_id === guideUserId
-          ? { ...r, guide_is_banned: profile.is_banned, guide_role: profile.role }
-          : r
-      )
-    );
+    onGuideBanChange?.(guideUserId, profile);
   };
+  if (rows.length === 0 && filteredEmpty) {
+    return (
+      <div className="rounded-2xl border-2 border-dashed border-violet-200 bg-white p-12 text-center shadow-sm">
+        <Flag className="mx-auto mb-4 h-14 w-14 text-violet-300" aria-hidden />
+        <p className="text-xl font-black text-gray-900">Ничего не найдено</p>
+        <p className="mt-2 font-semibold text-gray-600">Сбросьте или измените фильтры.</p>
+        {onResetFilters ? (
+          <button
+            type="button"
+            onClick={onResetFilters}
+            className="mt-4 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-violet-700"
+          >
+            Сбросить фильтры
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
   if (rows.length === 0) {
     return (
       <div className="rounded-2xl border-2 border-dashed border-violet-200 bg-white p-12 text-center shadow-sm">
