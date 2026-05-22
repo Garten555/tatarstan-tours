@@ -66,14 +66,23 @@ export async function POST(
         user_id: user.id,
         message,
       })
-      .select()
+      .select('id, review_id, message, created_at, user_id')
       .single();
 
     if (error || !comment) {
       return NextResponse.json({ error: 'Не удалось сохранить комментарий' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, comment });
+    const { data: authorProfile } = await serviceClient
+      .from('profiles')
+      .select('id, first_name, last_name, avatar_url, role')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    return NextResponse.json({
+      success: true,
+      comment: { ...comment, user: authorProfile },
+    });
   } catch (error) {
     console.error('Ошибка API комментариев:', error);
     return NextResponse.json({ error: 'Внутренняя ошибка сервера' }, { status: 500 });

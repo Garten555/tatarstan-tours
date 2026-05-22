@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Flag, ExternalLink, Calendar, Shield } from 'lucide-react';
 import { escapeHtml } from '@/lib/utils/sanitize';
+import FormattedDate from '@/components/common/FormattedDate';
 import BanUserButton from '@/components/admin/BanUserButton';
 
 export type TourRoomReportRow = {
@@ -187,11 +188,11 @@ export default function TourRoomMessageReportsList({
             <div className="flex shrink-0 flex-col gap-1 text-xs font-semibold text-gray-500 sm:text-right">
               <span className="inline-flex items-center justify-end gap-1 sm:justify-end">
                 <Calendar className="h-3.5 w-3.5" aria-hidden />
-                Сообщение: {new Date(row.created_at).toLocaleString('ru-RU')}
+                Сообщение: <FormattedDate value={row.created_at} />
               </span>
               {row.reported_at ? (
                 <span className="text-amber-800">
-                  Жалоба: {new Date(row.reported_at).toLocaleString('ru-RU')}
+                  Жалоба: <FormattedDate value={row.reported_at} />
                 </span>
               ) : null}
               <span className="font-mono text-[11px] text-gray-400">id: {row.id}</span>

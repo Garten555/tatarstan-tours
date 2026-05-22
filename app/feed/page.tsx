@@ -7,6 +7,7 @@ import { escapeHtml } from '@/lib/utils/sanitize';
 import ClampedText from '@/components/ui/ClampedText';
 import { FeedAspectCover } from '@/components/feed/FeedAspectCover';
 import BlogPostFeedItem from '@/components/blog/BlogPostFeedItem';
+import FormattedDate from '@/components/common/FormattedDate';
 import { createClient } from '@/lib/supabase/client';
 
 type FeedType = 'post' | 'review' | 'achievement';
@@ -160,12 +161,7 @@ export default function FeedPage() {
                         {escapeHtml(name)}
                       </Link>
                       <div className="text-xs text-gray-500">
-                        {new Date(item.created_at).toLocaleString('ru-RU', {
-                          day: 'numeric',
-                          month: 'short',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
+                        <FormattedDate value={item.created_at} variant="short" />
                       </div>
                     </div>
                   </div>

@@ -2,11 +2,10 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Send, Loader2 } from 'lucide-react';
-import Image from 'next/image';
-import { format } from 'date-fns';
-import { ru } from 'date-fns/locale';
+import FormattedDate from '@/components/common/FormattedDate';
 import toast from 'react-hot-toast';
 import { escapeHtml } from '@/lib/utils/sanitize';
+import UserAvatar from '@/components/common/UserAvatar';
 import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
 import { insertEmojiAtCursor } from '@/lib/chat/insert-emoji-at-cursor';
 
@@ -24,6 +23,7 @@ interface Comment {
     first_name?: string | null;
     last_name?: string | null;
     avatar_url?: string | null;
+    role?: string | null;
   };
   replies?: Comment[];
 }
@@ -153,26 +153,20 @@ export default function BlogComments({ postId }: BlogCommentsProps) {
             return (
               <div key={comment.id} className="border-b border-gray-100 pb-6 last:border-0">
                 <div className="flex gap-4">
-                  {comment.user?.avatar_url ? (
-                    <Image
-                      src={comment.user.avatar_url}
-                      alt={authorName}
-                      width={40}
-                      height={40}
-                      className="rounded-full flex-shrink-0"
-                    />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-emerald-500 flex items-center justify-center text-white font-bold flex-shrink-0">
-                      {authorName[0]?.toUpperCase() || 'П'}
-                    </div>
-                  )}
+                  <UserAvatar
+                    avatarUrl={comment.user?.avatar_url}
+                    displayName={authorName}
+                    username={comment.user?.username}
+                    role={comment.user?.role}
+                    size="sm"
+                  />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="font-semibold text-gray-900">
                         {escapeHtml(authorName)}
                       </span>
                       <span className="text-sm text-gray-500">
-                        {format(new Date(comment.created_at), 'dd MMM yyyy, HH:mm', { locale: ru })}
+                        <FormattedDate value={comment.created_at} variant="short" />
                       </span>
                     </div>
                     <p className="text-gray-700 whitespace-pre-wrap">

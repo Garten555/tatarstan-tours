@@ -182,7 +182,7 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
     reviewUserIds.length > 0
       ? await supabase
           .from('profiles')
-          .select('id, first_name, last_name, avatar_url')
+          .select('id, first_name, last_name, avatar_url, role')
           .in('id', reviewUserIds)
       : { data: [] };
 
@@ -209,7 +209,7 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
     commentUserIds.length > 0
       ? await supabase
           .from('profiles')
-          .select('id, first_name, last_name, avatar_url')
+          .select('id, first_name, last_name, avatar_url, role')
           .in('id', commentUserIds)
       : { data: [] };
 
@@ -240,7 +240,14 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
 
   const commentsMap = new Map<
     string,
-    { id: string; message: string; user_name: string; user_avatar: string | null; created_at: string }[]
+    {
+      id: string;
+      message: string;
+      user_name: string;
+      user_avatar: string | null;
+      user_role: string | null;
+      created_at: string;
+    }[]
   >();
 
   (reviewComments || []).forEach((comment: any) => {
@@ -254,6 +261,7 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
       message: comment.message,
       user_name: name || 'Пользователь',
       user_avatar: profile?.avatar_url || null,
+      user_role: profile?.role ?? null,
       created_at: comment.created_at,
     });
   });
@@ -276,6 +284,7 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
       id: review.id,
       user_name: name || 'Пользователь',
       user_avatar: profile?.avatar_url || null,
+      user_role: profile?.role ?? null,
       created_at: review.created_at,
       rating: review.rating,
       text: review.text,

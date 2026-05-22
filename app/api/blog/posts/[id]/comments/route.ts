@@ -15,7 +15,7 @@ export async function GET(
       .from('blog_comments')
       .select(`
         *,
-        user:profiles!blog_comments_user_id_fkey(id, username, first_name, last_name, avatar_url)
+        user:profiles!blog_comments_user_id_fkey(id, username, first_name, last_name, avatar_url, role)
       `)
       .eq('post_id', id)
       .is('parent_id', null) // Только корневые комментарии
@@ -36,7 +36,7 @@ export async function GET(
           .from('blog_comments')
           .select(`
             *,
-            user:profiles!blog_comments_user_id_fkey(id, username, first_name, last_name, avatar_url)
+            user:profiles!blog_comments_user_id_fkey(id, username, first_name, last_name, avatar_url, role)
           `)
           .eq('parent_id', comment.id)
           .order('created_at', { ascending: true });
@@ -99,7 +99,7 @@ export async function POST(
       })
       .select(`
         *,
-        user:profiles!blog_comments_user_id_fkey(id, username, first_name, last_name, avatar_url)
+        user:profiles!blog_comments_user_id_fkey(id, username, first_name, last_name, avatar_url, role)
       `)
       .single();
 

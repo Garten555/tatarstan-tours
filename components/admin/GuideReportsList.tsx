@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Flag, ExternalLink, Calendar, Shield } from 'lucide-react';
 import { escapeHtml } from '@/lib/utils/sanitize';
+import FormattedDate from '@/components/common/FormattedDate';
 import BanUserButton, { type BanProfileUpdate } from '@/components/admin/BanUserButton';
 import { canBanUserAsAdmin } from '@/lib/admin/can-ban-user';
 
@@ -162,7 +163,7 @@ export default function GuideReportsList({
             <div className="flex shrink-0 flex-col gap-1 text-xs font-semibold text-gray-500 sm:text-right">
               <span className="inline-flex items-center justify-end gap-1">
                 <Calendar className="h-3.5 w-3.5" aria-hidden />
-                {new Date(row.created_at).toLocaleString('ru-RU')}
+                <FormattedDate value={row.created_at} />
               </span>
               <span className="font-mono text-[11px] text-gray-400">id: {row.id}</span>
             </div>

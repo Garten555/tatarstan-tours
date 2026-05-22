@@ -12,6 +12,7 @@ import BanUserButton from '@/components/admin/BanUserButton';
 import { canBanUserAsAdmin } from '@/lib/admin/can-ban-user';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import toast from 'react-hot-toast';
+import { formatDayMonthYearRu } from '@/lib/date/format-ru';
 
 interface TourRoomProps {
   roomId: string;
@@ -146,8 +147,7 @@ export function TourRoom({
     );
   }
 
-  const formatDate = (d: string) =>
-    new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
+  const formatDate = (d: string) => formatDayMonthYearRu(d);
 
   const participantCount = Array.isArray((room as any).participants) ? (room as any).participants.length : 0;
 

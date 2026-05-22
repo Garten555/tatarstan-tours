@@ -5,6 +5,7 @@ type TourReviewsSectionProps = {
     id: string;
     user_name: string;
     user_avatar: string | null;
+    user_role?: string | null;
     created_at: string;
     rating: number;
     text: string | null;
@@ -17,6 +18,7 @@ type TourReviewsSectionProps = {
       message: string;
       user_name: string;
       user_avatar: string | null;
+      user_role?: string | null;
       created_at: string;
     }[];
   }[];

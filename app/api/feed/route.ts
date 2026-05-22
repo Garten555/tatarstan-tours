@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
           views_count,
           likes_count,
           comments_count,
-          user:profiles!travel_blog_posts_user_id_fkey(id, username, first_name, last_name, avatar_url)
+          user:profiles!travel_blog_posts_user_id_fkey(id, username, first_name, last_name, avatar_url, role)
         `
         )
         .in('user_id', ids)

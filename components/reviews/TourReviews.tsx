@@ -7,6 +7,8 @@ import toast from 'react-hot-toast';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
 import ReviewReactions from '@/components/reviews/ReviewReactions';
 import ReportReasonModal from '@/components/common/ReportReasonModal';
+import UserAvatar from '@/components/common/UserAvatar';
+import FormattedDate from '@/components/common/FormattedDate';
 
 type ReportTarget =
   | null
@@ -22,6 +24,7 @@ type ReviewItem = {
   id: string;
   user_name: string;
   user_avatar?: string | null;
+  user_role?: string | null;
   created_at: string;
   rating: number;
   text: string | null;
@@ -29,7 +32,14 @@ type ReviewItem = {
   like_count: number;
   dislike_count: number;
   user_reaction: 'like' | 'dislike' | null;
-  comments: { id: string; message: string; user_name: string; user_avatar: string | null; created_at: string }[];
+  comments: {
+    id: string;
+    message: string;
+    user_name: string;
+    user_avatar: string | null;
+    user_role?: string | null;
+    created_at: string;
+  }[];
 };
 
 type TourReviewsProps = {
@@ -46,7 +56,17 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
   const [commentLoading, setCommentLoading] = useState<Record<string, boolean>>({});
   const [commentForms, setCommentForms] = useState<Record<string, boolean>>({});
   const [localComments, setLocalComments] = useState<
-    Record<string, { id: string; message: string; user_name: string; user_avatar: string | null; created_at: string }[]>
+    Record<
+      string,
+      {
+        id: string;
+        message: string;
+        user_name: string;
+        user_avatar: string | null;
+        user_role?: string | null;
+        created_at: string;
+      }[]
+    >
   >({});
   const [reportTarget, setReportTarget] = useState<ReportTarget>(null);
   const [reportBusy, setReportBusy] = useState(false);
@@ -101,7 +121,14 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
   useEffect(() => {
     const next: Record<
       string,
-      { id: string; message: string; user_name: string; user_avatar: string | null; created_at: string }[]
+      {
+        id: string;
+        message: string;
+        user_name: string;
+        user_avatar: string | null;
+        user_role?: string | null;
+        created_at: string;
+      }[]
     > = {};
     reviews.forEach((review) => {
       next[review.id] = review.comments || [];
@@ -160,23 +187,18 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
               >
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white flex items-center justify-center font-black text-lg overflow-hidden border-2 border-emerald-200">
-                      {review.user_avatar ? (
-                        <img
-                          src={review.user_avatar}
-                          alt={review.user_name || 'Пользователь'}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        (review.user_name || 'П').slice(0, 1).toUpperCase()
-                      )}
-                    </div>
+                    <UserAvatar
+                      avatarUrl={review.user_avatar}
+                      displayName={review.user_name}
+                      role={review.user_role}
+                      size="lg"
+                    />
                     <div>
                       <div className="font-black text-lg text-gray-900">
                         {review.user_name || 'Пользователь'}
                       </div>
                       <div className="text-sm text-gray-600 mt-1 font-semibold">
-                        {new Date(review.created_at).toLocaleDateString('ru-RU')}
+                        <FormattedDate value={review.created_at} variant="date" />
                       </div>
                     </div>
                   </div>
@@ -256,21 +278,16 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
                           key={`${review.id}-comment-${index}`}
                           className="flex gap-4 rounded-xl border-2 border-gray-200 bg-gray-50 px-5 py-4 hover:bg-gray-100 transition-colors"
                         >
-                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-emerald-600 text-white flex items-center justify-center font-black overflow-hidden text-sm border-2 border-emerald-200">
-                            {comment.user_avatar ? (
-                              <img
-                                src={comment.user_avatar}
-                                alt={comment.user_name || 'Пользователь'}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              (comment.user_name || 'П').slice(0, 1).toUpperCase()
-                            )}
-                          </div>
+                          <UserAvatar
+                            avatarUrl={comment.user_avatar}
+                            displayName={comment.user_name}
+                            role={comment.user_role}
+                            size="md"
+                          />
                           <div className="flex-1">
                             <div className="text-sm font-bold text-gray-600 mb-1">
                               {comment.user_name || 'Пользователь'} •{' '}
-                              {new Date(comment.created_at).toLocaleDateString('ru-RU')}
+                              <FormattedDate value={comment.created_at} variant="date" />
                             </div>
                             <div className="text-base text-gray-900 whitespace-pre-line break-words font-semibold">
                               {comment.message}
@@ -339,6 +356,12 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
                             }
                             const createdAt = data?.comment?.created_at || new Date().toISOString();
                             const commentId = data?.comment?.id || `local-${Date.now()}`;
+                            const u = data?.comment?.user;
+                            const profile = Array.isArray(u) ? u[0] : u;
+                            const userName = profile
+                              ? [profile.first_name, profile.last_name].filter(Boolean).join(' ') ||
+                                'Вы'
+                              : 'Вы';
                             setLocalComments((prev) => ({
                               ...prev,
                               [review.id]: [
@@ -346,8 +369,9 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
                                 {
                                   id: commentId,
                                   message,
-                                  user_name: 'Вы',
-                                  user_avatar: null,
+                                  user_name: userName || 'Вы',
+                                  user_avatar: profile?.avatar_url ?? null,
+                                  user_role: profile?.role ?? null,
                                   created_at: createdAt,
                                 },
                               ],

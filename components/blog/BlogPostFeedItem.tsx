@@ -3,13 +3,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { format } from 'date-fns';
-import { ru } from 'date-fns/locale';
+import FormattedDate from '@/components/common/FormattedDate';
 import { escapeHtml, sanitizeRichHtml } from '@/lib/utils/sanitize';
 import BlogLikeButton from '@/components/blog/BlogLikeButton';
 import { createClient } from '@/lib/supabase/client';
 import { Trash2, Flag, X, Check, Calendar, Eye, MessageCircle, Image as ImageIcon } from 'lucide-react';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
+import UserAvatar from '@/components/common/UserAvatar';
 import { useDialog } from '@/hooks/useDialog';
 import toast from 'react-hot-toast';
 import { bindPlyrRussianSpeedUi, type PlyrRussianUiHost } from '@/lib/video/plyr-ru-speed-ui';
@@ -34,6 +34,7 @@ interface BlogPostFeedItemProps {
       id: string;
       username?: string | null;
       avatar_url?: string | null;
+      role?: string | null;
     };
   };
   isOwner?: boolean; // Передаем информацию о владельце для быстрого отображения кнопки удаления
@@ -79,6 +80,7 @@ export default function BlogPostFeedItem({
             username: null,
             first_name: null,
             avatar_url: null,
+            role: null,
           },
           created_at: comment.created_at,
         }));
@@ -281,6 +283,7 @@ export default function BlogPostFeedItem({
               id: newComment.user_id,
               username: 'Вы',
               avatar_url: null,
+              role: null,
             },
             created_at: newComment.created_at,
           },
@@ -323,7 +326,7 @@ export default function BlogPostFeedItem({
             </span>
             <span className="inline-flex items-center gap-1 rounded-full bg-black/35 backdrop-blur px-3 py-1 text-xs font-medium">
               <Calendar className="w-3.5 h-3.5" />
-              {format(new Date(displayDate), 'd MMMM yyyy', { locale: ru })}
+              <FormattedDate value={displayDate} variant="date" />
             </span>
           </div>
         </div>
@@ -341,26 +344,22 @@ export default function BlogPostFeedItem({
                   setAvatarViewerOpen(true);
                 }
               }}
-              className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-semibold overflow-hidden text-lg md:text-xl cursor-pointer hover:opacity-80 transition-opacity"
+              className="cursor-pointer transition-opacity hover:opacity-80"
             >
-              {post.user?.avatar_url ? (
-                <Image
-                  src={post.user.avatar_url}
-                  alt={authorUsername || 'Пользователь'}
-                  width={56}
-                  height={56}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                (authorUsername || 'П').slice(0, 1).toUpperCase()
-              )}
+              <UserAvatar
+                avatarUrl={post.user?.avatar_url}
+                displayName={authorUsername || undefined}
+                username={post.user?.username}
+                role={post.user?.role}
+                size="lg"
+              />
             </button>
             <div>
               <div className="font-semibold text-gray-900 text-base md:text-lg">
                 {authorUsername || 'Пользователь'}
               </div>
               <div className="text-sm md:text-base text-gray-400 mt-1">
-                {format(new Date(displayDate), 'd MMMM yyyy', { locale: ru })}
+                <FormattedDate value={displayDate} variant="date" />
               </div>
             </div>
           </Link>
@@ -471,24 +470,22 @@ export default function BlogPostFeedItem({
                 key={comment.id}
                 className="flex gap-4 rounded-xl border border-white/70 bg-white/80 px-5 py-4"
               >
-                <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-semibold overflow-hidden text-sm md:text-base flex-shrink-0">
-                  {comment.user?.avatar_url ? (
-                    <Image
-                      src={comment.user.avatar_url}
-                      alt={comment.user?.username || comment.user?.first_name || 'Пользователь'}
-                      width={48}
-                      height={48}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    ((comment.user?.username || comment.user?.first_name || 'П').slice(0, 1).toUpperCase())
-                  )}
-                </div>
+                <UserAvatar
+                  avatarUrl={comment.user?.avatar_url}
+                  displayName={
+                    comment.user?.first_name && comment.user?.last_name
+                      ? `${comment.user.first_name} ${comment.user.last_name}`
+                      : comment.user?.username || undefined
+                  }
+                  username={comment.user?.username}
+                  role={comment.user?.role}
+                  size="md"
+                />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-1">
                     <div className="text-sm md:text-base text-gray-500">
                       {comment.user?.username || comment.user?.first_name || 'Пользователь'} •{' '}
-                      {format(new Date(comment.created_at), 'd MMM yyyy', { locale: ru })}
+                      <FormattedDate value={comment.created_at} variant="short" />
                     </div>
                     <div className="flex items-center gap-2">
                       {(currentUser?.id === comment.user?.id || currentUser?.id === post.user?.id) && (
