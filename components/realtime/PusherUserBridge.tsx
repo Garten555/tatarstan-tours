@@ -17,6 +17,11 @@ import {
   adminSyncChannelName,
   type AdminSyncPayload,
 } from '@/lib/pusher/admin-sync-payload';
+import {
+  ADMIN_MODERATION_CHANNEL,
+  ADMIN_MODERATION_EVENT,
+  USER_BOOKINGS_EVENT,
+} from '@/lib/pusher/data-sync';
 
 type AchievementPayload = {
   id: string;
@@ -49,6 +54,7 @@ export default function PusherUserBridge() {
   const channelNotificationsRef = useRef<ReturnType<Pusher['subscribe']> | null>(null);
   const channelAchievementsRef = useRef<ReturnType<Pusher['subscribe']> | null>(null);
   const channelAdminSyncRef = useRef<ReturnType<Pusher['subscribe']> | null>(null);
+  const channelModerationRef = useRef<ReturnType<Pusher['subscribe']> | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -59,11 +65,13 @@ export default function PusherUserBridge() {
         channelNotificationsRef.current,
         channelAchievementsRef.current,
         channelAdminSyncRef.current,
+        channelModerationRef.current,
       ]);
       channelUserRef.current = null;
       channelNotificationsRef.current = null;
       channelAchievementsRef.current = null;
       channelAdminSyncRef.current = null;
+      channelModerationRef.current = null;
       pusherRef.current = null;
     };
 
@@ -86,6 +94,9 @@ export default function PusherUserBridge() {
       channelUserRef.current = chUser;
       chUser.bind('new-message', () => {
         dispatchPusherBridge({ channel: 'user', event: 'new-message' });
+      });
+      chUser.bind(USER_BOOKINGS_EVENT, () => {
+        dispatchPusherBridge({ channel: 'user', event: 'bookings-changed' });
       });
 
       const chNotif = pusher.subscribe(`notifications-${user.id}`);
@@ -122,6 +133,20 @@ export default function PusherUserBridge() {
           });
         }
       );
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+      const role = (profile as { role?: string } | null)?.role ?? 'user';
+      if (['super_admin', 'tour_admin', 'support_admin'].includes(role)) {
+        const chMod = pusher.subscribe(ADMIN_MODERATION_CHANNEL);
+        channelModerationRef.current = chMod;
+        chMod.bind(ADMIN_MODERATION_EVENT, () => {
+          dispatchPusherBridge({ channel: 'moderation', event: 'reports-changed' });
+        });
+      }
 
       const chAdminSync = pusher.subscribe(adminSyncChannelName(user.id));
       channelAdminSyncRef.current = chAdminSync;

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { PUSHER_BRIDGE_EVENT, type PusherBridgeDetail } from '@/lib/pusher/user-bridge-events';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -73,89 +74,101 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const cancelInFlightRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    const loadBookings = async () => {
-      try {
-        const response = await fetch('/api/user/bookings');
-        const data = await response.json();
-        
-        // Загружаем комнаты для подтвержденных бронирований
-        if (data.bookings) {
-          const confirmedBookings = data.bookings.filter(
-            (b: Booking) => b.status === 'confirmed'
-          );
-          
-          // Загружаем комнаты параллельно для всех подтвержденных бронирований
-          const loadRooms = async () => {
-            const roomPromises = confirmedBookings.map(async (booking: Booking) => {
-              try {
-                const qs = new URLSearchParams({ tour_id: booking.tour_id });
-                if (booking.session_id) qs.set('session_id', booking.session_id);
-                const roomResponse = await fetch(`/api/tour-rooms?${qs.toString()}`);
-                if (!roomResponse.ok) return null;
-                const roomData = await roomResponse.json();
-                if (roomData.success && roomData.room) {
-                  return { bookingId: booking.id, roomId: roomData.room.id };
-                }
-                return null;
-              } catch (error) {
-                // Игнорируем ошибки загрузки комнат
-                return null;
+  const loadBookings = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
+    try {
+      const response = await fetch('/api/user/bookings', { cache: 'no-store' });
+      const data = await response.json();
+
+      if (data.bookings) {
+        const confirmedBookings = data.bookings.filter(
+          (b: Booking) => b.status === 'confirmed'
+        );
+
+        const loadRooms = async () => {
+          const roomPromises = confirmedBookings.map(async (booking: Booking) => {
+            try {
+              const qs = new URLSearchParams({ tour_id: booking.tour_id });
+              if (booking.session_id) qs.set('session_id', booking.session_id);
+              const roomResponse = await fetch(`/api/tour-rooms?${qs.toString()}`);
+              if (!roomResponse.ok) return null;
+              const roomData = await roomResponse.json();
+              if (roomData.success && roomData.room) {
+                return { bookingId: booking.id, roomId: roomData.room.id };
               }
-            });
-            
-            const results = await Promise.all(roomPromises);
-            const roomIdsMap: Record<string, string> = {};
-            results.forEach((result) => {
-              if (result) {
-                roomIdsMap[result.bookingId] = result.roomId;
-              }
-            });
-            setRoomIds(roomIdsMap);
-          };
-          loadRooms();
-        }
-        if (data.bookings) {
-          const normalized = data.bookings.map((booking: any) => {
-            const tour = Array.isArray(booking.tour) ? booking.tour[0] || null : booking.tour || null;
-            const rawSlot = booking.tour_session;
-            const tour_session = rawSlot
-              ? (Array.isArray(rawSlot) ? rawSlot[0] ?? null : rawSlot)
-              : null;
-            return {
-              ...booking,
-              tour_session: tour_session
-                ? {
-                    start_at: tour_session.start_at,
-                    end_at: tour_session.end_at ?? null,
-                  }
-                : null,
-              review: Array.isArray(booking.review) ? booking.review[0] || null : booking.review || null,
-              tour: tour ? {
-                ...tour,
-                cover_image: tour.cover_image || null,
-              } : null,
-            };
+              return null;
+            } catch {
+              return null;
+            }
           });
-          setBookings(normalized);
-        }
-      } catch (error) {
-        console.error('Ошибка загрузки бронирований:', error);
-      } finally {
-        setLoading(false);
+
+          const results = await Promise.all(roomPromises);
+          const roomIdsMap: Record<string, string> = {};
+          results.forEach((result) => {
+            if (result) {
+              roomIdsMap[result.bookingId] = result.roomId;
+            }
+          });
+          setRoomIds(roomIdsMap);
+        };
+        void loadRooms();
+
+        const normalized = data.bookings.map((booking: any) => {
+          const tour = Array.isArray(booking.tour) ? booking.tour[0] || null : booking.tour || null;
+          const rawSlot = booking.tour_session;
+          const tour_session = rawSlot
+            ? (Array.isArray(rawSlot) ? rawSlot[0] ?? null : rawSlot)
+            : null;
+          return {
+            ...booking,
+            tour_session: tour_session
+              ? {
+                  start_at: tour_session.start_at,
+                  end_at: tour_session.end_at ?? null,
+                }
+              : null,
+            review: Array.isArray(booking.review) ? booking.review[0] || null : booking.review || null,
+            tour: tour
+              ? {
+                  ...tour,
+                  cover_image: tour.cover_image || null,
+                }
+              : null,
+          };
+        });
+        setBookings(normalized);
       }
-    };
-    
+    } catch (error) {
+      console.error('Ошибка загрузки бронирований:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
     const loadUser = async () => {
       const { createClient } = await import('@/lib/supabase/client');
       const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       setCurrentUser(user);
     };
-    
-    loadUser();
-    loadBookings();
-  }, []);
+
+    void loadUser();
+    void loadBookings();
+  }, [loadBookings]);
+
+  useEffect(() => {
+    const onBridge = (e: Event) => {
+      const detail = (e as CustomEvent<PusherBridgeDetail>).detail;
+      if (detail?.channel === 'user' && detail.event === 'bookings-changed') {
+        void loadBookings({ silent: true });
+      }
+    };
+    window.addEventListener(PUSHER_BRIDGE_EVENT, onBridge);
+    return () => window.removeEventListener(PUSHER_BRIDGE_EVENT, onBridge);
+  }, [loadBookings]);
 
   // Форматирование даты
   const formatDate = (dateString: string) => {

@@ -6,8 +6,10 @@ import { TourRoom as TourRoomType } from '@/types';
 import { TourRoomChat } from './TourRoomChat';
 import { TourRoomGallery } from './TourRoomGallery';
 import { TourRoomParticipants } from './TourRoomParticipants';
-import { MessageSquare, Image, Users, ArrowLeft, Loader2, Flag } from 'lucide-react';
+import { MessageSquare, Image, Users, ArrowLeft, Loader2, Flag, Shield } from 'lucide-react';
 import ReportReasonModal from '@/components/common/ReportReasonModal';
+import BanUserButton from '@/components/admin/BanUserButton';
+import { canBanUserAsAdmin } from '@/lib/admin/can-ban-user';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import toast from 'react-hot-toast';
 
@@ -15,6 +17,10 @@ interface TourRoomProps {
   roomId: string;
   initialRoom?: TourRoomType;
   viewerUserId?: string;
+  viewerRole?: string;
+  guideUserId?: string | null;
+  guideRole?: string | null;
+  guideIsBanned?: boolean;
   galleryCanModerate?: boolean;
 }
 
@@ -60,7 +66,16 @@ function NavButton({
   );
 }
 
-export function TourRoom({ roomId, initialRoom, viewerUserId, galleryCanModerate = false }: TourRoomProps) {
+export function TourRoom({
+  roomId,
+  initialRoom,
+  viewerUserId,
+  viewerRole = 'user',
+  guideUserId,
+  guideRole,
+  guideIsBanned = false,
+  galleryCanModerate = false,
+}: TourRoomProps) {
   const getInitialTab = (): TabType => {
     if (typeof window !== 'undefined') {
       const tab = new URLSearchParams(window.location.search).get('tab');
@@ -136,8 +151,16 @@ export function TourRoom({ roomId, initialRoom, viewerUserId, galleryCanModerate
 
   const participantCount = Array.isArray((room as any).participants) ? (room as any).participants.length : 0;
 
+  const effectiveGuideId = guideUserId ?? room.guide_id ?? null;
+
   const canReportGuide =
-    Boolean(viewerUserId && room.guide_id && viewerUserId !== room.guide_id);
+    Boolean(viewerUserId && effectiveGuideId && viewerUserId !== effectiveGuideId);
+
+  const canBanGuide = Boolean(
+    viewerUserId &&
+      effectiveGuideId &&
+      canBanUserAsAdmin(viewerRole, effectiveGuideId, guideRole, viewerUserId)
+  );
 
   const subtitleParts: string[] = [];
   if (room.tour?.city?.name) subtitleParts.push(escapeHtml(room.tour.city.name));
@@ -197,15 +220,29 @@ export function TourRoom({ roomId, initialRoom, viewerUserId, galleryCanModerate
             <p className="mt-0.5 break-words text-xs leading-snug text-gray-500 line-clamp-3 sm:line-clamp-2">
               {subtitleParts.length > 0 ? subtitleParts.join(' · ') : 'Групповой чат'}
             </p>
-            {canReportGuide ? (
-              <button
-                type="button"
-                onClick={() => setGuideReportOpen(true)}
-                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/90 px-2.5 py-1 text-[11px] font-bold text-amber-900 transition hover:bg-amber-100 sm:text-xs"
-              >
-                <Flag className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                Пожаловаться на гида
-              </button>
+            {(canReportGuide || canBanGuide) ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {canReportGuide ? (
+                  <button
+                    type="button"
+                    onClick={() => setGuideReportOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50/90 px-2.5 py-1 text-[11px] font-bold text-amber-900 transition hover:bg-amber-100 sm:text-xs"
+                  >
+                    <Flag className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    Пожаловаться на гида
+                  </button>
+                ) : null}
+                {canBanGuide && effectiveGuideId ? (
+                  <div className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50/90 px-2 py-0.5">
+                    <Shield className="h-3.5 w-3.5 shrink-0 text-rose-800" aria-hidden />
+                    <BanUserButton
+                      userId={effectiveGuideId}
+                      isBanned={guideIsBanned}
+                      userRole={guideRole ?? undefined}
+                    />
+                  </div>
+                ) : null}
+              </div>
             ) : null}
           </div>
         </header>

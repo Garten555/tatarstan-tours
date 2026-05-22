@@ -1,6 +1,7 @@
 // API для управления конкретным бронированием
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { publishBookingsChanged } from '@/lib/pusher/data-sync';
 
 // PATCH - Обновление бронирования
 export async function PATCH(
@@ -184,6 +185,12 @@ export async function PATCH(
         // Не прерываем выполнение если email не отправился
         console.error('Ошибка отправки email уведомления об отмене:', emailError);
       }
+    }
+
+    const bookingUserId =
+      (booking as { user_id?: string } | null)?.user_id ?? oldBooking?.user_id;
+    if (bookingUserId) {
+      void publishBookingsChanged(bookingUserId);
     }
 
     return NextResponse.json({

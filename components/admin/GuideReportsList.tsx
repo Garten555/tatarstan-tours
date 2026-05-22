@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { Flag, ExternalLink, Calendar, Shield } from 'lucide-react';
 import { escapeHtml } from '@/lib/utils/sanitize';
-import BanUserButton from '@/components/admin/BanUserButton';
+import BanUserButton, { type BanProfileUpdate } from '@/components/admin/BanUserButton';
+import { canBanUserAsAdmin } from '@/lib/admin/can-ban-user';
 
 export type GuideReportRow = {
   id: string;
@@ -31,17 +32,23 @@ function roleRu(role: string | null | undefined): string {
   return m[role] || role;
 }
 
-function canBanGuide(row: GuideReportRow, viewerRole: string): boolean {
-  if (!row.guide_user_id) return false;
-  if (!['super_admin', 'tour_admin', 'support_admin'].includes(viewerRole)) return false;
-  if (row.guide_role === 'super_admin') return false;
-  if (viewerRole === 'support_admin' && row.guide_role && ['tour_admin', 'support_admin'].includes(row.guide_role)) {
-    return false;
-  }
-  return true;
-}
+type Props = {
+  rows: GuideReportRow[];
+  viewerRole: string;
+  onRowsChange?: (rows: GuideReportRow[]) => void;
+};
 
-export default function GuideReportsList({ rows, viewerRole }: { rows: GuideReportRow[]; viewerRole: string }) {
+export default function GuideReportsList({ rows, viewerRole, onRowsChange }: Props) {
+  const handleBanChange = (guideUserId: string) => (profile: BanProfileUpdate) => {
+    if (!onRowsChange) return;
+    onRowsChange(
+      rows.map((r) =>
+        r.guide_user_id === guideUserId
+          ? { ...r, guide_is_banned: profile.is_banned, guide_role: profile.role }
+          : r
+      )
+    );
+  };
   if (rows.length === 0) {
     return (
       <div className="rounded-2xl border-2 border-dashed border-violet-200 bg-white p-12 text-center shadow-sm">
@@ -68,12 +75,13 @@ export default function GuideReportsList({ rows, viewerRole }: { rows: GuideRepo
               <span className="text-xs font-bold uppercase tracking-wide text-violet-900/80">{row.status}</span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              {canBanGuide(row, viewerRole) ? (
+              {canBanUserAsAdmin(viewerRole, row.guide_user_id, row.guide_role, '') ? (
                 <div className="flex flex-wrap items-center gap-2" onClick={(e) => e.stopPropagation()}>
                   <BanUserButton
                     userId={row.guide_user_id}
                     isBanned={row.guide_is_banned}
                     userRole={row.guide_role ?? undefined}
+                    onBanChange={handleBanChange(row.guide_user_id)}
                   />
                 </div>
               ) : row.guide_role === 'super_admin' ? (

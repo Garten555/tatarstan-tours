@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { publishAdminModerationChanged } from '@/lib/pusher/data-sync';
 
 export async function POST(
   request: NextRequest,
@@ -73,6 +74,7 @@ export async function POST(
       return NextResponse.json({ error: 'Не удалось отправить жалобу' }, { status: 500 });
     }
 
+    void publishAdminModerationChanged();
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Ошибка жалобы на сообщение:', error);

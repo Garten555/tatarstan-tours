@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
-import GuideReportsList, { type GuideReportRow } from '@/components/admin/GuideReportsList';
+import GuideReportsLive from '@/components/admin/GuideReportsLive';
+import { type GuideReportRow } from '@/components/admin/GuideReportsList';
 import { Flag } from 'lucide-react';
 
 export const metadata = {
@@ -111,7 +112,7 @@ export default async function GuideReportsPage() {
         </p>
       </div>
 
-      <GuideReportsList rows={rows} viewerRole={role} />
+      <GuideReportsLive initialRows={rows} viewerRole={role} />
 
       <div className="mt-8 text-center">
         <Link href="/admin/tour-room-reports" className="text-sm font-bold text-emerald-600 underline hover:text-emerald-700">

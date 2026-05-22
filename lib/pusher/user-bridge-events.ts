@@ -3,7 +3,9 @@ export const PUSHER_BRIDGE_EVENT = 'tt:pusher';
 
 export type PusherBridgeDetail =
   | { channel: 'user'; event: 'new-message' }
+  | { channel: 'user'; event: 'bookings-changed' }
   | { channel: 'notifications'; event: 'new-notification' }
+  | { channel: 'moderation'; event: 'reports-changed' }
   | { channel: 'admin-sync'; event: 'profile-role'; role: string | null }
   | { channel: 'admin-sync'; event: 'forced-reload'; reason: 'banned' | 'unban' };
 

@@ -29,7 +29,7 @@ export default async function TourRoomPage({ params }: TourRoomPageProps) {
     .select(`
       *,
       tour:tours(id, title, start_date, end_date, cover_image, city:cities(name)),
-      guide:profiles!tour_rooms_guide_id_fkey(id, first_name, last_name, avatar_url),
+      guide:profiles!tour_rooms_guide_id_fkey(id, first_name, last_name, avatar_url, role, is_banned),
       participants:tour_room_participants(
         id,
         user:profiles(id, first_name, last_name, avatar_url)
@@ -81,11 +81,20 @@ export default async function TourRoomPage({ params }: TourRoomPageProps) {
     );
   }
 
+  const guideRel = (room as { guide?: { id?: string; role?: string | null; is_banned?: boolean | null } | { id?: string; role?: string | null; is_banned?: boolean | null }[] })
+    .guide;
+  const guideProfile = Array.isArray(guideRel) ? guideRel[0] : guideRel;
+  const viewerRole = (profile as { role?: string } | null)?.role ?? 'user';
+
   return (
     <TourRoom
       roomId={room_id}
       initialRoom={room}
       viewerUserId={user.id}
+      viewerRole={viewerRole}
+      guideUserId={(room as { guide_id?: string }).guide_id ?? guideProfile?.id}
+      guideRole={guideProfile?.role ?? null}
+      guideIsBanned={Boolean(guideProfile?.is_banned)}
       galleryCanModerate={isGuide || isAdmin}
     />
   );

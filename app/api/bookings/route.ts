@@ -5,6 +5,7 @@ import type { TourSessionRow } from '@/lib/types/tour-session';
 import { ensureTourRoomForSession } from '@/lib/tour/ensure-session-room';
 import { generatePaymentRef } from '@/lib/payment/payment-ref';
 import { sumActiveBookingSeatsForSession } from '@/lib/tour/session-participants';
+import { publishBookingsChanged } from '@/lib/pusher/data-sync';
 
 export async function POST(request: NextRequest) {
   try {
@@ -565,6 +566,7 @@ export async function POST(request: NextRequest) {
       }
     })();
 
+    void publishBookingsChanged(user.id);
     return NextResponse.json({
       success: true,
       booking,

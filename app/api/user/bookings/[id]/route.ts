@@ -1,6 +1,7 @@
 // Отмена своего бронирования пользователем (PATCH)
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { publishBookingsChanged } from '@/lib/pusher/data-sync';
 
 function tourEffectivelyEnded(params: {
   tourEnd?: string | null;
@@ -229,6 +230,7 @@ export async function PATCH(
       console.error('Ошибка отправки email при отмене:', emailError);
     }
 
+    void publishBookingsChanged(user.id);
     return NextResponse.json({
       success: true,
       message: 'Бронирование отменено',

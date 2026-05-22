@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { sendEmail, getBanNotificationEmail } from '@/lib/email/send-email';
 import { publishAdminSync } from '@/lib/pusher/user-notification';
+import { publishAdminModerationChanged } from '@/lib/pusher/data-sync';
 
 const ADMIN_ROLES = ['super_admin', 'support_admin', 'tour_admin'];
 
@@ -154,6 +155,7 @@ export async function PATCH(
       kind: 'forced_reload',
       reason: action === 'ban' ? 'banned' : 'unban',
     });
+    void publishAdminModerationChanged();
 
     return NextResponse.json({ success: true, profile: updated });
   } catch (error) {
