@@ -36,13 +36,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Получаем пользователей с ролями 'user' и 'guide' (оптимизировано)
+    // Пользователи для назначения гидов (как в «Комнатах тура»)
     const { data: users, error } = await serviceClient
       .from('profiles')
-      .select('id, first_name, last_name, email, role, avatar_url')
+      .select('id, first_name, last_name, email, role, avatar_url, is_banned')
       .in('role', ['user', 'guide'])
+      .eq('is_banned', false)
       .order('first_name')
-      .limit(100); // Ограничиваем количество для производительности
+      .limit(200);
 
     if (error) {
       console.error('Ошибка получения пользователей:', error);
