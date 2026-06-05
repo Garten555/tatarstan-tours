@@ -1323,6 +1323,17 @@ button[class*="bg-emerald"][class*="text-white"] {
   color: inherit !important;
 }
 
+/* Кнопки карточек туров в админке — белый текст поверх глобальных правил */
+.admin-tour-card-btn,
+.admin-tour-card-btn svg {
+  color: rgb(255 255 255) !important;
+}
+
+.admin-tour-card-btn:hover,
+.admin-tour-card-btn:hover svg {
+  color: rgb(255 255 255) !important;
+}
+
 /* Улучшение видимости кнопок (исключаем зелёные CTA: bg-emerald-500 и т.д.) */
 button:not(.bg-emerald-500):not(.bg-emerald-600):not(.bg-emerald-700):not(.bg-blue-600):not(.bg-red-500):not(.bg-gray-300) {
   color: rgb(17 24 39) !important;

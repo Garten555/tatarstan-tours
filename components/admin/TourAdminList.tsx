@@ -446,34 +446,36 @@ export default function TourAdminList() {
             </h3>
 
             {/* Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
-              <div className="flex items-center gap-3 p-3 sm:p-4 bg-emerald-50 rounded-xl border border-emerald-200 min-w-0">
+            <div className="flex flex-col gap-3 mb-6">
+              <div className="flex items-center gap-3 p-4 bg-emerald-50 rounded-xl border border-emerald-200">
                 <div className="w-10 h-10 shrink-0 bg-emerald-600 rounded-lg flex items-center justify-center">
                   <Coins className="w-5 h-5 text-white" />
                 </div>
-                <div className="min-w-0">
+                <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold text-emerald-700 uppercase tracking-wide">Цена</div>
-                  <div className="text-base sm:text-lg font-black text-gray-900 truncate">{tour.price_per_person} ₽ / чел</div>
+                  <div className="text-lg font-black text-gray-900 break-words">
+                    {tour.price_per_person} ₽ / чел
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 sm:p-4 bg-blue-50 rounded-xl border border-blue-200 min-w-0">
+              <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-xl border border-blue-200">
                 <div className="w-10 h-10 shrink-0 bg-blue-600 rounded-lg flex items-center justify-center">
                   <Users className="w-5 h-5 text-white" />
                 </div>
-                <div className="min-w-0">
+                <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold text-blue-700 uppercase tracking-wide">Участники</div>
-                  <div className="text-base sm:text-lg font-black text-gray-900">
+                  <div className="text-lg font-black text-gray-900">
                     {tour.current_participants} / {tour.max_participants}
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 sm:p-4 bg-purple-50 rounded-xl border border-purple-200 min-w-0">
+              <div className="flex items-center gap-3 p-4 bg-purple-50 rounded-xl border border-purple-200">
                 <div className="w-10 h-10 shrink-0 bg-purple-600 rounded-lg flex items-center justify-center">
                   <Calendar className="w-5 h-5 text-white" />
                 </div>
-                <div className="min-w-0">
+                <div className="flex-1 min-w-0">
                   <div className="text-xs font-bold text-purple-700 uppercase tracking-wide">Дата</div>
-                  <div className="text-base sm:text-lg font-black text-gray-900">
+                  <div className="text-lg font-black text-gray-900">
                     {new Date(tour.start_date).toLocaleDateString('ru-RU')}
                   </div>
                 </div>
@@ -485,7 +487,7 @@ export default function TourAdminList() {
               <Link
                 href={`/admin/tours/${tour.id}/edit`}
                 onClick={(e) => e.stopPropagation()}
-                className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl"
+                className="admin-tour-card-btn w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl"
               >
                 <Edit className="w-5 h-5 shrink-0" />
                 Изменить
@@ -494,7 +496,7 @@ export default function TourAdminList() {
                 type="button"
                 onClick={(e) => handleCancelTour(tour.id, e)}
                 disabled={cancellingId === tour.id || tour.status === 'cancelled'}
-                className="w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50"
+                className="admin-tour-card-btn w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50"
               >
                 <Ban className="w-5 h-5 shrink-0" />
                 {cancellingId === tour.id ? '…' : tour.status === 'cancelled' ? 'Отменён' : 'Отменить тур'}
@@ -506,7 +508,7 @@ export default function TourAdminList() {
                   handleDelete(tour.id);
                 }}
                 disabled={deletingId === tour.id}
-                className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50"
+                className="admin-tour-card-btn w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50"
               >
                 <Trash2 className="w-5 h-5 shrink-0" />
                 {deletingId === tour.id ? '...' : 'Удалить навсегда'}
