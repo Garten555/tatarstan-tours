@@ -121,7 +121,6 @@ export default function TourForm({
       .then((r) => r.json())
       .then((data: { success?: boolean; users?: Array<{ id: string; first_name?: string; last_name?: string; email?: string; role?: string }> }) => {
         if (cancelled || !data?.success || !Array.isArray(data.users)) return;
-        // Как в «Комнатах тура»: гидом может быть любой user/guide из списка, не только role=guide
         setGuideOptions(
           data.users.map((u) => ({
             id: u.id,
@@ -1323,7 +1322,7 @@ export default function TourForm({
               ))}
             </select>
             <p className="text-xs text-gray-500 mt-1.5">
-              Тот же список, что в «Комнатах тура». На каждый выезд — свой гид и чат группы после сохранения.
+              Только пользователи с ролью «Гид» (Админка → Пользователи). На каждый выезд — свой гид и чат группы.
             </p>
           </div>
 

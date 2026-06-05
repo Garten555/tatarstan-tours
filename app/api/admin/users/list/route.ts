@@ -29,18 +29,22 @@ export async function GET(request: NextRequest) {
       .single();
 
     const role = (profile as { role?: string } | null)?.role;
-    if (role !== 'tour_admin' && role !== 'super_admin') {
+    if (
+      role !== 'tour_admin' &&
+      role !== 'super_admin' &&
+      role !== 'support_admin'
+    ) {
       return NextResponse.json(
         { error: 'Недостаточно прав' },
         { status: 403 }
       );
     }
 
-    // Пользователи для назначения гидов (как в «Комнатах тура»)
+    // Только пользователи с ролью «Гид» (назначается в разделе Пользователи)
     const { data: users, error } = await serviceClient
       .from('profiles')
       .select('id, first_name, last_name, email, role, avatar_url, is_banned')
-      .in('role', ['user', 'guide'])
+      .eq('role', 'guide')
       .eq('is_banned', false)
       .order('first_name')
       .limit(200);
