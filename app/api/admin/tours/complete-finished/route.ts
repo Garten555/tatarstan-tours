@@ -1,6 +1,7 @@
-// API для ручного завершения всех завершенных туров
+// API для ручного завершения всех туров с прошедшими датами
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { completeFinishedActiveTours } from '@/lib/tours/tour-lifecycle-status';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,13 +14,9 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json(
-        { error: 'Необходима авторизация' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Необходима авторизация' }, { status: 401 });
     }
 
-    // Проверяем, является ли пользователь админом
     const { data: profile } = await serviceClient
       .from('profiles')
       .select('role')
@@ -32,45 +29,20 @@ export async function POST(request: NextRequest) {
       profile?.role === 'support_admin';
 
     if (!isAdmin) {
-      return NextResponse.json(
-        { error: 'Доступ запрещен' },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: 'Доступ запрещен' }, { status: 403 });
     }
 
-    // Вызываем функцию для завершения туров
-    const { data, error } = await serviceClient.rpc('auto_complete_finished_tours');
-
-    if (error) {
-      console.error('Ошибка завершения туров:', error);
-      return NextResponse.json(
-        { error: 'Не удалось завершить туры' },
-        { status: 500 }
-      );
-    }
+    const result = await completeFinishedActiveTours(serviceClient);
 
     return NextResponse.json({
       success: true,
-      completed_count: data || 0,
-      message: `Завершено туров: ${data || 0}`,
+      completed_count: result.completed_count,
+      tour_ids: result.tour_ids,
+      message: `Завершено туров: ${result.completed_count}`,
     });
   } catch (error) {
     console.error('Ошибка завершения туров:', error);
     const errorMessage = error instanceof Error ? error.message : 'Внутренняя ошибка сервера';
-    return NextResponse.json(
-      { error: errorMessage },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
-
-
-
-
-
-
-
-
-
-
-

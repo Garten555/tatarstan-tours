@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
+import {
+  attachEffectiveTourStatus,
+  completeFinishedActiveTours,
+  fetchActiveSessionsByTourId,
+} from '@/lib/tours/tour-lifecycle-status';
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,6 +44,8 @@ export async function GET(request: NextRequest) {
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') || '10')), 50);
     const offset = (page - 1) * limit;
+
+    await completeFinishedActiveTours(serviceClient);
 
     // Начинаем запрос
     let query = serviceClient
@@ -103,7 +110,12 @@ export async function GET(request: NextRequest) {
     const toursAll = toursRaw || [];
     const total = toursAll.length;
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
-    const tours = toursAll.slice(offset, offset + limit);
+    const pageTours = toursAll.slice(offset, offset + limit);
+    const sessionsByTourId = await fetchActiveSessionsByTourId(
+      serviceClient,
+      pageTours.map((t) => t.id)
+    );
+    const tours = attachEffectiveTourStatus(pageTours, sessionsByTourId);
 
     return NextResponse.json({
       tours,

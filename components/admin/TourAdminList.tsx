@@ -18,6 +18,7 @@ interface Tour {
   start_date: string;
   end_date: string;
   status: string;
+  effective_status?: string;
   current_participants: number;
   max_participants: number;
   cover_image: string | null;
@@ -94,7 +95,7 @@ export default function TourAdminList() {
       params.set('sort_by', sortField);
       params.set('sort_order', sortOrder);
       params.set('page', page.toString());
-      params.set('limit', '10');
+      params.set('limit', '6');
 
       const response = await fetch(`/api/admin/tours/filter?${params.toString()}`);
       if (!response.ok) throw new Error('Ошибка загрузки туров');
@@ -198,6 +199,8 @@ export default function TourAdminList() {
       case 'active':
       case 'published':
         return 'bg-green-100 text-green-800';
+      case 'completed':
+        return 'bg-blue-100 text-blue-800';
       case 'draft':
         return 'bg-yellow-100 text-yellow-800';
       case 'archived':
@@ -213,11 +216,14 @@ export default function TourAdminList() {
       'draft': 'Черновик',
       'published': 'Опубликован',
       'active': 'Активен',
+      'completed': 'Завершён',
       'archived': 'Архивирован',
       'cancelled': 'Отменён',
     };
     return labels[status] || status;
   };
+
+  const displayStatus = (tour: Tour) => tour.effective_status ?? tour.status;
 
   const resetFilters = () => {
     setSearch('');
@@ -394,11 +400,11 @@ export default function TourAdminList() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-8 xl:grid-cols-2">
       {tours.map((tour) => (
         <div
           key={tour.id}
-          className="group bg-white rounded-2xl border-2 border-gray-200 shadow-sm hover:shadow-2xl hover:border-emerald-400 transition-all duration-300 overflow-hidden cursor-pointer transform hover:-translate-y-2"
+          className="group min-w-0 bg-white rounded-2xl border-2 border-gray-200 shadow-sm hover:shadow-2xl hover:border-emerald-400 transition-all duration-300 overflow-hidden cursor-pointer transform hover:-translate-y-2"
           role="link"
           tabIndex={0}
           onClick={() => router.push(`/admin/tours/${tour.id}/edit`)}
@@ -410,7 +416,7 @@ export default function TourAdminList() {
           }}
         >
           {/* Cover Image */}
-          <div className="relative h-56 bg-gradient-to-br from-gray-200 to-gray-300 overflow-hidden">
+          <div className="relative h-64 sm:h-72 bg-gradient-to-br from-gray-200 to-gray-300 overflow-hidden">
             {tour.cover_image ? (
               <Image
                 src={tour.cover_image}
@@ -426,48 +432,48 @@ export default function TourAdminList() {
             <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
             <span
               className={`absolute top-3 right-3 px-3 py-1.5 rounded-lg text-sm font-bold shadow-lg ${getStatusColor(
-                tour.status
+                displayStatus(tour)
               )}`}
             >
-              {getStatusLabel(tour.status)}
+              {getStatusLabel(displayStatus(tour))}
             </span>
           </div>
 
           {/* Content */}
-          <div className="p-6">
-            <h3 className="text-xl md:text-2xl font-black text-gray-900 mb-4">
+          <div className="p-6 sm:p-8">
+            <h3 className="text-xl sm:text-2xl font-black text-gray-900 mb-5 leading-snug">
               {tour.title}
             </h3>
 
             {/* Stats */}
-            <div className="space-y-3 mb-6">
-              <div className="flex items-center gap-3 p-3 bg-emerald-50 rounded-xl border border-emerald-200">
-                <div className="w-10 h-10 bg-emerald-600 rounded-lg flex items-center justify-center">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+              <div className="flex items-center gap-3 p-3 sm:p-4 bg-emerald-50 rounded-xl border border-emerald-200 min-w-0">
+                <div className="w-10 h-10 shrink-0 bg-emerald-600 rounded-lg flex items-center justify-center">
                   <Coins className="w-5 h-5 text-white" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-xs font-bold text-emerald-700 uppercase tracking-wide">Цена</div>
-                  <div className="text-lg font-black text-gray-900">{tour.price_per_person} ₽ / чел</div>
+                  <div className="text-base sm:text-lg font-black text-gray-900 truncate">{tour.price_per_person} ₽ / чел</div>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-200">
-                <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+              <div className="flex items-center gap-3 p-3 sm:p-4 bg-blue-50 rounded-xl border border-blue-200 min-w-0">
+                <div className="w-10 h-10 shrink-0 bg-blue-600 rounded-lg flex items-center justify-center">
                   <Users className="w-5 h-5 text-white" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-xs font-bold text-blue-700 uppercase tracking-wide">Участники</div>
-                  <div className="text-lg font-black text-gray-900">
+                  <div className="text-base sm:text-lg font-black text-gray-900">
                     {tour.current_participants} / {tour.max_participants}
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-xl border border-purple-200">
-                <div className="w-10 h-10 bg-purple-600 rounded-lg flex items-center justify-center">
+              <div className="flex items-center gap-3 p-3 sm:p-4 bg-purple-50 rounded-xl border border-purple-200 min-w-0">
+                <div className="w-10 h-10 shrink-0 bg-purple-600 rounded-lg flex items-center justify-center">
                   <Calendar className="w-5 h-5 text-white" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="text-xs font-bold text-purple-700 uppercase tracking-wide">Дата</div>
-                  <div className="text-lg font-black text-gray-900">
+                  <div className="text-base sm:text-lg font-black text-gray-900">
                     {new Date(tour.start_date).toLocaleDateString('ru-RU')}
                   </div>
                 </div>
@@ -475,26 +481,24 @@ export default function TourAdminList() {
             </div>
 
             {/* Actions */}
-            <div className="flex flex-col gap-3">
-              <div className="flex gap-3">
-                <Link
-                  href={`/admin/tours/${tour.id}/edit`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-                >
-                  <Edit className="w-5 h-5" />
-                  Изменить
-                </Link>
-                <button
-                  type="button"
-                  onClick={(e) => handleCancelTour(tour.id, e)}
-                  disabled={cancellingId === tour.id || tour.status === 'cancelled'}
-                  className="flex flex-1 items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-3 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50"
-                >
-                  <Ban className="w-5 h-5" />
-                  {cancellingId === tour.id ? '…' : tour.status === 'cancelled' ? 'Отменён' : 'Отменить'}
-                </button>
-              </div>
+            <div className="flex flex-col gap-2.5">
+              <Link
+                href={`/admin/tours/${tour.id}/edit`}
+                onClick={(e) => e.stopPropagation()}
+                className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl"
+              >
+                <Edit className="w-5 h-5 shrink-0" />
+                Изменить
+              </Link>
+              <button
+                type="button"
+                onClick={(e) => handleCancelTour(tour.id, e)}
+                disabled={cancellingId === tour.id || tour.status === 'cancelled'}
+                className="w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50"
+              >
+                <Ban className="w-5 h-5 shrink-0" />
+                {cancellingId === tour.id ? '…' : tour.status === 'cancelled' ? 'Отменён' : 'Отменить тур'}
+              </button>
               <button
                 type="button"
                 onClick={(e) => {
@@ -502,9 +506,9 @@ export default function TourAdminList() {
                   handleDelete(tour.id);
                 }}
                 disabled={deletingId === tour.id}
-                className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50"
               >
-                <Trash2 className="w-5 h-5" />
+                <Trash2 className="w-5 h-5 shrink-0" />
                 {deletingId === tour.id ? '...' : 'Удалить навсегда'}
               </button>
             </div>
@@ -514,57 +518,62 @@ export default function TourAdminList() {
           </div>
 
           {/* Пагинация */}
-          {totalPages > 1 && (
-            <div className="bg-white border-b border-gray-100 mt-8 py-6 px-4 md:px-6 lg:px-8 -mx-4 md:-mx-6 lg:-mx-8 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] lg:w-[calc(100%+4rem)]">
+          {total > 0 && (
+            <div className="bg-white border border-gray-200 rounded-2xl mt-8 py-6 px-4 sm:px-6 shadow-sm">
               <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
                 <button
+                  type="button"
                   onClick={() => setPage(Math.max(1, page - 1))}
                   disabled={page === 1}
-                  className="px-5 py-3 border-2 border-gray-300 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 hover:border-emerald-500 transition-all flex items-center gap-2 font-bold text-base"
+                  className="w-full sm:w-auto px-6 py-3 border-2 border-gray-300 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 hover:border-emerald-500 transition-all flex items-center justify-center gap-2 font-bold text-base"
                 >
                   <ChevronLeft className="w-5 h-5" />
                   Назад
                 </button>
-                
-                <div className="flex items-center gap-2">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum;
-                    if (totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (page <= 3) {
-                      pageNum = i + 1;
-                    } else if (page >= totalPages - 2) {
-                      pageNum = totalPages - 4 + i;
-                    } else {
-                      pageNum = page - 2 + i;
-                    }
-                    
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => setPage(pageNum)}
-                        className={`w-12 h-12 rounded-xl font-black text-base transition-all ${
-                          page === pageNum
-                            ? 'bg-emerald-600 text-white shadow-lg'
-                            : 'bg-white border-2 border-gray-300 text-gray-700 hover:border-emerald-500 hover:text-emerald-600'
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    );
-                  })}
-                </div>
 
-                <span className="text-base font-bold text-gray-700 px-4">
-                  Страница {page} из {totalPages}
+                {totalPages > 1 && (
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (page <= 3) {
+                        pageNum = i + 1;
+                      } else if (page >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = page - 2 + i;
+                      }
+
+                      return (
+                        <button
+                          type="button"
+                          key={pageNum}
+                          onClick={() => setPage(pageNum)}
+                          className={`w-12 h-12 rounded-xl font-black text-base transition-all ${
+                            page === pageNum
+                              ? 'bg-emerald-600 text-white shadow-lg'
+                              : 'bg-white border-2 border-gray-300 text-gray-700 hover:border-emerald-500 hover:text-emerald-600'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <span className="text-base font-bold text-gray-700 px-2 text-center">
+                  Страница {page} из {totalPages} · туров: {total}
                 </span>
 
                 <button
+                  type="button"
                   onClick={() => setPage(Math.min(totalPages, page + 1))}
                   disabled={page === totalPages}
-                  className="px-5 py-3 border-2 border-gray-300 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 hover:border-emerald-500 transition-all flex items-center gap-2 font-bold text-base"
+                  className="w-full sm:w-auto px-6 py-3 border-2 border-gray-300 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 hover:border-emerald-500 transition-all flex items-center justify-center gap-2 font-bold text-base"
                 >
-                  Вперед
+                  Вперёд
                   <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
