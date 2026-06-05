@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import Pusher from 'pusher-js';
 import { Button } from '@/components/ui/Button';
 import type { HeroPopularTour } from '@/lib/tours/active-catalog-listing';
@@ -64,6 +65,7 @@ function GlassTourCard({ tour, linked }: { tour: PopularTour; linked: boolean })
 }
 
 export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | null }) {
+  const router = useRouter();
   const [items, setItems] = useState<PopularTour[]>(() => normalizeHeroItems(popularTours));
   const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<ReturnType<Pusher['subscribe']> | null>(null);
@@ -74,10 +76,11 @@ export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | n
       if (!res.ok) return;
       const data = (await res.json()) as { tours?: PopularTour[] };
       setItems(normalizeHeroItems(data.tours));
+      router.refresh();
     } catch {
       /* ignore */
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     setItems(normalizeHeroItems(popularTours));

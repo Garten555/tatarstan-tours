@@ -9,6 +9,9 @@ import { filterCatalogToursByUpcomingSessions } from '@/lib/tours/tour-public-vi
 
 export const FEATURED_HOME_TOUR_LIMIT = 3;
 
+/** Верхняя граница выборки active-туров (на практике каталог небольшой). */
+const ACTIVE_CATALOG_QUERY_LIMIT = 300;
+
 const CATALOG_TOUR_SELECT = `
   id,
   title,
@@ -66,7 +69,7 @@ export async function fetchActiveCatalogTourRows(
     .select(CATALOG_TOUR_SELECT)
     .eq('status', 'active')
     .or(`end_date.is.null,end_date.gte.${now}`)
-    .limit(8000);
+    .limit(ACTIVE_CATALOG_QUERY_LIMIT);
 
   if (error) {
     console.error('fetchActiveCatalogTourRows:', error);

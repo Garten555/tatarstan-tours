@@ -1,4 +1,5 @@
 import Pusher from 'pusher';
+import { revalidatePath } from 'next/cache';
 
 const ADMIN_MODERATION_CHANNEL = 'admin-moderation';
 const ADMIN_MODERATION_EVENT = 'reports-changed';
@@ -52,6 +53,13 @@ export async function publishAdminModerationChanged(): Promise<void> {
 
 /** Hero и каталог на главной: новые/завершённые туры, слоты, статусы. */
 export async function publishCatalogChanged(): Promise<void> {
+  try {
+    revalidatePath('/');
+    revalidatePath('/tours');
+  } catch (e) {
+    console.error('[publishCatalogChanged] revalidatePath:', e);
+  }
+
   const pusher = getPusher();
   if (!pusher) return;
   try {
