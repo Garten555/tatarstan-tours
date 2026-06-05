@@ -10,7 +10,7 @@ import type { HeroPopularTour } from '@/lib/tours/active-catalog-listing';
 import {
   PUBLIC_CATALOG_CHANNEL,
   PUBLIC_CATALOG_EVENT,
-} from '@/lib/pusher/data-sync';
+} from '@/lib/pusher/channels';
 import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
 import { ArrowRight, MapPin, Calendar, Users } from 'lucide-react';
 

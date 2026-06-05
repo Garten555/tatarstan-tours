@@ -44,11 +44,16 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Получаем все комнаты с данными туров и гидов
+    // Получаем комнаты с данными туров, слотов и гидов (без лишних полей)
     const { data: rooms, error: roomsError } = await serviceClient
       .from('tour_rooms')
       .select(`
-        *,
+        id,
+        tour_id,
+        tour_session_id,
+        guide_id,
+        is_active,
+        created_at,
         tour:tours(
           id,
           title,
@@ -56,6 +61,10 @@ export async function GET(request: NextRequest) {
           end_date,
           cover_image,
           city:cities(name)
+        ),
+        session:tour_sessions(
+          start_at,
+          end_at
         ),
         guide:profiles!tour_rooms_guide_id_fkey(
           id,
@@ -100,10 +109,15 @@ export async function GET(request: NextRequest) {
     }
 
     // Добавляем счетчики к комнатам
-    const roomsWithCounts = (rooms || []).map((room: RoomData) => ({
-      ...room,
-      participants_count: participantsCounts[room.id] || 0,
-    }));
+    const roomsWithCounts = (rooms || []).map((room: RoomData) => {
+      const rawSession = (room as { session?: unknown }).session;
+      const session = Array.isArray(rawSession) ? rawSession[0] ?? null : rawSession;
+      return {
+        ...room,
+        session,
+        participants_count: participantsCounts[room.id] || 0,
+      };
+    });
 
     return NextResponse.json({
       success: true,

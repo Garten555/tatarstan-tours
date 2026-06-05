@@ -21,7 +21,7 @@ import {
   ADMIN_MODERATION_CHANNEL,
   ADMIN_MODERATION_EVENT,
   USER_BOOKINGS_EVENT,
-} from '@/lib/pusher/data-sync';
+} from '@/lib/pusher/channels';
 
 type AchievementPayload = {
   id: string;

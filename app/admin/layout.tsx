@@ -39,7 +39,7 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex h-screen min-h-0 overflow-hidden bg-gray-50">
       <AdminPusherSync userId={user.id} />
       {/* Sidebar */}
       <AdminSidebar 
@@ -48,8 +48,8 @@ export default async function AdminLayout({
         avatarUrl={typedProfile?.avatar_url || null}
       />
 
-      {/* Main content */}
-      <main className="flex-1 p-4 sm:p-6 md:p-8 overflow-x-hidden">
+      {/* Main content — отдельная прокрутка, не зависит от body.overflow */}
+      <main className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6 md:p-8">
         <div className="max-w-[100%]">
           {children}
         </div>

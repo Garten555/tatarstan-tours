@@ -1,11 +1,20 @@
 import Pusher from 'pusher';
 import { revalidatePath } from 'next/cache';
+import {
+  ADMIN_MODERATION_CHANNEL,
+  ADMIN_MODERATION_EVENT,
+  PUBLIC_CATALOG_CHANNEL,
+  PUBLIC_CATALOG_EVENT,
+  USER_BOOKINGS_EVENT,
+} from '@/lib/pusher/channels';
 
-const ADMIN_MODERATION_CHANNEL = 'admin-moderation';
-const ADMIN_MODERATION_EVENT = 'reports-changed';
-const USER_BOOKINGS_EVENT = 'bookings-changed';
-export const PUBLIC_CATALOG_CHANNEL = 'public-catalog';
-export const PUBLIC_CATALOG_EVENT = 'catalog-changed';
+export {
+  ADMIN_MODERATION_CHANNEL,
+  ADMIN_MODERATION_EVENT,
+  PUBLIC_CATALOG_CHANNEL,
+  PUBLIC_CATALOG_EVENT,
+  USER_BOOKINGS_EVENT,
+} from '@/lib/pusher/channels';
 
 let pusherSingleton: Pusher | null | undefined;
 
@@ -68,5 +77,3 @@ export async function publishCatalogChanged(): Promise<void> {
     console.error('[publishCatalogChanged]', e);
   }
 }
-
-export { ADMIN_MODERATION_CHANNEL, ADMIN_MODERATION_EVENT, USER_BOOKINGS_EVENT };

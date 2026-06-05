@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import {
+  collectTourRoomS3Paths,
+  deleteS3Paths,
+} from '@/lib/tour-rooms/cleanup';
 import { publishAdminSync } from '@/lib/pusher/user-notification';
 
-// DELETE /api/admin/tour-rooms/[id] - удаление комнаты тура
+// DELETE /api/admin/tour-rooms/[id] - удаление комнаты тура (+ медиа в S3)
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -12,7 +16,6 @@ export async function DELETE(
     const supabase = await createClient();
     const serviceClient = await createServiceClient();
 
-    // Проверяем авторизацию
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {
@@ -22,7 +25,6 @@ export async function DELETE(
       );
     }
 
-    // Проверяем права
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
@@ -41,7 +43,6 @@ export async function DELETE(
       );
     }
 
-    // Проверяем существование комнаты
     const { data: room, error: roomError } = await serviceClient
       .from('tour_rooms')
       .select('id, tour_id, guide_id')
@@ -55,7 +56,9 @@ export async function DELETE(
       );
     }
 
-    // Удаляем комнату (CASCADE удалит все связанные данные: участников, сообщения, медиа)
+    const s3Paths = await collectTourRoomS3Paths(serviceClient, [id]);
+    const s3Files = await deleteS3Paths(s3Paths);
+
     const { error: deleteError } = await serviceClient
       .from('tour_rooms')
       .delete()
@@ -81,6 +84,7 @@ export async function DELETE(
     return NextResponse.json({
       success: true,
       message: 'Комната успешно удалена',
+      s3_files_deleted: s3Files,
     });
   } catch (error) {
     console.error('Error in DELETE /api/admin/tour-rooms/[id]:', error);
@@ -90,5 +94,3 @@ export async function DELETE(
     );
   }
 }
-
-

@@ -33,6 +33,7 @@ type TourRoomsConfirm = null | {
 interface TourRoom {
   id: string;
   tour_id: string;
+  tour_session_id?: string | null;
   guide_id: string | null;
   is_active: boolean;
   created_at: string;
@@ -46,6 +47,10 @@ interface TourRoom {
       name: string;
     };
   };
+  session?: {
+    start_at: string;
+    end_at: string | null;
+  } | null;
   guide?: {
     id: string;
     first_name: string;
@@ -54,6 +59,8 @@ interface TourRoom {
   };
   participants_count?: number;
 }
+
+const AUTO_CLEANUP_STORAGE_KEY = 'admin-tour-rooms-auto-cleanup-ts';
 
 export default function TourRoomsPage() {
   const [rooms, setRooms] = useState<TourRoom[]>([]);
@@ -82,16 +89,43 @@ export default function TourRoomsPage() {
   const [creatingRoom, setCreatingRoom] = useState(false);
   const [selectedTourId, setSelectedTourId] = useState<string | null>(null);
   const [cleanupLoading, setCleanupLoading] = useState(false);
+  const [deleteAllLoading, setDeleteAllLoading] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<TourRoomsConfirm>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
   useEffect(() => {
-    // Загружаем только комнаты при монтировании
-    // Пользователей загружаем только при открытии модального окна (ленивая загрузка)
-    loadRooms();
+    let cancelled = false;
+
+    const runAutoCleanup = async () => {
+      const last = Number(sessionStorage.getItem(AUTO_CLEANUP_STORAGE_KEY) || 0);
+      if (Date.now() - last < 60 * 60 * 1000) return;
+
+      try {
+        const res = await fetch('/api/admin/cleanup/tour-rooms', { method: 'POST' });
+        const data = await res.json().catch(() => ({}));
+        sessionStorage.setItem(AUTO_CLEANUP_STORAGE_KEY, String(Date.now()));
+        if (cancelled || !res.ok) return;
+        const deleted = (data as { deleted?: number }).deleted ?? 0;
+        if (deleted > 0) {
+          await loadRooms({ silent: true });
+          toast.success(`Автоочистка: удалено комнат — ${deleted}`);
+        }
+      } catch {
+        /* фоновая задача — без шума */
+      }
+    };
+
+    void (async () => {
+      await loadRooms();
+      if (!cancelled) await runAutoCleanup();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  useBodyScrollLock(showUserSelect || showCreateRoom || confirmDialog !== null);
+  useBodyScrollLock(showUserSelect || showCreateRoom);
 
   const handleConfirmDialog = async () => {
     if (!confirmDialog) return;
@@ -257,12 +291,12 @@ export default function TourRoomsPage() {
     });
   };
 
-  /** Те же правила, что у cron: комнаты туров, у которых end_date был более 14 дней назад. */
+  /** Комнаты, у которых выезд/тур завершился более 14 дней назад (дата слота end_at или end_date тура). */
   const openRetentionCleanupConfirm = () => {
     setConfirmDialog({
       title: 'Очистить комнаты по сроку?',
       description:
-        'Будут удалены комнаты туров, у которых дата окончания тура (end_date) была более 14 дней назад. Участники, сообщения и медиа этих комнат будут удалены.',
+        'Будут удалены комнаты, у которых прошло более 14 дней после окончания выезда (слот) или тура. Медиа в облаке тоже будут удалены.',
       variant: 'danger',
       confirmLabel: 'Удалить старые комнаты',
       action: async () => {
@@ -275,13 +309,51 @@ export default function TourRoomsPage() {
             return;
           }
           const deleted = (data as { deleted?: number }).deleted ?? 0;
-          toast.success((data as { message?: string }).message || `Удалено комнат: ${deleted}`);
+          const s3 = (data as { s3_files_deleted?: number }).s3_files_deleted ?? 0;
+          toast.success(
+            (data as { message?: string }).message ||
+              `Удалено комнат: ${deleted}, файлов в облаке: ${s3}`
+          );
           await loadRooms({ silent: true });
         } catch (e) {
           console.error(e);
           toast.error('Не удалось выполнить очистку');
         } finally {
           setCleanupLoading(false);
+        }
+      },
+    });
+  };
+
+  const openDeleteAllConfirm = () => {
+    setConfirmDialog({
+      title: 'Удалить ВСЕ комнаты?',
+      description:
+        'Будут удалены все комнаты туров, все сообщения, участники и медиа (в том числе файлы в облаке S3). Действие необратимо. Доступно только супер-админу.',
+      variant: 'danger',
+      confirmLabel: 'Удалить все комнаты',
+      action: async () => {
+        try {
+          setDeleteAllLoading(true);
+          const res = await fetch('/api/admin/cleanup/tour-rooms?mode=all', { method: 'POST' });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            toast.error((data as { error?: string }).error || `Ошибка ${res.status}`);
+            return;
+          }
+          const deleted = (data as { deleted?: number }).deleted ?? 0;
+          const s3 = (data as { s3_files_deleted?: number }).s3_files_deleted ?? 0;
+          toast.success(
+            (data as { message?: string }).message ||
+              `Удалено комнат: ${deleted}, файлов в облаке: ${s3}`
+          );
+          setRooms([]);
+          await loadRooms({ silent: true });
+        } catch (e) {
+          console.error(e);
+          toast.error('Не удалось удалить все комнаты');
+        } finally {
+          setDeleteAllLoading(false);
         }
       },
     });
@@ -316,14 +388,18 @@ export default function TourRoomsPage() {
     });
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 className="w-12 h-12 animate-spin text-emerald-600" />
-        <p className="ml-4 text-xl font-bold text-gray-600">Загрузка комнат...</p>
-      </div>
-    );
-  }
+  const formatRoomDates = (room: TourRoom) => {
+    if (room.session?.start_at) {
+      const start = formatDate(room.session.start_at);
+      const end = room.session.end_at ? formatDate(room.session.end_at) : null;
+      return end ? `${start} — ${end}` : start;
+    }
+    const start = formatDate(room.tour.start_date);
+    const end = room.tour.end_date ? formatDate(room.tour.end_date) : null;
+    return end ? `${start} — ${end}` : start;
+  };
+
+  const listBusy = loading;
 
   return (
     <div>
@@ -360,6 +436,20 @@ export default function TourRoomsPage() {
               <span>Очистить по сроку (14 дн.)</span>
             </button>
             <button
+              type="button"
+              onClick={openDeleteAllConfirm}
+              disabled={deleteAllLoading || listBusy}
+              className="px-4 py-3 border-2 border-rose-200 bg-rose-50 text-rose-900 rounded-xl hover:bg-rose-100 flex items-center justify-center gap-2 font-bold text-sm transition-all disabled:opacity-50"
+              title="Удалить все комнаты и медиа в облаке (только супер-админ)"
+            >
+              {deleteAllLoading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Trash2 className="w-5 h-5 text-rose-700" />
+              )}
+              <span>Удалить все комнаты</span>
+            </button>
+            <button
               onClick={() => {
                 setShowCreateRoom(true);
                 if (tours.length === 0) {
@@ -378,10 +468,11 @@ export default function TourRoomsPage() {
           <div className="text-sm text-slate-800 leading-relaxed">
             <strong className="font-bold">Удаление:</strong> у каждой комнаты есть кнопка «Удалить» — срочное удаление вручную (сообщения, участники, медиа).
             <br />
-            <strong className="font-bold">Автоочистка:</strong> комнаты с турами, у которых прошло более{' '}
-            <strong>14 дней</strong> после даты окончания тура (<code className="text-xs bg-white/80 px-1 rounded">end_date</code>
-            ), можно регулярно снимать через cron (<code className="text-xs bg-white/80 px-1 rounded">POST /api/admin/cleanup/tour-rooms</code>
-            ) или кнопкой выше.
+            <strong className="font-bold">Автоочистка:</strong> при открытии страницы и по cron удаляются комнаты, у которых прошло более{' '}
+            <strong>14 дней</strong> после окончания выезда (<code className="text-xs bg-white/80 px-1 rounded">tour_sessions.end_at</code>
+            ) или тура (<code className="text-xs bg-white/80 px-1 rounded">end_date</code>
+            ). Медиа удаляются из S3. Cron:{' '}
+            <code className="text-xs bg-white/80 px-1 rounded">POST /api/admin/cleanup/tour-rooms</code>.
           </div>
         </div>
       </div>
@@ -451,7 +542,16 @@ export default function TourRoomsPage() {
 
       {/* Список комнат */}
       <div className="bg-white border-b border-gray-100 py-6 px-4 md:px-6 lg:px-8 -mx-4 md:-mx-6 lg:-mx-8 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] lg:w-[calc(100%+4rem)]">
-        {filteredRooms.length === 0 ? (
+        {listBusy ? (
+          <div className="space-y-4" aria-busy="true" aria-label="Загрузка комнат">
+            {[1, 2, 3].map((i) => (
+              <div
+                key={i}
+                className="h-40 animate-pulse rounded-2xl border-2 border-gray-100 bg-gray-50"
+              />
+            ))}
+          </div>
+        ) : filteredRooms.length === 0 ? (
           <div className="text-center py-12">
             <DoorOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-xl font-black text-gray-900">
@@ -498,10 +598,7 @@ export default function TourRoomsPage() {
                     <div className="flex flex-wrap items-center gap-6 text-base text-gray-700 mb-3">
                       <div className="flex items-center gap-2">
                         <Calendar className="w-5 h-5 text-emerald-600" />
-                        <span className="font-semibold">{formatDate(room.tour.start_date)}</span>
-                        {room.tour.end_date && (
-                          <span className="text-gray-500"> - {formatDate(room.tour.end_date)}</span>
-                        )}
+                        <span className="font-semibold">{formatRoomDates(room)}</span>
                       </div>
                       {room.tour.city && (
                         <div className="flex items-center gap-2">

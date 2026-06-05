@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Pusher from 'pusher-js';
 import { createClient } from '@/lib/supabase/client';
 import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
+import { resetBodyScrollLock } from '@/lib/useBodyScrollLock';
 import {
   ADMIN_SYNC_PUSHER_EVENT,
   type AdminSyncPayload,
@@ -21,6 +22,10 @@ export default function AdminPusherSync({ userId }: Props) {
   const router = useRouter();
   const pusherRef = useRef<Pusher | null>(null);
   const channelRef = useRef<ReturnType<Pusher['subscribe']> | null>(null);
+
+  useEffect(() => {
+    resetBodyScrollLock();
+  }, []);
 
   useEffect(() => {
     const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
