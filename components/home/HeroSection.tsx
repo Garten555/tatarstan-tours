@@ -4,15 +4,10 @@ import { useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
+import type { HeroPopularTour } from '@/lib/tours/active-catalog-listing';
 import { ArrowRight, MapPin, Calendar, Users } from 'lucide-react';
 
-type PopularTour = {
-  title: string;
-  slug?: string;
-  price?: number | null;
-  durationLabel?: string | null;
-  startDateLabel?: string | null;
-};
+type PopularTour = HeroPopularTour;
 
 const FALLBACK_TOUR: PopularTour = {
   title: 'Казань + Болгар',
