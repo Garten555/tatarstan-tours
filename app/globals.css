@@ -1253,8 +1253,8 @@ html {
 
 /* Улучшение видимости ссылок */
 /* Исключаем навигацию в хедере, меню пользователя и футер из глобального правила */
-a:not(.text-white):not(.text-emerald-600):not(.text-blue-600):not(.text-gray-900):not(.text-gray-800):not(.text-gray-700):not(.header-user-dropdown-item):not(.header-user-dropdown-item-emerald):not(.header-user-dropdown-item-admin):not(.header-user-dropdown-item-danger):not(.header-nav-link):not(.footer-link):not(.footer-social-link):not(.about-back-link):not(.header-auth-button),
-button:not(.text-white):not([class*="text-white"]) {
+a:not(.text-white):not(.admin-tour-card-btn):not(.text-emerald-600):not(.text-blue-600):not(.text-gray-900):not(.text-gray-800):not(.text-gray-700):not(.header-user-dropdown-item):not(.header-user-dropdown-item-emerald):not(.header-user-dropdown-item-admin):not(.header-user-dropdown-item-danger):not(.header-nav-link):not(.footer-link):not(.footer-social-link):not(.about-back-link):not(.header-auth-button),
+button:not(.text-white):not(.admin-tour-card-btn):not([class*="text-white"]) {
   color: rgb(37 99 235) !important; /* Более яркий синий */
 }
 
@@ -1324,18 +1324,20 @@ button[class*="bg-emerald"][class*="text-white"] {
 }
 
 /* Кнопки карточек туров в админке — белый текст поверх глобальных правил */
+a.admin-tour-card-btn,
+button.admin-tour-card-btn,
 .admin-tour-card-btn,
-.admin-tour-card-btn svg {
-  color: rgb(255 255 255) !important;
-}
-
+.admin-tour-card-btn svg,
 .admin-tour-card-btn:hover,
-.admin-tour-card-btn:hover svg {
+.admin-tour-card-btn:hover svg,
+.admin-tour-card-btn:focus,
+.admin-tour-card-btn:focus svg {
   color: rgb(255 255 255) !important;
+  -webkit-text-fill-color: rgb(255 255 255) !important;
 }
 
 /* Улучшение видимости кнопок (исключаем зелёные CTA: bg-emerald-500 и т.д.) */
-button:not(.bg-emerald-500):not(.bg-emerald-600):not(.bg-emerald-700):not(.bg-blue-600):not(.bg-red-500):not(.bg-gray-300) {
+button:not(.bg-emerald-500):not(.bg-emerald-600):not(.bg-emerald-700):not(.bg-blue-600):not(.bg-red-500):not(.bg-red-600):not(.bg-amber-600):not(.bg-gray-300):not(.admin-tour-card-btn) {
   color: rgb(17 24 39) !important;
 }
 

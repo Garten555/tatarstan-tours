@@ -487,18 +487,18 @@ export default function TourAdminList() {
               <Link
                 href={`/admin/tours/${tour.id}/edit`}
                 onClick={(e) => e.stopPropagation()}
-                className="admin-tour-card-btn w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl"
+                className="admin-tour-card-btn w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl"
               >
-                <Edit className="w-5 h-5 shrink-0" />
+                <Edit className="w-5 h-5 shrink-0 text-white" />
                 Изменить
               </Link>
               <button
                 type="button"
                 onClick={(e) => handleCancelTour(tour.id, e)}
                 disabled={cancellingId === tour.id || tour.status === 'cancelled'}
-                className="admin-tour-card-btn w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50"
+                className="admin-tour-card-btn w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50"
               >
-                <Ban className="w-5 h-5 shrink-0" />
+                <Ban className="w-5 h-5 shrink-0 text-white" />
                 {cancellingId === tour.id ? '…' : tour.status === 'cancelled' ? 'Отменён' : 'Отменить тур'}
               </button>
               <button
@@ -508,9 +508,9 @@ export default function TourAdminList() {
                   handleDelete(tour.id);
                 }}
                 disabled={deletingId === tour.id}
-                className="admin-tour-card-btn w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50"
+                className="admin-tour-card-btn w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50"
               >
-                <Trash2 className="w-5 h-5 shrink-0" />
+                <Trash2 className="w-5 h-5 shrink-0 text-white" />
                 {deletingId === tour.id ? '...' : 'Удалить навсегда'}
               </button>
             </div>
