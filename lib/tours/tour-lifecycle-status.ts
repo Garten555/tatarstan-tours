@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { LEGACY_TOUR_SESSION_ID } from '@/lib/tour/legacy-session';
+import { publishCatalogChanged } from '@/lib/pusher/data-sync';
 import {
   hasScheduledFutureStart,
   isTourEndedByEndDate,
@@ -145,8 +146,13 @@ export async function completeFinishedActiveTours(
     return { completed_count: 0, tour_ids: [] };
   }
 
+  const completed_count = updated?.length ?? 0;
+  if (completed_count > 0) {
+    void publishCatalogChanged();
+  }
+
   return {
-    completed_count: updated?.length ?? 0,
+    completed_count,
     tour_ids: (updated ?? []).map((t) => t.id),
   };
 }

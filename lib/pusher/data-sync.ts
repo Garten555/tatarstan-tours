@@ -3,6 +3,8 @@ import Pusher from 'pusher';
 const ADMIN_MODERATION_CHANNEL = 'admin-moderation';
 const ADMIN_MODERATION_EVENT = 'reports-changed';
 const USER_BOOKINGS_EVENT = 'bookings-changed';
+export const PUBLIC_CATALOG_CHANNEL = 'public-catalog';
+export const PUBLIC_CATALOG_EVENT = 'catalog-changed';
 
 let pusherSingleton: Pusher | null | undefined;
 
@@ -45,6 +47,17 @@ export async function publishAdminModerationChanged(): Promise<void> {
     await pusher.trigger(ADMIN_MODERATION_CHANNEL, ADMIN_MODERATION_EVENT, { at: Date.now() });
   } catch (e) {
     console.error('[publishAdminModerationChanged]', e);
+  }
+}
+
+/** Hero и каталог на главной: новые/завершённые туры, слоты, статусы. */
+export async function publishCatalogChanged(): Promise<void> {
+  const pusher = getPusher();
+  if (!pusher) return;
+  try {
+    await pusher.trigger(PUBLIC_CATALOG_CHANNEL, PUBLIC_CATALOG_EVENT, { at: Date.now() });
+  } catch (e) {
+    console.error('[publishCatalogChanged]', e);
   }
 }
 

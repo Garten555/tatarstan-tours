@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { publishCatalogChanged } from '@/lib/pusher/data-sync';
 
 // POST /api/admin/tours - создание тура
 export async function POST(request: NextRequest) {
@@ -67,6 +68,8 @@ export async function POST(request: NextRequest) {
     }
     
     console.log('✅ Tour created successfully:', (data as CreatedTour)?.id);
+
+    void publishCatalogChanged();
 
     return NextResponse.json({ success: true, data });
   } catch (error) {
@@ -152,6 +155,7 @@ export async function PUT(request: NextRequest) {
             if (process.env.NODE_ENV !== 'production') {
               console.log('✅ Tour updated successfully:', data.id);
             }
+    void publishCatalogChanged();
     return NextResponse.json({ success: true, data });
   } catch (error) {
     console.error('Error in PUT /api/admin/tours:', error);

@@ -4,6 +4,7 @@ import { deleteFileFromS3 } from '@/lib/s3/upload';
 import { sendTourRemovedEmail } from '@/lib/email/tour-notifications';
 import { countBookingsAffectedByDateChange } from '@/lib/bookings/active-bookings-for-date-change';
 import { syncAllTourSessionParticipants } from '@/lib/tour/session-participants';
+import { publishCatalogChanged } from '@/lib/pusher/data-sync';
 
 function isoNorm(ts: string | null | undefined): string {
   if (!ts) return '';
@@ -141,6 +142,8 @@ export async function PUT(
     if (isRelaunch || tourDatesChanged) {
       await syncAllTourSessionParticipants(serviceClient, id);
     }
+
+    void publishCatalogChanged();
 
     return NextResponse.json({ success: true, data });
   } catch (error) {
@@ -290,6 +293,8 @@ export async function DELETE(
         filesToDelete.map(path => deleteFileFromS3(path))
       ).catch(err => console.error('Error deleting files from S3:', err));
     }
+
+    void publishCatalogChanged();
 
     return NextResponse.json({ 
       success: true, 

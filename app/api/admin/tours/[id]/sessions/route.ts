@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { ensureTourRoomForSession } from '@/lib/tour/ensure-session-room';
 import { syncSessionCurrentParticipants } from '@/lib/tour/session-participants';
 import { sendTourRescheduleEmail } from '@/lib/email/tour-notifications';
+import { publishCatalogChanged } from '@/lib/pusher/data-sync';
 
 type IncomingSession = {
   id?: string;
@@ -290,6 +291,8 @@ export async function POST(
         )
       );
     }
+
+    void publishCatalogChanged();
 
     return NextResponse.json({ success: true });
   } catch (e) {

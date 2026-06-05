@@ -1,10 +1,16 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import Pusher from 'pusher-js';
 import { Button } from '@/components/ui/Button';
 import type { HeroPopularTour } from '@/lib/tours/active-catalog-listing';
+import {
+  PUBLIC_CATALOG_CHANNEL,
+  PUBLIC_CATALOG_EVENT,
+} from '@/lib/pusher/data-sync';
+import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
 import { ArrowRight, MapPin, Calendar, Users } from 'lucide-react';
 
 type PopularTour = HeroPopularTour;
@@ -16,6 +22,10 @@ const FALLBACK_TOUR: PopularTour = {
   durationLabel: null,
   startDateLabel: null,
 };
+
+function normalizeHeroItems(tours?: PopularTour[] | null): PopularTour[] {
+  return tours && tours.length > 0 ? tours : [FALLBACK_TOUR];
+}
 
 function GlassTourCard({ tour, linked }: { tour: PopularTour; linked: boolean }) {
   const inner = (
@@ -54,10 +64,44 @@ function GlassTourCard({ tour, linked }: { tour: PopularTour; linked: boolean })
 }
 
 export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | null }) {
-  const items = useMemo(
-    () => (popularTours && popularTours.length > 0 ? popularTours : [FALLBACK_TOUR]),
-    [popularTours]
-  );
+  const [items, setItems] = useState<PopularTour[]>(() => normalizeHeroItems(popularTours));
+  const pusherRef = useRef<Pusher | null>(null);
+  const channelRef = useRef<ReturnType<Pusher['subscribe']> | null>(null);
+
+  const refetchHeroTours = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tours/hero-nearest', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = (await res.json()) as { tours?: PopularTour[] };
+      setItems(normalizeHeroItems(data.tours));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    setItems(normalizeHeroItems(popularTours));
+  }, [popularTours]);
+
+  useEffect(() => {
+    const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
+    if (!key) return;
+
+    const pusher = new Pusher(key, {
+      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'eu',
+    });
+    pusherRef.current = pusher;
+
+    const channel = pusher.subscribe(PUBLIC_CATALOG_CHANNEL);
+    channelRef.current = channel;
+    channel.bind(PUBLIC_CATALOG_EVENT, refetchHeroTours);
+
+    return () => {
+      disconnectPusherSafely(pusherRef.current, [channelRef.current]);
+      pusherRef.current = null;
+      channelRef.current = null;
+    };
+  }, [refetchHeroTours]);
 
   const activeTour = items[0];
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { sendTourCancelledEmail } from '@/lib/email/tour-notifications';
+import { publishCatalogChanged } from '@/lib/pusher/data-sync';
 
 /**
  * POST /api/admin/tours/[id]/cancel — отменить тур (не удалять): статус cancelled + отмена активных бронирований + письма участникам.
@@ -89,6 +90,8 @@ export async function POST(
     void Promise.allSettled(
       emails.map((to) => sendTourCancelledEmail({ to, tourTitle, reason }))
     ).catch(() => {});
+
+    void publishCatalogChanged();
 
     return NextResponse.json({ success: true });
   } catch (e) {
