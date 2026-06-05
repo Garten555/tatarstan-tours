@@ -225,6 +225,11 @@ export default function TourAdminList() {
 
   const displayStatus = (tour: Tour) => tour.effective_status ?? tour.status;
 
+  const canCancelTour = (tour: Tour) => {
+    const status = displayStatus(tour);
+    return status !== 'completed' && status !== 'cancelled';
+  };
+
   const resetFilters = () => {
     setSearch('');
     setStatus('');
@@ -492,15 +497,17 @@ export default function TourAdminList() {
                 <Edit className="w-5 h-5 shrink-0 text-white" />
                 Изменить
               </Link>
-              <button
-                type="button"
-                onClick={(e) => handleCancelTour(tour.id, e)}
-                disabled={cancellingId === tour.id || tour.status === 'cancelled'}
-                className="admin-tour-card-btn w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50"
-              >
-                <Ban className="w-5 h-5 shrink-0 text-white" />
-                {cancellingId === tour.id ? '…' : tour.status === 'cancelled' ? 'Отменён' : 'Отменить тур'}
-              </button>
+              {canCancelTour(tour) && (
+                <button
+                  type="button"
+                  onClick={(e) => handleCancelTour(tour.id, e)}
+                  disabled={cancellingId === tour.id}
+                  className="admin-tour-card-btn w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white px-4 py-3.5 rounded-xl text-base font-black transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50"
+                >
+                  <Ban className="w-5 h-5 shrink-0 text-white" />
+                  {cancellingId === tour.id ? '…' : 'Отменить тур'}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={(e) => {
