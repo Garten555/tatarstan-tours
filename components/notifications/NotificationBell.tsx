@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { createClient } from '@/lib/supabase/client';
 import { playNotificationSound } from '@/lib/sound/notifications';
 import { sanitizeImageUrl } from '@/lib/utils/sanitize';
+import { getAchievementBadgeIcon } from '@/lib/achievements/badge-icons';
 import {
   PUSHER_BRIDGE_EVENT,
   type PusherBridgeDetail,
@@ -25,9 +26,19 @@ function parseNotificationBodyMeta(body: string | null): {
   senderUsername: string | null;
   senderAvatar: string | null;
   roomId: string | null;
+  badgeType: string | null;
+  achievementId: string | null;
 } {
   if (!body) {
-    return { displayText: '', senderId: null, senderUsername: null, senderAvatar: null, roomId: null };
+    return {
+      displayText: '',
+      senderId: null,
+      senderUsername: null,
+      senderAvatar: null,
+      roomId: null,
+      badgeType: null,
+      achievementId: null,
+    };
   }
   const lines = body.split('\n');
   const meta = new Map<string, string>();
@@ -50,6 +61,14 @@ function parseNotificationBodyMeta(body: string | null): {
       meta.set('room_id', line.slice('room_id:'.length).trim());
       continue;
     }
+    if (line.startsWith('badge_type:')) {
+      meta.set('badge_type', line.slice('badge_type:'.length).trim());
+      continue;
+    }
+    if (line.startsWith('achievement_id:')) {
+      meta.set('achievement_id', line.slice('achievement_id:'.length).trim());
+      continue;
+    }
     textLines.push(rawLine);
   }
   return {
@@ -58,6 +77,8 @@ function parseNotificationBodyMeta(body: string | null): {
     senderUsername: meta.get('sender_username') || null,
     senderAvatar: meta.get('sender_avatar') || null,
     roomId: meta.get('room_id') || null,
+    badgeType: meta.get('badge_type') || null,
+    achievementId: meta.get('achievement_id') || null,
   };
 }
 
@@ -248,6 +269,7 @@ export default function NotificationBell() {
                 <div className="divide-y divide-gray-100">
                   {notifications.map((notification) => {
                     const isFriendReq = notification.type === 'friend_request';
+                    const isAchievement = notification.type === 'achievement';
                     const parsedMeta = parseNotificationBodyMeta(notification.body);
                     const { displayText, senderId } = isFriendReq
                       ? parseFriendRequestMeta(notification.body)
@@ -256,7 +278,10 @@ export default function NotificationBell() {
                     const senderName = parsedMeta.senderUsername || 'Пользователь';
                     const senderInitial = senderName.charAt(0).toUpperCase();
                     const safeAvatar = sanitizeImageUrl(parsedMeta.senderAvatar);
-                    const hasAvatar = !!safeAvatar;
+                    const hasAvatar = !isAchievement && !!safeAvatar;
+                    const achievementIcon = isAchievement
+                      ? getAchievementBadgeIcon(parsedMeta.badgeType)
+                      : null;
 
                     return (
                       <div
@@ -264,7 +289,14 @@ export default function NotificationBell() {
                         className="p-4 hover:bg-gray-50 transition-colors"
                       >
                         <div className="flex items-start gap-2.5">
-                          {hasAvatar ? (
+                          {isAchievement ? (
+                            <div
+                              className="w-8 h-8 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center text-lg shrink-0 mt-0.5"
+                              aria-hidden
+                            >
+                              {achievementIcon}
+                            </div>
+                          ) : hasAvatar ? (
                             <img
                               src={safeAvatar as string}
                               alt={senderName}
@@ -279,9 +311,13 @@ export default function NotificationBell() {
                         <div className="font-medium text-gray-900 text-sm">
                           {notification.title}
                         </div>
-                        {(isFriendReq ? displayText : notification.body) ? (
+                        {(isFriendReq ? displayText : isAchievement ? displayText : notification.body) ? (
                           <div className="text-xs text-gray-600 mt-1 whitespace-pre-wrap">
-                            {isFriendReq ? displayText : parsedMeta.displayText || notification.body}
+                            {isFriendReq
+                              ? displayText
+                              : isAchievement
+                                ? displayText
+                                : parsedMeta.displayText || notification.body}
                           </div>
                         ) : null}
 

@@ -23,6 +23,8 @@ import {
   USER_BOOKINGS_EVENT,
 } from '@/lib/pusher/channels';
 
+import { getAchievementBadgeIcon } from '@/lib/achievements/badge-icons';
+
 type AchievementPayload = {
   id: string;
   badge_name?: string | null;
@@ -49,6 +51,7 @@ function playAchievementChime() {
 
 export default function PusherUserBridge() {
   const lastAchievementIdRef = useRef<string | null>(null);
+  const achievementsSyncedUserRef = useRef<string | null>(null);
   const pusherRef = useRef<Pusher | null>(null);
   const channelUserRef = useRef<ReturnType<Pusher['subscribe']> | null>(null);
   const channelNotificationsRef = useRef<ReturnType<Pusher['subscribe']> | null>(null);
@@ -116,23 +119,24 @@ export default function PusherUserBridge() {
           lastAchievementIdRef.current = achievement.id;
 
           const title = achievement.badge_name || 'Новое достижение';
-          toast.success(`Вам присвоено достижение: ${title}`);
+          const icon = getAchievementBadgeIcon(achievement.badge_type);
+          toast.success(`${icon} Вам присвоено достижение: ${title}`);
           playAchievementChime();
-
-          fetch('/api/notifications', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title,
-              body: achievement.badge_description || null,
-              type: 'achievement',
-            }),
-          }).finally(() => {
-            window.dispatchEvent(new Event('notifications:update'));
-          });
+          window.dispatchEvent(new Event('notifications:update'));
         }
       );
+
+      if (achievementsSyncedUserRef.current !== user.id) {
+        achievementsSyncedUserRef.current = user.id;
+        void fetch('/api/passport/achievements/repair', {
+          method: 'POST',
+          credentials: 'include',
+        })
+          .then(() => {
+            window.dispatchEvent(new Event('notifications:update'));
+          })
+          .catch(() => {});
+      }
 
       const { data: profile } = await supabase
         .from('profiles')

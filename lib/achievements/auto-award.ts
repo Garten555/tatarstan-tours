@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { fetchUserParticipatedTourIds } from '@/lib/passport/user-tour-stats';
-import { publishAchievementEarned } from '@/lib/pusher/user-notification';
+import { notifyAchievementEarned } from '@/lib/achievements/achievement-notification';
 import { syncUserReputationFromAchievements } from '@/lib/reputation/experience';
 
 export type AchievementBadge = {
@@ -127,7 +127,12 @@ export async function ensureAchievement(
   }
 
   if (inserted) {
-    await publishAchievementEarned(userId, inserted);
+    await notifyAchievementEarned(serviceClient, userId, {
+      id: inserted.id,
+      badge_name: inserted.badge_name,
+      badge_type: inserted.badge_type,
+      badge_description: inserted.badge_description,
+    });
   }
 
   return { awarded: Boolean(inserted), achievement: inserted ?? undefined };

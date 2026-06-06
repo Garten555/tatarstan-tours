@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { rateLimit } from '@/lib/security/rate-limit';
-import { publishAchievementEarned } from '@/lib/pusher/user-notification';
+import { notifyAchievementEarned } from '@/lib/achievements/achievement-notification';
 import { syncUserReputationFromAchievements } from '@/lib/reputation/experience';
 import { syncTourParticipationAchievements } from '@/lib/achievements/auto-award';
 
@@ -102,7 +102,7 @@ export async function POST(
     }
 
     if (achievement) {
-      await publishAchievementEarned(user_id, {
+      await notifyAchievementEarned(serviceClient, user_id, {
         id: achievement.id,
         badge_name: achievement.badge_name,
         badge_type: achievement.badge_type,

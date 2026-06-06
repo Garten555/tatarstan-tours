@@ -12,7 +12,6 @@ import {
 import { escapeHtml } from '@/lib/utils/sanitize';
 import AchievementCard from './AchievementCard';
 import { ExportMapButton } from './ExportMapButton';
-import AchievementsRefreshButton from './AchievementsRefreshButton';
 import { ParticipatedTourCard } from './ParticipatedTourCard';
 
 interface PassportTabsProps {
@@ -115,7 +114,6 @@ export default function PassportTabs({
                   </p>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
-                  <AchievementsRefreshButton />
                   <div className="px-4 py-2 bg-emerald-50 rounded-lg border border-emerald-200">
                     <div className="text-xs text-emerald-700 font-medium mb-1">Опыт</div>
                     <div className="text-xl font-black text-emerald-700">{reputationScore}</div>
