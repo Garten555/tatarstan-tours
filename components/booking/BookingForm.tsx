@@ -29,6 +29,8 @@ import {
   normalizeCardNumber,
   validateCardPaymentInput,
 } from '@/lib/payment/card-validation';
+import { isBlockingDuplicateBooking } from '@/lib/bookings/duplicate-booking';
+import type { BookingForReview } from '@/lib/bookings/review-eligibility';
 
 interface BookingFormProps {
   tour: any;
@@ -173,13 +175,25 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
         const response = await fetch('/api/user/bookings');
         const data = await response.json();
         if (response.ok && Array.isArray(data.bookings)) {
-          const hasBooking = data.bookings.some((booking: any) => {
-            if (booking.tour_id !== tour.id || !['pending', 'confirmed'].includes(booking.status)) {
-              return false;
-            }
-            if (session?.id) return booking.session_id === session.id;
-            return booking.session_id == null || booking.session_id === '';
-          });
+          const hasBooking = data.bookings.some((booking: Record<string, unknown>) =>
+            isBlockingDuplicateBooking(
+              {
+                tour_id: String(booking.tour_id),
+                session_id: booking.session_id ? String(booking.session_id) : null,
+                status: String(booking.status ?? ''),
+                departure_end_at: (booking.departure_end_at as string | null) ?? null,
+                departure_start_at: (booking.departure_start_at as string | null) ?? null,
+                tour_session: Array.isArray(booking.tour_session)
+                  ? booking.tour_session[0] ?? null
+                  : (booking.tour_session as BookingForReview['tour_session']),
+                tour: Array.isArray(booking.tour)
+                  ? booking.tour[0] ?? null
+                  : (booking.tour as BookingForReview['tour']),
+              },
+              tour.id,
+              session?.id ?? null
+            )
+          );
           setHasExistingBooking(hasBooking);
         }
       } catch (err) {
@@ -187,7 +201,7 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
       }
     };
     loadExistingBookings();
-  }, [tour.id]);
+  }, [tour.id, session?.id]);
 
   useEffect(() => {
     const loadTravelers = async () => {

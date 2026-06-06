@@ -34,6 +34,8 @@ export async function GET(request: NextRequest) {
         num_people,
         payment_method,
         created_at,
+        departure_end_at,
+        departure_start_at,
         tour:tours!bookings_tour_id_fkey(
           id,
           title,

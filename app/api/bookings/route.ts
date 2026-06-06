@@ -8,6 +8,11 @@ import { sumActiveBookingSeatsForSession } from '@/lib/tour/session-participants
 import { publishBookingsChanged } from '@/lib/pusher/data-sync';
 import { sendBookingConfirmationEmail } from '@/lib/bookings/send-booking-confirmation-email';
 import {
+  BOOKING_DUPLICATE_SELECT,
+  isBlockingDuplicateBooking,
+  normalizeBookingDuplicateRow,
+} from '@/lib/bookings/duplicate-booking';
+import {
   buildSafeCardPaymentMeta,
   validateCardPaymentInput,
 } from '@/lib/payment/card-validation';
@@ -179,12 +184,11 @@ export async function POST(request: NextRequest) {
 
       const { data: existingBookings, error: existingBookingsError } = await serviceClient
         .from('bookings')
-        .select('id')
+        .select(BOOKING_DUPLICATE_SELECT)
         .eq('tour_id', tour_id)
         .eq('user_id', user.id)
         .eq('session_id', session_id)
-        .in('status', ['pending', 'confirmed'])
-        .limit(1);
+        .in('status', ['pending', 'confirmed']);
 
       if (existingBookingsError) {
         console.error('Ошибка проверки бронирований:', existingBookingsError);
@@ -194,7 +198,11 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if ((existingBookings || []).length > 0) {
+      const hasActiveDuplicate = (existingBookings || []).some((row) =>
+        isBlockingDuplicateBooking(normalizeBookingDuplicateRow(row as Record<string, unknown>), tour_id, session_id)
+      );
+
+      if (hasActiveDuplicate) {
         return NextResponse.json(
           { error: 'У вас уже есть бронирование на этот выезд' },
           { status: 400 }
@@ -220,11 +228,10 @@ export async function POST(request: NextRequest) {
 
       const { data: existingBookings, error: existingBookingsError } = await serviceClient
         .from('bookings')
-        .select('id, status')
+        .select(BOOKING_DUPLICATE_SELECT)
         .eq('tour_id', tour_id)
         .eq('user_id', user.id)
-        .in('status', ['pending', 'confirmed'])
-        .limit(1);
+        .in('status', ['pending', 'confirmed']);
 
       if (existingBookingsError) {
         console.error('Ошибка проверки бронирований:', existingBookingsError);
@@ -234,7 +241,11 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if ((existingBookings || []).length > 0) {
+      const hasActiveDuplicate = (existingBookings || []).some((row) =>
+        isBlockingDuplicateBooking(normalizeBookingDuplicateRow(row as Record<string, unknown>), tour_id, null)
+      );
+
+      if (hasActiveDuplicate) {
         return NextResponse.json(
           { error: 'У вас уже есть бронирование на этот тур' },
           { status: 400 }
