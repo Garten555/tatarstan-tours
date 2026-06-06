@@ -1,14 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
 import { 
   Award, 
   Compass, 
   MapPin, 
-  Calendar,
-  ExternalLink,
   Star,
   Trophy,
   TrendingUp,
@@ -17,6 +13,7 @@ import { escapeHtml } from '@/lib/utils/sanitize';
 import AchievementCard from './AchievementCard';
 import { ExportMapButton } from './ExportMapButton';
 import AchievementsRefreshButton from './AchievementsRefreshButton';
+import { ParticipatedTourCard } from './ParticipatedTourCard';
 
 interface PassportTabsProps {
   achievements: any[];
@@ -176,83 +173,17 @@ export default function PassportTabs({
               </div>
 
               {completedTours.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-6 max-w-3xl mx-auto">
                   {completedTours.map((booking: any) => {
                     const tour = booking.tour;
                     if (!tour) return null;
-                    
+
                     return (
-                      <div
+                      <ParticipatedTourCard
                         key={booking.id}
-                        className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-all duration-200"
-                      >
-                        {tour.cover_image && (
-                          <div className="relative h-48 md:h-64 bg-gray-200 overflow-hidden">
-                            <Image
-                              src={tour.cover_image}
-                              alt={escapeHtml(tour.title)}
-                              fill
-                              className="object-cover"
-                              loading="lazy"
-                              unoptimized={tour.cover_image?.includes('s3.twcstorage.ru')}
-                              sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
-                            <div className="absolute bottom-4 left-4 right-4">
-                              <Link
-                                href={`/tours/${tour.slug}`}
-                                className="group"
-                              >
-                                <h3 className="text-xl md:text-2xl font-black text-white mb-2 group-hover:text-emerald-300 transition-colors">
-                                  {escapeHtml(tour.title)}
-                                </h3>
-                              </Link>
-                            </div>
-                          </div>
-                        )}
-                        <div className="p-4 md:p-6">
-                          {!tour.cover_image && (
-                            <Link
-                              href={`/tours/${tour.slug}`}
-                              className="group"
-                            >
-                              <h3 className="text-xl md:text-2xl font-black text-gray-900 mb-4 group-hover:text-emerald-600 transition-colors">
-                                {escapeHtml(tour.title)}
-                              </h3>
-                            </Link>
-                          )}
-                          
-                          <div className="space-y-3 mb-4">
-                            {tour.city && (
-                              <div className="flex items-center gap-2 text-gray-700">
-                                <MapPin className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-                                <span className="font-semibold">{escapeHtml(tour.city.name)}</span>
-                              </div>
-                            )}
-                            
-                            <div className="flex items-center gap-2 text-gray-700">
-                              <Calendar className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-                              <span className="font-semibold">
-                                {new Date(tour.start_date).toLocaleDateString('ru-RU', {
-                                  day: 'numeric',
-                                  month: 'long',
-                                  year: 'numeric'
-                                })}
-                              </span>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                            <Link
-                              href={`/tours/${tour.slug}`}
-                              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold transition-colors"
-                            >
-                              <span>Открыть тур</span>
-                              <ExternalLink className="w-4 h-4" />
-                            </Link>
-                          </div>
-                        </div>
-                      </div>
+                        bookingId={booking.id}
+                        tour={tour}
+                      />
                     );
                   })}
                 </div>
