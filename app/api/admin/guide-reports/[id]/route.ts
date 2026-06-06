@@ -53,6 +53,15 @@ export async function PATCH(
 
     if (error) {
       console.error('[guide-reports PATCH]', error);
+      if (error.message?.includes('guide_reports_status_check')) {
+        return NextResponse.json(
+          {
+            error:
+              'Статус resolved не разрешён в БД. Выполните database/migrations/009_guide_reports_resolved_status.sql в Supabase.',
+          },
+          { status: 503 }
+        );
+      }
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
     if (!data) {

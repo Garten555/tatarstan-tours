@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS public.guide_reports (
   reporter_id uuid NOT NULL REFERENCES public.profiles (id) ON DELETE CASCADE,
   room_id uuid REFERENCES public.tour_rooms (id) ON DELETE SET NULL,
   reason text,
-  status text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'reviewed', 'dismissed')),
+  status text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'reviewed', 'resolved', 'dismissed')),
   admin_note text,
   created_at timestamptz NOT NULL DEFAULT now(),
   reviewed_at timestamptz,
