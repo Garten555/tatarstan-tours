@@ -1,14 +1,18 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { X, Star, Upload, Loader2, Quote } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getReviewTheme } from '@/lib/reviews/rating-theme';
 
 type ReviewModalProps = {
-  bookingId: string;
-  tourId: string;
+  bookingId?: string;
+  tourId?: string;
   tourTitle: string;
+  reviewId?: string;
+  initialRating?: number;
+  initialText?: string;
+  mode?: 'create' | 'edit';
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: () => void;
@@ -24,15 +28,27 @@ export default function ReviewModal({
   bookingId,
   tourId,
   tourTitle,
+  reviewId,
+  initialRating = 5,
+  initialText = '',
+  mode = 'create',
   isOpen,
   onClose,
   onSuccess,
 }: ReviewModalProps) {
-  const [rating, setRating] = useState(5);
-  const [text, setText] = useState('');
+  const [rating, setRating] = useState(initialRating);
+  const [text, setText] = useState(initialText);
   const [files, setFiles] = useState<LocalFile[]>([]);
   const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    setRating(initialRating);
+    setText(initialText);
+    setFiles([]);
+  }, [isOpen, initialRating, initialText]);
+
+  const isEdit = mode === 'edit';
   const theme = useMemo(() => getReviewTheme(rating), [rating]);
   const canSubmit = useMemo(() => rating >= 1 && rating <= 5 && !saving, [rating, saving]);
   const previewText = text.trim() || 'Ваш отзыв появится здесь…';
@@ -40,6 +56,7 @@ export default function ReviewModal({
   if (!isOpen) return null;
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (isEdit) return;
     const selected = Array.from(event.target.files || []);
     if (selected.length === 0) return;
 
@@ -91,6 +108,32 @@ export default function ReviewModal({
     setSaving(true);
 
     try {
+      if (isEdit) {
+        if (!reviewId) {
+          throw new Error('Не указан отзыв');
+        }
+
+        const response = await fetch(`/api/reviews/${reviewId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rating, text }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(data.error || 'Не удалось сохранить отзыв');
+        }
+
+        toast.success('Отзыв обновлён');
+        onClose();
+        onSuccess?.();
+        return;
+      }
+
+      if (!bookingId || !tourId) {
+        throw new Error('Не указано бронирование');
+      }
+
       const media = [];
       for (const [index, file] of files.entries()) {
         const uploaded = await uploadFile(file);
@@ -121,7 +164,7 @@ export default function ReviewModal({
       setFiles([]);
       onSuccess?.();
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : 'Не удалось отправить отзыв');
+      toast.error(error instanceof Error ? error.message : 'Не удалось сохранить отзыв');
     } finally {
       setSaving(false);
     }
@@ -132,7 +175,9 @@ export default function ReviewModal({
       <div className="my-auto w-full max-w-2xl rounded-2xl bg-white p-6 shadow-xl">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Оставить отзыв</h2>
+            <h2 className="text-xl font-semibold text-gray-900">
+              {isEdit ? 'Редактировать отзыв' : 'Оставить отзыв'}
+            </h2>
             <p className="mt-1 text-sm text-gray-600">{tourTitle}</p>
           </div>
           <button
@@ -172,7 +217,6 @@ export default function ReviewModal({
           </div>
         </div>
 
-        {/* Превью карточки отзыва */}
         <div
           className={`relative mt-6 rounded-2xl border-2 p-5 transition-all duration-300 ${theme.card}`}
         >
@@ -227,41 +271,43 @@ export default function ReviewModal({
           />
         </div>
 
-        <div className="mt-6">
-          <label className="text-sm font-medium text-gray-700">Фото и видео</label>
-          <div className="mt-2 flex flex-wrap gap-3">
-            <label
-              className={`flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-gray-300 px-4 py-2 text-sm text-gray-600 transition ${theme.uploadHover}`}
-            >
-              <Upload className="h-4 w-4" />
-              Добавить файлы
-              <input
-                type="file"
-                accept="image/*,video/*"
-                multiple
-                className="hidden"
-                onChange={handleFileChange}
-              />
-            </label>
+        {!isEdit ? (
+          <div className="mt-6">
+            <label className="text-sm font-medium text-gray-700">Фото и видео</label>
+            <div className="mt-2 flex flex-wrap gap-3">
+              <label
+                className={`flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-gray-300 px-4 py-2 text-sm text-gray-600 transition ${theme.uploadHover}`}
+              >
+                <Upload className="h-4 w-4" />
+                Добавить файлы
+                <input
+                  type="file"
+                  accept="image/*,video/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </label>
 
-            {files.map((file, index) => (
-              <div key={file.preview} className="relative h-24 w-24 overflow-hidden rounded-lg border">
-                {file.type === 'video' ? (
-                  <video src={file.preview} className="h-full w-full object-cover" />
-                ) : (
-                  <img src={file.preview} alt="preview" className="h-full w-full object-cover" />
-                )}
-                <button
-                  type="button"
-                  onClick={() => handleRemoveFile(index)}
-                  className="absolute right-1 top-1 h-5 w-5 rounded-full bg-black/60 text-xs text-white"
-                >
-                  ×
-                </button>
-              </div>
-            ))}
+              {files.map((file, index) => (
+                <div key={file.preview} className="relative h-24 w-24 overflow-hidden rounded-lg border">
+                  {file.type === 'video' ? (
+                    <video src={file.preview} className="h-full w-full object-cover" />
+                  ) : (
+                    <img src={file.preview} alt="preview" className="h-full w-full object-cover" />
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFile(index)}
+                    className="absolute right-1 top-1 h-5 w-5 rounded-full bg-black/60 text-xs text-white"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
 
         <div className="mt-8 flex justify-end gap-3">
           <button
@@ -279,7 +325,7 @@ export default function ReviewModal({
             className={`flex items-center gap-2 rounded-lg px-5 py-2 text-white transition-colors duration-200 disabled:opacity-60 ${theme.submit}`}
           >
             {saving && <Loader2 className="h-4 w-4 animate-spin" />}
-            Отправить
+            {isEdit ? 'Сохранить' : 'Отправить'}
           </button>
         </div>
       </div>

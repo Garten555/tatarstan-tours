@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
         rating,
         text,
         created_at,
+        booking_id,
         tour:tours!reviews_tour_id_fkey(
           id,
           title,

@@ -1,6 +1,8 @@
 import Image from 'next/image';
 import { Calendar, MapPin, ImageIcon } from 'lucide-react';
 
+import { ActiveTourRelaunchLink } from '@/components/tours/ActiveTourRelaunchLink';
+import type { ActiveTourLink } from '@/lib/tours/resolve-active-tour-link';
 import { escapeHtml } from '@/lib/utils/sanitize';
 
 type ParticipatedTourCardProps = {
@@ -12,9 +14,10 @@ type ParticipatedTourCardProps = {
     start_date?: string | null;
     city?: { name: string } | null;
   };
+  activeTourLink?: ActiveTourLink | null;
 };
 
-export function ParticipatedTourCard({ tour }: ParticipatedTourCardProps) {
+export function ParticipatedTourCard({ tour, activeTourLink = null }: ParticipatedTourCardProps) {
   const dateLabel = tour.start_date
     ? new Date(tour.start_date).toLocaleDateString('ru-RU', {
         day: 'numeric',
@@ -66,7 +69,7 @@ export function ParticipatedTourCard({ tour }: ParticipatedTourCardProps) {
         </h3>
 
         {!tour.cover_image && (
-          <div className="space-y-3">
+          <div className="space-y-3 mb-4">
             {tour.city?.name ? (
               <div className="flex items-center gap-2 text-gray-700">
                 <MapPin className="w-5 h-5 text-emerald-600 flex-shrink-0" />
@@ -80,6 +83,18 @@ export function ParticipatedTourCard({ tour }: ParticipatedTourCardProps) {
               </div>
             ) : null}
           </div>
+        )}
+
+        {dateLabel ? (
+          <p className="mb-4 text-sm text-gray-500">
+            Ваш выезд: <span className="font-semibold text-gray-700">{dateLabel}</span>
+          </p>
+        ) : null}
+
+        {activeTourLink ? (
+          <ActiveTourRelaunchLink link={activeTourLink} />
+        ) : (
+          <p className="text-sm text-gray-500">Сейчас нет открытых дат для записи на этот маршрут.</p>
         )}
       </div>
     </article>

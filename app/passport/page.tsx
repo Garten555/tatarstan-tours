@@ -6,6 +6,10 @@ import PassportHeaderEditor from '@/components/passport/PassportHeaderEditor';
 import { countUserParticipatedTours, fetchUserParticipatedTours } from '@/lib/passport/user-tour-stats';
 import { syncAllUserAchievements } from '@/lib/achievements/auto-award';
 import { STATUS_LEVEL_NAMES } from '@/lib/reputation/experience';
+import {
+  attachActiveTourLinksToAchievements,
+  attachActiveTourLinksToParticipatedRows,
+} from '@/lib/tours/resolve-active-tour-link';
 
 const ACHIEVEMENT_STYLES: Record<
   string,
@@ -92,7 +96,7 @@ export default async function PassportPage() {
         unlock_date,
         tour_id,
         diary_id,
-        tour:tours(id, title, slug, cover_image),
+        tour:tours(id, title, slug, cover_image, start_date, end_date, city_id, status, category),
         diary:travel_diaries(id, title)
       `)
       .eq('user_id', user.id)
@@ -171,7 +175,13 @@ export default async function PassportPage() {
     }).catch(() => []),
   ]);
 
-  const achievements = achievementsResult.data || [];
+  const achievements = await attachActiveTourLinksToAchievements(
+    serviceClient,
+    (achievementsResult.data || []).map((row: any) => ({
+      ...row,
+      tour: Array.isArray(row.tour) ? row.tour[0] ?? null : row.tour ?? null,
+    }))
+  );
   const locations = Array.isArray(locationsResult) ? locationsResult : [];
   const settingKey = `profile_cover:${user.id}`;
   const { data: coverSetting } = await serviceClient
@@ -192,10 +202,14 @@ export default async function PassportPage() {
     ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
     : 'Путешественник';
 
-  const [participatedToursCount, participatedTours] = await Promise.all([
+  const [participatedToursCount, participatedToursRaw] = await Promise.all([
     countUserParticipatedTours(serviceClient, user.id),
     fetchUserParticipatedTours(serviceClient, user.id),
   ]);
+  const participatedTours = await attachActiveTourLinksToParticipatedRows(
+    serviceClient,
+    participatedToursRaw
+  );
 
   return (
     <div className="min-h-screen bg-gray-100">

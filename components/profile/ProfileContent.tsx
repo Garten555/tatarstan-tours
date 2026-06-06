@@ -7,9 +7,14 @@ import { User, Mail, Phone, Calendar, Shield, Upload, Loader2, Trash2, Star, Edi
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import UserBookings from './UserBookings';
 import { ReviewTourContext } from '@/components/reviews/ReviewTourContext';
+import ReviewModal from '@/components/reviews/ReviewModal';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
 import UploadProgressBar from '@/components/common/UploadProgressBar';
 import { uploadFormDataWithProgress } from '@/lib/http/upload-form-progress';
+import {
+  getEffectiveBookingStatus,
+} from '@/lib/bookings/review-eligibility';
+import { isTourPageLinkable } from '@/lib/tours/tour-public-visibility';
 
 interface ProfileContentProps {
   profile: any;
@@ -39,6 +44,7 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
   const [avatarViewerOpen, setAvatarViewerOpen] = useState(false);
   const [reviews, setReviews] = useState<any[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
+  const [editingReview, setEditingReview] = useState<any | null>(null);
   const [banModalOpen, setBanModalOpen] = useState(false);
   const [banReason, setBanReason] = useState('');
   const [banReasonType, setBanReasonType] = useState<string>('custom');
@@ -190,13 +196,24 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
               const bookings = Array.isArray(bookingsData) ? bookingsData : (bookingsData.bookings || []);
               
               if (Array.isArray(bookings)) {
-                const activeBookings = bookings.filter(
-                  (b: any) => b.status === 'pending' || b.status === 'confirmed'
-                ).length;
-                
-                const completedTours = bookings.filter(
-                  (b: any) => b.status === 'completed'
-                ).length;
+                const normalizeBookingForStats = (b: any) => ({
+                  status: b.status,
+                  session_id: b.session_id,
+                  tour_session: Array.isArray(b.tour_session)
+                    ? b.tour_session[0] ?? null
+                    : b.tour_session ?? null,
+                  tour: Array.isArray(b.tour) ? b.tour[0] ?? null : b.tour ?? null,
+                });
+
+                const activeBookings = bookings.filter((b: any) => {
+                  const effective = getEffectiveBookingStatus(normalizeBookingForStats(b));
+                  return effective === 'pending' || effective === 'confirmed';
+                }).length;
+
+                const completedTours = bookings.filter((b: any) => {
+                  const effective = getEffectiveBookingStatus(normalizeBookingForStats(b));
+                  return effective === 'completed';
+                }).length;
                 
                 const totalSpent = bookings
                   .filter((b: any) => b.payment_status === 'paid')
@@ -851,16 +868,24 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
           </div>
         ) : (
           <div className="space-y-5">
-            {reviews.map((review) => (
+            {reviews.map((review) => {
+              const tour = review.tour
+                ? Array.isArray(review.tour)
+                  ? review.tour[0] ?? null
+                  : review.tour
+                : null;
+              const tourLinkable = isTourPageLinkable(tour);
+
+              return (
               <div
                 key={review.id}
                 className="border-2 border-gray-100 rounded-2xl p-6 md:p-8 bg-white hover:border-emerald-300 hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
               >
-                <div className="flex items-start justify-between mb-4">
+                <div className="flex items-start justify-between mb-4 gap-4">
                   <div className="flex-1">
-                    {review.tour && (
+                    {tour && (
                       <h3 className="text-xl md:text-2xl font-black text-gray-900 mb-3">
-                        {review.tour.title}
+                        {tour.title}
                       </h3>
                     )}
                     <div className="flex items-center gap-2 text-base text-gray-600 mb-3 font-medium">
@@ -874,29 +899,41 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: 5 }).map((_, index) => {
-                      const value = index + 1;
-                      const isActive = review.rating >= value;
-                      return (
-                        <Star
-                          key={value}
-                          className={`w-5 h-5 md:w-6 md:h-6 ${
-                            isActive
-                              ? review.rating >= 4.5
-                                ? 'text-emerald-600'
-                                : review.rating >= 3.5
-                                ? 'text-lime-600'
-                                : review.rating >= 2.5
-                                ? 'text-amber-500'
-                                : 'text-rose-500'
-                              : 'text-gray-200'
-                          }`}
-                          fill={isActive ? 'currentColor' : 'none'}
-                        />
-                      );
-                    })}
-                    <span className="ml-2 text-xl md:text-2xl font-black text-gray-900">{review.rating}</span>
+                  <div className="flex flex-col items-end gap-3">
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: 5 }).map((_, index) => {
+                        const value = index + 1;
+                        const isActive = review.rating >= value;
+                        return (
+                          <Star
+                            key={value}
+                            className={`w-5 h-5 md:w-6 md:h-6 ${
+                              isActive
+                                ? review.rating >= 4.5
+                                  ? 'text-emerald-600'
+                                  : review.rating >= 3.5
+                                  ? 'text-lime-600'
+                                  : review.rating >= 2.5
+                                  ? 'text-amber-500'
+                                  : 'text-rose-500'
+                                : 'text-gray-200'
+                            }`}
+                            fill={isActive ? 'currentColor' : 'none'}
+                          />
+                        );
+                      })}
+                      <span className="ml-2 text-xl md:text-2xl font-black text-gray-900">{review.rating}</span>
+                    </div>
+                    {!isViewMode && (
+                      <button
+                        type="button"
+                        onClick={() => setEditingReview(review)}
+                        className="inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-50"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                        Редактировать
+                      </button>
+                    )}
                   </div>
                 </div>
                 
@@ -906,18 +943,45 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
                   </p>
                 )}
 
-                {review.tour && (
+                {tour && tourLinkable && (
                   <div className="mt-4">
-                    <ReviewTourContext tour={review.tour} />
+                    <ReviewTourContext tour={tour} />
                   </div>
                 )}
               </div>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>
 
       {/* Просмотрщик аватара */}
+      {editingReview && (
+        <ReviewModal
+          mode="edit"
+          reviewId={editingReview.id}
+          tourTitle={
+            (Array.isArray(editingReview.tour)
+              ? editingReview.tour[0]?.title
+              : editingReview.tour?.title) || 'Тур'
+          }
+          initialRating={editingReview.rating}
+          initialText={editingReview.text || ''}
+          isOpen={!!editingReview}
+          onClose={() => setEditingReview(null)}
+          onSuccess={async () => {
+            setEditingReview(null);
+            try {
+              const response = await fetch('/api/user/reviews');
+              const data = await response.json();
+              if (data.reviews) setReviews(data.reviews);
+            } catch {
+              // ignore
+            }
+          }}
+        />
+      )}
+
       {avatarUrl && (
         <ImageViewerModal
           isOpen={avatarViewerOpen}

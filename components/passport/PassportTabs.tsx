@@ -175,6 +175,7 @@ export default function PassportTabs({
                         key={booking.id}
                         bookingId={booking.id}
                         tour={tour}
+                        activeTourLink={booking.activeTourLink ?? null}
                       />
                     );
                   })}

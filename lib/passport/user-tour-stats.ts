@@ -13,6 +13,8 @@ const BOOKING_TOUR_SELECT = `
     start_date,
     end_date,
     yandex_map_url,
+    city_id,
+    status,
     city:cities(id, name)
   )
 `;
@@ -29,6 +31,8 @@ const ACHIEVEMENT_TOUR_SELECT = `
     start_date,
     end_date,
     yandex_map_url,
+    city_id,
+    status,
     city:cities(id, name)
   )
 `;
@@ -41,6 +45,8 @@ const TOUR_CARD_SELECT = `
   start_date,
   end_date,
   yandex_map_url,
+  city_id,
+  status,
   city:cities(id, name)
 `;
 
@@ -57,6 +63,8 @@ export type ParticipatedTourRow = {
     start_date: string;
     end_date?: string | null;
     yandex_map_url?: string | null;
+    city_id?: string | null;
+    status?: string | null;
     city?: { id: string; name: string } | null;
   } | null;
 };
@@ -86,6 +94,8 @@ function normalizeTourJoin(raw: unknown): ParticipatedTourRow['tour'] {
     start_date: typeof t.start_date === 'string' ? t.start_date : '',
     end_date: typeof t.end_date === 'string' ? t.end_date : null,
     yandex_map_url: typeof t.yandex_map_url === 'string' ? t.yandex_map_url : null,
+    city_id: typeof t.city_id === 'string' ? t.city_id : null,
+    status: typeof t.status === 'string' ? t.status : null,
     city,
   };
 }

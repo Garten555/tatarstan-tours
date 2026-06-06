@@ -15,12 +15,12 @@ export type TourRowForDedupe = {
   price_per_person?: number | string | null;
 };
 
-function groupKey(t: TourRowForDedupe): string {
+export function groupKey(t: TourRowForDedupe): string {
   const title = (t.title || '').trim().toLowerCase().replace(/\s+/g, ' ');
   return `${title}|${t.city_id ?? ''}`;
 }
 
-function pickCanonicalTour<T extends TourRowForDedupe>(a: T, b: T): T {
+export function pickCanonicalTour<T extends TourRowForDedupe>(a: T, b: T): T {
   const ta = a.start_date ? new Date(a.start_date).getTime() : Number.POSITIVE_INFINITY;
   const tb = b.start_date ? new Date(b.start_date).getTime() : Number.POSITIVE_INFINITY;
   if (ta !== tb) return ta <= tb ? a : b;

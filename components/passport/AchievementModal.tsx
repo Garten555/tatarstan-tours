@@ -7,6 +7,8 @@ import Link from 'next/link';
 import { X, Calendar, MapPin, BookOpen, Award } from 'lucide-react';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import { formatTourCategoryLabel } from '@/lib/tours/category-labels';
+import { ActiveTourRelaunchLink } from '@/components/tours/ActiveTourRelaunchLink';
+import type { ActiveTourLink } from '@/lib/tours/resolve-active-tour-link';
 
 type AchievementModalProps = {
   isOpen: boolean;
@@ -31,6 +33,7 @@ type AchievementModalProps = {
       id: string;
       title: string;
     } | null;
+    activeTourLink?: ActiveTourLink | null;
   } | null;
   achievementStyle: {
     icon: string;
@@ -298,6 +301,18 @@ export default function AchievementModal({
                   <p className="text-sm text-gray-600">
                     {tourAchievementCaption}
                   </p>
+                  {achievement.activeTourLink ? (
+                    <div className="mt-4">
+                      <ActiveTourRelaunchLink
+                        link={achievement.activeTourLink}
+                        buttonClassName="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-blue-700"
+                      />
+                    </div>
+                  ) : (
+                    <p className="mt-3 text-xs text-gray-500">
+                      Сейчас нет открытых дат для записи на этот маршрут.
+                    </p>
+                  )}
                 </div>
               </div>
             </div>

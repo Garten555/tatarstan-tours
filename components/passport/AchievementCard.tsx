@@ -26,6 +26,7 @@ type AchievementCardProps = {
       id: string;
       title: string;
     } | null;
+    activeTourLink?: import('@/lib/tours/resolve-active-tour-link').ActiveTourLink | null;
   };
   achievementStyle: {
     icon: string;

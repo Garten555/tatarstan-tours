@@ -17,6 +17,7 @@ import TourReviewsSection from '@/components/tours/TourReviewsSection';
 import { ArrowLeft } from 'lucide-react';
 import { isInvalidTourSlug } from '@/lib/tours/isInvalidTourSlug';
 import TourBookingRedirectBanner from '@/components/tours/TourBookingRedirectBanner';
+import TourParticipantArchiveCard from '@/components/tours/TourParticipantArchiveCard';
 import { parseBookingTourRedirectError } from '@/lib/tour/booking-tour-redirect';
 import {
   filterUpcomingSessions,
@@ -43,13 +44,12 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
     data: { user },
   } = await supabaseAuth.auth.getUser();
 
-  // Получаем данные тура
+  // Получаем данные тура (в т.ч. завершённого — для участников с бронью)
   const { data: tour, error } = await supabase
     .from('tours')
     .select('*')
     .eq('slug', slug)
-    .eq('status', 'active')
-    .single();
+    .maybeSingle();
 
   if (error || !tour) {
     notFound();
@@ -137,29 +137,47 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
     }
   }
 
-  if (
-    !isTourVisibleInPublicCatalog(
-      { start_date: t.start_date, end_date: t.end_date },
-      tourSessions
-    )
-  ) {
-    notFound();
+  let participantArchiveMode = false;
+  const catalogVisible = isTourVisibleInPublicCatalog(
+    { start_date: t.start_date, end_date: t.end_date },
+    tourSessions
+  );
+
+  if (!catalogVisible) {
+    if (!user) {
+      notFound();
+    }
+
+    const { count: participantBookingCount, error: participantError } = await supabase
+      .from('bookings')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', user.id)
+      .eq('tour_id', t.id)
+      .in('status', ['confirmed', 'completed']);
+
+    if (participantError || !participantBookingCount) {
+      notFound();
+    }
+
+    participantArchiveMode = true;
   }
 
-  tourSessions = filterUpcomingSessions(tourSessions);
+  if (!participantArchiveMode) {
+    tourSessions = filterUpcomingSessions(tourSessions);
 
-  if (tourSessions.length === 0 && t.start_date) {
-    const start = new Date(t.start_date);
-    if (start > new Date()) {
-      tourSessions = [
-        {
-          id: LEGACY_TOUR_SESSION_ID,
-          start_at: t.start_date,
-          end_at: t.end_date ?? null,
-          max_participants: t.max_participants,
-          current_participants: t.current_participants ?? 0,
-        },
-      ];
+    if (tourSessions.length === 0 && t.start_date) {
+      const start = new Date(t.start_date);
+      if (start > new Date()) {
+        tourSessions = [
+          {
+            id: LEGACY_TOUR_SESSION_ID,
+            start_at: t.start_date,
+            end_at: t.end_date ?? null,
+            max_participants: t.max_participants,
+            current_participants: t.current_participants ?? 0,
+          },
+        ];
+      }
     }
   }
 
@@ -321,12 +339,19 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
         <TourSessionsProvider sessions={tourSessions}>
         <div className="mt-4 sm:mt-6 flex flex-col md:flex-col lg:flex-row gap-6 sm:gap-8 w-full items-start">
           <div className="w-full md:w-full lg:w-[320px] xl:w-[380px] 2xl:w-[400px] flex-shrink-0">
-            <TourScheduleBooking
-              tourId={t.id}
-              price={t.price_per_person}
-              tourMaxParticipants={t.max_participants}
-              tourCurrentParticipants={t.current_participants || 0}
-            />
+            {participantArchiveMode ? (
+              <TourParticipantArchiveCard
+                startDate={t.start_date ?? null}
+                endDate={t.end_date ?? null}
+              />
+            ) : (
+              <TourScheduleBooking
+                tourId={t.id}
+                price={t.price_per_person}
+                tourMaxParticipants={t.max_participants}
+                tourCurrentParticipants={t.current_participants || 0}
+              />
+            )}
           </div>
 
           <div className="flex-1 space-y-6 sm:space-y-8 w-full min-w-0">

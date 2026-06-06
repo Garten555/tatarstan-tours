@@ -192,6 +192,7 @@ export default function PublicPassportSection({
                       key={booking.id}
                       bookingId={booking.id}
                       tour={tour}
+                      activeTourLink={booking.activeTourLink ?? null}
                     />
                   );
                 })}

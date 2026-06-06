@@ -5,6 +5,10 @@ import PublicProfileLayout from '@/components/profile/PublicProfileLayout';
 import { mergeLatestActivityTimestamps } from '@/lib/utils/presence';
 import { countUserParticipatedTours, fetchUserParticipatedTours } from '@/lib/passport/user-tour-stats';
 import { syncAllUserAchievements } from '@/lib/achievements/auto-award';
+import {
+  attachActiveTourLinksToAchievements,
+  attachActiveTourLinksToParticipatedRows,
+} from '@/lib/tours/resolve-active-tour-link';
 
 interface PublicProfilePageProps {
   params: Promise<{ username: string }>;
@@ -395,6 +399,10 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
           title,
           slug,
           cover_image,
+          start_date,
+          end_date,
+          city_id,
+          status,
           category
         ),
         diary:travel_diaries!achievements_diary_id_fkey(
@@ -518,7 +526,10 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
   ]);
 
   const participatedToursCount = await countUserParticipatedTours(serviceClient, profileData.id);
-  const participatedTours = await fetchUserParticipatedTours(serviceClient, profileData.id);
+  const participatedTours = await attachActiveTourLinksToParticipatedRows(
+    serviceClient,
+    await fetchUserParticipatedTours(serviceClient, profileData.id)
+  );
 
   const stats = {
     diaries_count: diariesCountResult.count || 0, // Оставляем для обратной совместимости
@@ -532,7 +543,13 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
 
   const recentDiaries = recentDiariesResult.data || [];
   const recentBlogPosts = recentBlogPostsResult.data || []; // Посты блога
-  const recentAchievements = recentAchievementsListResult.data || [];
+  const recentAchievements = await attachActiveTourLinksToAchievements(
+    serviceClient,
+    (recentAchievementsListResult.data || []).map((row: any) => ({
+      ...row,
+      tour: Array.isArray(row.tour) ? row.tour[0] ?? null : row.tour ?? null,
+    }))
+  );
   // Проверяем подписку: если isFollowingCheckResult существует и data не null и не пустой массив, значит подписан
   const isFollowing = isFollowingCheckResult !== null && 
     isFollowingCheckResult?.data !== null && 
