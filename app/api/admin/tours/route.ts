@@ -1,6 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { publishCatalogChanged } from '@/lib/pusher/data-sync';
+import { normalizeTourTimestampForStorage } from '@/lib/date/tour-timestamp';
+
+function normalizeTourDateFields(data: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...data };
+  if ('start_date' in out && out.start_date != null) {
+    out.start_date = normalizeTourTimestampForStorage(String(out.start_date));
+  }
+  if ('end_date' in out && out.end_date != null) {
+    out.end_date = normalizeTourTimestampForStorage(String(out.end_date));
+  }
+  return out;
+}
 
 // POST /api/admin/tours - создание тура
 export async function POST(request: NextRequest) {
@@ -34,7 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Получаем данные из запроса
-    const tourData = await request.json();
+    const tourData = normalizeTourDateFields((await request.json()) as Record<string, unknown>);
     
     console.log('📝 Received tour data:', JSON.stringify(tourData, null, 2));
 
@@ -109,11 +121,7 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const tourData = await request.json();
-    
-            if (process.env.NODE_ENV !== 'production') {
-              console.log('📝 Updating tour:', tourData.id);
-            }
+    const tourData = normalizeTourDateFields((await request.json()) as Record<string, unknown>);
 
     // Удаляем поля, которые не нужно обновлять
     interface TourData {

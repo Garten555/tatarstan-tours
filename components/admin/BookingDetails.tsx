@@ -22,6 +22,8 @@ import {
   Edit
 } from 'lucide-react';
 
+import { formatDateTimeShortRu } from '@/lib/date/format-ru';
+
 interface BookingDetailsProps {
   booking: any;
   attendees: any[];
@@ -41,17 +43,8 @@ export default function BookingDetails({ booking, attendees }: BookingDetailsPro
     setCurrentPaymentStatus(booking.payment_status);
   }, [booking.status, booking.payment_status]);
 
-  // Форматирование даты
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ru-RU', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  // Форматирование даты (Europe/Moscow)
+  const formatDate = formatDateTimeShortRu;
 
   // Получение цвета статуса
   const getStatusColor = (status: string) => {

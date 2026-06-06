@@ -4,6 +4,7 @@ import { ensureTourRoomForSession } from '@/lib/tour/ensure-session-room';
 import { syncSessionCurrentParticipants } from '@/lib/tour/session-participants';
 import { sendTourRescheduleEmail } from '@/lib/email/tour-notifications';
 import { publishCatalogChanged } from '@/lib/pusher/data-sync';
+import { normalizeTourTimestampForStorage } from '@/lib/date/tour-timestamp';
 
 type IncomingSession = {
   id?: string;
@@ -174,8 +175,11 @@ export async function POST(
     };
 
     for (const s of sessions) {
-      const start_at = s.start_at;
-      const end_at = s.end_at ?? null;
+      const start_at = normalizeTourTimestampForStorage(s.start_at) ?? s.start_at;
+      const end_at =
+        s.end_at != null && s.end_at !== ''
+          ? normalizeTourTimestampForStorage(s.end_at) ?? s.end_at
+          : null;
       const guide_id = normalizeGuideId(s.guide_id);
       if (!start_at) {
         return NextResponse.json({ error: 'У каждого слота нужна start_at' }, { status: 400 });
@@ -293,6 +297,26 @@ export async function POST(
     }
 
     void publishCatalogChanged();
+
+    // Даты в tours — по фактическим слотам (карточка и каталог не расходятся с tour_sessions)
+    const { data: sessionTimes } = await serviceClient
+      .from('tour_sessions')
+      .select('start_at, end_at')
+      .eq('tour_id', tourId)
+      .order('start_at', { ascending: true });
+
+    if (sessionTimes?.length) {
+      const starts = sessionTimes.map((r) => r.start_at as string).filter(Boolean);
+      const ends = sessionTimes
+        .map((r) => (r.end_at as string | null) ?? null)
+        .filter(Boolean) as string[];
+      const start_date = starts[0];
+      const end_date =
+        ends.length > 0
+          ? ends.reduce((a, b) => (new Date(a) >= new Date(b) ? a : b))
+          : null;
+      await serviceClient.from('tours').update({ start_date, end_date }).eq('id', tourId);
+    }
 
     return NextResponse.json({ success: true });
   } catch (e) {

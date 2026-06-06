@@ -23,6 +23,7 @@ import {
   isTourVisibleInPublicCatalog,
 } from '@/lib/tours/tour-public-visibility';
 import { syncSessionCurrentParticipants } from '@/lib/tour/session-participants';
+import { formatDateTimeShortRu } from '@/lib/date/format-ru';
 
 interface TourPageProps {
   params: Promise<{ slug: string }>;
@@ -302,17 +303,6 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
       ? reviewItems.reduce((sum, review) => sum + review.rating, 0) / reviewCount
       : 0;
 
-  // Форматирование даты
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ru-RU', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
 
   const fallbackDurationLabel = tourDurationLabel(t.start_date, t.end_date ?? null);
 
@@ -353,7 +343,7 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
             />
 
             <TourCharacteristicsSectionConnected
-              fallbackStartDateLabel={formatDate(t.start_date)}
+              fallbackStartDateLabel={formatDateTimeShortRu(t.start_date)}
               fallbackDurationLabel={fallbackDurationLabel}
               fallbackMaxParticipants={t.max_participants}
               priceLabel={`${t.price_per_person.toLocaleString('ru-RU')} ₽`}

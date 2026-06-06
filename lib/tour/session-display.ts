@@ -1,31 +1,17 @@
 import type { TourSessionOption } from '@/lib/types/tour-session-option';
+import { formatDateTimeShortRu } from '@/lib/date/format-ru';
 
-/** Дата и время для карточек и списков слотов */
+/** Дата и время для карточек и списков слотов (Europe/Moscow). */
 export function formatSessionRange(startAt: string, endAt: string | null) {
-  const s = new Date(startAt);
-  const opts: Intl.DateTimeFormatOptions = {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  };
-  const startLabel = s.toLocaleString('ru-RU', opts);
+  const startLabel = formatDateTimeShortRu(startAt);
   if (!endAt) return startLabel;
-  const e = new Date(endAt);
-  const endLabel = e.toLocaleString('ru-RU', opts);
+  const endLabel = formatDateTimeShortRu(endAt);
   return `${startLabel} — ${endLabel}`;
 }
 
 /** Короткая подпись одной даты (день + месяц + время) */
 export function formatSessionShort(startAt: string) {
-  return new Date(startAt).toLocaleString('ru-RU', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return formatDateTimeShortRu(startAt);
 }
 
 /** Продолжительность между двумя моментами (как на странице тура) */

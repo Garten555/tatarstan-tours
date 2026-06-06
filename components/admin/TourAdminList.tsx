@@ -7,6 +7,7 @@ import { Edit, Trash2, Calendar, Users, Coins, Search, X, ChevronLeft, ChevronRi
 import { useState, useEffect, useCallback } from 'react';
 import { useDialog } from '@/hooks/useDialog';
 import { parseClientSortParam } from '@/lib/tours/catalog-sort';
+import { formatDateTimeShortRu } from '@/lib/date/format-ru';
 
 interface Tour {
   id: string;
@@ -484,9 +485,9 @@ export default function TourAdminList() {
                   <Calendar className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-bold text-purple-700 uppercase tracking-wide">Дата</div>
+                  <div className="text-xs font-bold text-purple-700 uppercase tracking-wide">Дата и время</div>
                   <div className="text-lg font-black text-gray-900">
-                    {new Date(tour.start_date).toLocaleDateString('ru-RU')}
+                    {formatDateTimeShortRu(tour.start_date)}
                   </div>
                 </div>
               </div>

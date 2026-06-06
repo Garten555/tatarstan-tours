@@ -21,6 +21,7 @@ import toast from 'react-hot-toast';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import ConfirmModal from '@/components/common/ConfirmModal';
+import { formatDateTimeShortRu } from '@/lib/date/format-ru';
 
 type TourRoomsConfirm = null | {
   title: string;
@@ -382,15 +383,7 @@ export default function TourRoomsPage() {
     );
   });
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ru-RU', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  const formatDate = formatDateTimeShortRu;
 
   const formatRoomDates = (room: TourRoom) => {
     if (room.session?.start_at) {

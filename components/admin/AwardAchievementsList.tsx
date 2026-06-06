@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { Award, Users, Calendar, MapPin, Loader2, Search, ChevronDown } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { escapeHtml } from '@/lib/utils/sanitize';
+import { formatDateTimeShortRu } from '@/lib/date/format-ru';
 import IssueAchievementFormModal from '@/components/achievements/IssueAchievementFormModal';
 import type { GuideIssueAchievement } from '@/lib/achievements/guide-issue-metadata';
 
@@ -89,15 +90,7 @@ export default function AwardAchievementsList({ rooms }: AwardAchievementsListPr
     setLifecycleFilter('all');
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ru-RU', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  const formatDate = formatDateTimeShortRu;
 
   const toggleRoom = async (roomId: string) => {
     const newExpanded = new Set(expandedRooms);

@@ -19,17 +19,9 @@ import { isDepartureStillInFuture } from '@/lib/tour/session-bookable';
 /** Согласовано с подписью в форме и лимитом в app/api/upload/route.ts */
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 
-/**
- * ISO / timestamptz из БД → значение для input[type="datetime-local"].
- * Нельзя использовать toISOString().slice(0,16): там UTC, а datetime-local — локальная «стена времени».
- */
-function isoToDatetimeLocal(iso: string | null | undefined): string {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
+import { isoToDatetimeLocalInput, datetimeLocalInputToIso } from '@/lib/date/tour-timestamp';
+
+const isoToDatetimeLocal = isoToDatetimeLocalInput;
 
 /** Сравнение значений из datetime-local: одно мгновение времени (без ложных «изменений» из-за формата строки). */
 function sameLocalDateTimeField(a: string, b: string): boolean {
@@ -859,8 +851,9 @@ export default function TourForm({
         cover_image: coverImageUrl,
         price_per_person: parseFloat(formData.price_per_person),
         yandex_map_url: formData.yandex_map_url.trim() || null,
-        description: formData.short_desc || formData.full_desc || '', // Обязательное поле
-        // Удаляем id при создании
+        description: formData.short_desc || formData.full_desc || '',
+        start_date: datetimeLocalInputToIso(formData.start_date) ?? formData.start_date,
+        end_date: datetimeLocalInputToIso(formData.end_date) ?? formData.end_date,
         ...(mode === 'create' ? { id: undefined } : {}),
       };
       

@@ -12,6 +12,7 @@ import {
   Search,
 } from 'lucide-react';
 import { escapeHtml } from '@/lib/utils/sanitize';
+import { formatDateTimeShortRu } from '@/lib/date/format-ru';
 
 interface GuideToursListProps {
   rooms: Array<{
@@ -58,15 +59,7 @@ export default function GuideToursList({ rooms }: GuideToursListProps) {
     });
   }, [rooms, searchQuery, statusFilter]);
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ru-RU', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
+  const formatDate = formatDateTimeShortRu;
 
   if (rooms.length === 0) {
     return (
