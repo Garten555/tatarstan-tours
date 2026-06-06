@@ -166,11 +166,20 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
     const loadData = async () => {
       setLoadingStats(true);
       setLoadingReviews(true);
+
+      const bookingsUrl =
+        isViewMode && profile?.id
+          ? `/api/admin/users/${encodeURIComponent(profile.id)}/bookings`
+          : '/api/user/bookings';
+      const reviewsUrl =
+        isViewMode && profile?.id
+          ? `/api/admin/users/${encodeURIComponent(profile.id)}/reviews`
+          : '/api/user/reviews';
       
       try {
         const [bookingsResponse, reviewsResponse] = await Promise.all([
-          fetch('/api/user/bookings').catch(() => ({ ok: false })),
-          fetch('/api/user/reviews').catch(() => ({ ok: false }))
+          fetch(bookingsUrl).catch(() => ({ ok: false })),
+          fetch(reviewsUrl).catch(() => ({ ok: false }))
         ]);
         if (bookingsResponse.ok && 'headers' in bookingsResponse) {
           try {
@@ -252,7 +261,7 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
     };
     
     loadData();
-  }, []);
+  }, [isViewMode, profile?.id]);
 
   const getRoleName = (role: string) => {
     const roles: Record<string, string> = {
@@ -808,7 +817,7 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
       )}
 
       {/* Мои бронирования */}
-      <UserBookings isViewMode={isViewMode} />
+      <UserBookings isViewMode={isViewMode} profileUserId={profile?.id ?? null} />
 
       {/* Мои отзывы */}
       <div className="bg-white rounded-2xl border-2 border-gray-100 shadow-sm p-6 md:p-8">

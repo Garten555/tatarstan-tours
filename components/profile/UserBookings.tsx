@@ -61,9 +61,10 @@ interface Booking {
 
 interface UserBookingsProps {
   isViewMode?: boolean;
+  profileUserId?: string | null;
 }
 
-export default function UserBookings({ isViewMode = false }: UserBookingsProps) {
+export default function UserBookings({ isViewMode = false, profileUserId = null }: UserBookingsProps) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [generatingPDF, setGeneratingPDF] = useState<string | null>(null);
@@ -77,42 +78,14 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
   const loadBookings = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
     try {
-      const response = await fetch('/api/user/bookings', { cache: 'no-store' });
+      const bookingsUrl =
+        isViewMode && profileUserId
+          ? `/api/admin/users/${encodeURIComponent(profileUserId)}/bookings`
+          : '/api/user/bookings';
+      const response = await fetch(bookingsUrl, { cache: 'no-store' });
       const data = await response.json();
 
       if (data.bookings) {
-        const confirmedBookings = data.bookings.filter(
-          (b: Booking) => b.status === 'confirmed'
-        );
-
-        const loadRooms = async () => {
-          const roomPromises = confirmedBookings.map(async (booking: Booking) => {
-            try {
-              const qs = new URLSearchParams({ tour_id: booking.tour_id });
-              if (booking.session_id) qs.set('session_id', booking.session_id);
-              const roomResponse = await fetch(`/api/tour-rooms?${qs.toString()}`);
-              if (!roomResponse.ok) return null;
-              const roomData = await roomResponse.json();
-              if (roomData.success && roomData.room) {
-                return { bookingId: booking.id, roomId: roomData.room.id };
-              }
-              return null;
-            } catch {
-              return null;
-            }
-          });
-
-          const results = await Promise.all(roomPromises);
-          const roomIdsMap: Record<string, string> = {};
-          results.forEach((result) => {
-            if (result) {
-              roomIdsMap[result.bookingId] = result.roomId;
-            }
-          });
-          setRoomIds(roomIdsMap);
-        };
-        void loadRooms();
-
         const normalized = data.bookings.map((booking: any) => {
           const tour = Array.isArray(booking.tour) ? booking.tour[0] || null : booking.tour || null;
           const rawSlot = booking.tour_session;
@@ -136,6 +109,45 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
               : null,
           };
         });
+
+        const activeConfirmedBookings = normalized.filter(
+          (b: Booking) =>
+            b.status === 'confirmed' && !isTourCompletedForReview(b)
+        );
+
+        const loadRooms = async () => {
+          if (isViewMode) {
+            setRoomIds({});
+            return;
+          }
+
+          const roomPromises = activeConfirmedBookings.map(async (booking: Booking) => {
+            try {
+              const qs = new URLSearchParams({ tour_id: booking.tour_id });
+              if (booking.session_id) qs.set('session_id', booking.session_id);
+              const roomResponse = await fetch(`/api/tour-rooms?${qs.toString()}`);
+              if (!roomResponse.ok) return null;
+              const roomData = await roomResponse.json();
+              if (roomData.success && roomData.room?.id) {
+                return { bookingId: booking.id, roomId: roomData.room.id as string };
+              }
+              return null;
+            } catch {
+              return null;
+            }
+          });
+
+          const results = await Promise.all(roomPromises);
+          const roomIdsMap: Record<string, string> = {};
+          results.forEach((result) => {
+            if (result) {
+              roomIdsMap[result.bookingId] = result.roomId;
+            }
+          });
+          setRoomIds(roomIdsMap);
+        };
+        void loadRooms();
+
         setBookings(normalized);
       }
     } catch (error) {
@@ -143,7 +155,7 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isViewMode, profileUserId]);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -431,7 +443,10 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
                       Отменить бронирование
                     </button>
                   )}
-                  {['confirmed', 'completed'].includes(effectiveStatus) && roomIds[booking.id] && (
+                  {!isViewMode &&
+                    booking.status === 'confirmed' &&
+                    !isTourCompletedForReview(booking) &&
+                    roomIds[booking.id] && (
                     <Link
                       href={`/tour-rooms/${roomIds[booking.id]}`}
                       className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
@@ -440,7 +455,7 @@ export default function UserBookings({ isViewMode = false }: UserBookingsProps) 
                       Комната тура
                     </Link>
                   )}
-                  {canLeaveReview && !booking.review?.id && (
+                  {!isViewMode && canLeaveReview && !booking.review?.id && (
                     <button
                       onClick={() => setReviewBooking(booking)}
                       className="px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg text-sm font-medium transition-colors flex items-center gap-2"

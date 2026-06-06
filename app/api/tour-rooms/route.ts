@@ -2,7 +2,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { publishAdminSync, publishUserNotification } from '@/lib/pusher/user-notification';
-import { ensureTourRoomForSession } from '@/lib/tour/ensure-session-room';
 
 // GET /api/tour-rooms?tour_id={tour_id}&session_id={optional}
 // Комната тура: для нескольких выездов передавайте session_id слота брони.
@@ -116,79 +115,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Если комнаты нет - создаем (если есть confirmed бронирование или пользователь - админ)
-    if ((roomError || !room) && (booking || isAdmin)) {
-      let newRoom: Record<string, unknown> | null = null;
-      let createError: { message?: string } | null = null;
-
-      if (session_id) {
-        const { data: sessRow } = await serviceClient
-          .from('tour_sessions')
-          .select('guide_id')
-          .eq('id', session_id)
-          .maybeSingle();
-        const gid = (sessRow as { guide_id?: string | null } | null)?.guide_id ?? null;
-        const ensured = await ensureTourRoomForSession(serviceClient, {
-          tourId,
-          sessionId: session_id,
-          guideId: gid,
-          createdBy: user.id,
-        });
-        if (ensured.roomId) {
-          const loaded = await serviceClient
-            .from('tour_rooms')
-            .select(`
-              *,
-              tour:tours(id, title, start_date, end_date),
-              guide:profiles!tour_rooms_guide_id_fkey(id, first_name, last_name, avatar_url)
-            `)
-            .eq('id', ensured.roomId)
-            .single();
-          newRoom = loaded.data as Record<string, unknown> | null;
-          createError = loaded.error;
-        } else {
-          createError = { message: ensured.error };
-        }
-      } else {
-        const ins = await serviceClient
-          .from('tour_rooms')
-          .insert({
-            tour_id: tourId,
-            created_by: user.id,
-          })
-          .select(`
-          *,
-          tour:tours(id, title, start_date, end_date),
-          guide:profiles!tour_rooms_guide_id_fkey(id, first_name, last_name, avatar_url)
-        `)
-          .single();
-        newRoom = ins.data as Record<string, unknown> | null;
-        createError = ins.error;
-      }
-
-      if (createError && !newRoom) {
-        console.error('Ошибка создания комнаты:', createError);
-        return NextResponse.json(
-          { error: 'Не удалось создать комнату' },
-          { status: 500 }
-        );
-      }
-
-      // Добавляем пользователя в участники только если есть бронирование
-      if (booking && newRoom?.id) {
-        await serviceClient
-          .from('tour_room_participants')
-          .insert({
-            room_id: newRoom.id as string,
-            user_id: user.id,
-            booking_id: booking.id,
-          });
-      }
-
-      room = newRoom;
-    }
-
-    return NextResponse.json({ success: true, room });
+    return NextResponse.json({ success: true, room: room ?? null });
   } catch (error) {
     console.error('Ошибка получения комнаты:', error);
     return NextResponse.json(

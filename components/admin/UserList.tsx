@@ -47,6 +47,7 @@ export default function UserList({ users, currentUserId, currentUserRole = 'user
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [banFilter, setBanFilter] = useState<'all' | 'banned' | 'active'>('all');
 
   // Обработчик изменения роли
   const handleRoleChange = async (userId: string, newRole: string) => {
@@ -117,9 +118,13 @@ export default function UserList({ users, currentUserId, currentUserRole = 'user
       const matchesQuery =
         !query || fullName.includes(query) || email.includes(query);
       const matchesRole = roleFilter === 'all' || user.role === roleFilter;
-      return matchesQuery && matchesRole;
+      const matchesBan =
+        banFilter === 'all' ||
+        (banFilter === 'banned' && user.is_banned === true) ||
+        (banFilter === 'active' && user.is_banned !== true);
+      return matchesQuery && matchesRole && matchesBan;
     });
-  }, [rows, searchQuery, roleFilter]);
+  }, [rows, searchQuery, roleFilter, banFilter]);
 
   const getInitials = (user: User) => {
     const first = user.first_name?.[0] || '';
@@ -134,7 +139,7 @@ export default function UserList({ users, currentUserId, currentUserRole = 'user
     <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm -mx-4 md:-mx-6 lg:-mx-8 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] lg:w-[calc(100%+4rem)]">
       {/* Фильтры */}
       <div className="p-6 border-b-2 border-gray-200 bg-gray-50">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input
@@ -157,6 +162,17 @@ export default function UserList({ users, currentUserId, currentUserRole = 'user
                   {role.label}
                 </option>
               ))}
+            </select>
+          </div>
+          <div>
+            <select
+              value={banFilter}
+              onChange={(e) => setBanFilter(e.target.value as 'all' | 'banned' | 'active')}
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 font-semibold"
+            >
+              <option value="all">Все пользователи</option>
+              <option value="active">Активные</option>
+              <option value="banned">Заблокированные</option>
             </select>
           </div>
           <div className="flex items-center gap-3 px-5 py-3 bg-emerald-50 border-2 border-emerald-200 rounded-xl">
