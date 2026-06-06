@@ -24,12 +24,14 @@ type TourReviewsSectionProps = {
   }[];
   reviewCount: number;
   averageRating: number;
+  readOnly?: boolean;
 };
 
 export default function TourReviewsSection({
   reviews,
   reviewCount,
   averageRating,
+  readOnly = false,
 }: TourReviewsSectionProps) {
   return (
     <section>
@@ -37,6 +39,7 @@ export default function TourReviewsSection({
         reviews={reviews}
         reviewCount={reviewCount}
         averageRating={averageRating}
+        readOnly={readOnly}
       />
     </section>
   );

@@ -397,6 +397,7 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
               reviews={reviewItems}
               reviewCount={reviewCount}
               averageRating={averageRating}
+              readOnly={participantArchiveMode}
             />
           </div>
         </div>

@@ -46,9 +46,16 @@ type TourReviewsProps = {
   reviews: ReviewItem[];
   reviewCount: number;
   averageRating: number;
+  /** Архивная страница тура — только просмотр, без реакций и комментариев */
+  readOnly?: boolean;
 };
 
-export default function TourReviews({ reviews, reviewCount, averageRating }: TourReviewsProps) {
+export default function TourReviews({
+  reviews,
+  reviewCount,
+  averageRating,
+  readOnly = false,
+}: TourReviewsProps) {
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerImages, setViewerImages] = useState<string[]>([]);
   const [viewerIndex, setViewerIndex] = useState(0);
@@ -161,6 +168,11 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
           <p className="text-lg font-bold text-gray-600">
             {reviewCount > 0 ? `Всего отзывов: ${reviewCount}` : 'Пока нет опубликованных отзывов'}
           </p>
+          {readOnly ? (
+            <p className="mt-2 text-sm font-medium text-gray-500">
+              Архивная страница — отзывы и комментарии только для просмотра.
+            </p>
+          ) : null}
         </div>
         {reviewCount > 0 && (
           <div className={`flex items-center gap-3 px-5 py-3 bg-gradient-to-br from-emerald-50 to-emerald-100/50 border-2 border-emerald-200 rounded-xl ${getRatingColor(averageRating)}`}>
@@ -229,9 +241,11 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
                     initialLikeCount={review.like_count}
                     initialDislikeCount={review.dislike_count}
                     initialUserReaction={review.user_reaction}
+                    readOnly={readOnly}
                   />
                 </div>
 
+                {!readOnly ? (
                 <div className="mt-4">
                   <button
                     type="button"
@@ -241,6 +255,7 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
                     Пожаловаться на отзыв
                   </button>
                 </div>
+                ) : null}
 
                 {review.media.length > 0 && (
                   <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -292,6 +307,7 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
                             <div className="text-base text-gray-900 whitespace-pre-line break-words font-semibold">
                               {comment.message}
                             </div>
+                            {!readOnly ? (
                             <button
                               type="button"
                               onClick={() => setReportTarget({ kind: 'comment', commentId: comment.id })}
@@ -299,12 +315,15 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
                             >
                               Пожаловаться
                             </button>
+                            ) : null}
                           </div>
                         </div>
                       ))}
                     </div>
                   )}
 
+                  {!readOnly ? (
+                  <>
                   <div className="mt-4 flex items-center gap-3">
                     <button
                       type="button"
@@ -402,6 +421,8 @@ export default function TourReviews({ reviews, reviewCount, averageRating }: Tou
                     </div>
                   </div>
                   )}
+                  </>
+                  ) : null}
                 </div>
 
               </div>

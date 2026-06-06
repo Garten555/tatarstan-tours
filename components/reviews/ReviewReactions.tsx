@@ -8,6 +8,7 @@ type ReviewReactionsProps = {
   initialLikeCount: number;
   initialDislikeCount: number;
   initialUserReaction: 'like' | 'dislike' | null;
+  readOnly?: boolean;
 };
 
 export default function ReviewReactions({
@@ -15,6 +16,7 @@ export default function ReviewReactions({
   initialLikeCount,
   initialDislikeCount,
   initialUserReaction,
+  readOnly = false,
 }: ReviewReactionsProps) {
   const [likeCount, setLikeCount] = useState(initialLikeCount);
   const [dislikeCount, setDislikeCount] = useState(initialDislikeCount);
@@ -67,6 +69,21 @@ export default function ReviewReactions({
       setLoading(false);
     }
   };
+
+  if (readOnly) {
+    return (
+      <div className="flex items-center gap-4 text-sm text-gray-500">
+        <span className="inline-flex items-center gap-1">
+          <ThumbsUp className="w-4 h-4" />
+          {likeCount}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <ThumbsDown className="w-4 h-4" />
+          {dislikeCount}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-4 text-sm text-gray-500">
