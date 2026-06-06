@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import ReviewsTable from '@/components/admin/ReviewsTable';
+import { fetchProfilesByIds, mapReviewAuthor, unwrapRelation } from '@/lib/reviews/profile';
 import { Star } from 'lucide-react';
 
 export const metadata = {
@@ -23,7 +24,6 @@ export default async function ReviewsPage({ searchParams }: ReviewsPageProps) {
   const supabase = await createClient();
   const serviceClient = await createServiceClient();
 
-  // Проверяем авторизацию
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -32,7 +32,6 @@ export default async function ReviewsPage({ searchParams }: ReviewsPageProps) {
     redirect('/auth/login');
   }
 
-  // Проверяем права (support_admin, tour_admin или super_admin)
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
@@ -58,10 +57,12 @@ export default async function ReviewsPage({ searchParams }: ReviewsPageProps) {
       is_published,
       is_reported,
       created_at,
-      profiles (
+      author:profiles!reviews_user_id_fkey (
+        id,
         first_name,
         last_name,
-        email
+        email,
+        avatar_url
       ),
       tours (
         title
@@ -77,7 +78,6 @@ export default async function ReviewsPage({ searchParams }: ReviewsPageProps) {
     console.error('[admin/reviews] load:', reviewsError.message);
   }
 
-  // Преобразуем данные для компонента
   interface ReviewData {
     id: string;
     user_id: string;
@@ -88,16 +88,37 @@ export default async function ReviewsPage({ searchParams }: ReviewsPageProps) {
     is_published: boolean;
     is_reported: boolean;
     created_at: string;
-    profiles?: { first_name: string; last_name: string; email: string } | { first_name: string; last_name: string; email: string }[] | null;
+    author?: {
+      id: string;
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+      avatar_url: string | null;
+    } | {
+      id: string;
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+      avatar_url: string | null;
+    }[] | null;
     tours?: { title: string } | { title: string }[] | null;
     review_media?: { media_type: string; media_url: string }[] | null;
   }
-  const reviewsData = (reviews || []).map((review: ReviewData) => {
-    const userData = Array.isArray(review.profiles)
-      ? review.profiles[0]
-      : review.profiles;
-    const tourData = Array.isArray(review.tours) ? review.tours[0] : review.tours;
-    
+
+  const rawReviews = (reviews || []) as ReviewData[];
+  const missingAuthorIds = rawReviews
+    .filter((r) => !unwrapRelation(r.author))
+    .map((r) => r.user_id);
+  const profileMap = await fetchProfilesByIds(serviceClient, missingAuthorIds);
+
+  const reviewsData = rawReviews.map((review) => {
+    const author = mapReviewAuthor(
+      review.author,
+      profileMap.get(review.user_id) ?? null,
+      review.user_id
+    );
+    const tourData = unwrapRelation(review.tours);
+
     return {
       id: review.id,
       user_id: review.user_id,
@@ -108,8 +129,9 @@ export default async function ReviewsPage({ searchParams }: ReviewsPageProps) {
       is_published: review.is_published,
       is_reported: review.is_reported,
       created_at: review.created_at,
-      user_name: userData ? `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || userData.email || 'Пользователь' : 'Пользователь',
-      user_email: userData?.email || '',
+      user_name: author.user_name,
+      user_email: author.user_email,
+      user_avatar_url: author.user_avatar_url,
       tour_title: tourData?.title || 'Тур удален',
       media: (review.review_media || []).map((m) => ({
         media_type: (m.media_type === 'image' || m.media_type === 'video' ? m.media_type : 'image') as 'image' | 'video',
@@ -120,7 +142,6 @@ export default async function ReviewsPage({ searchParams }: ReviewsPageProps) {
 
   return (
     <div>
-      {/* Заголовок */}
       <div className="mb-8 py-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="px-3 py-1.5 bg-yellow-100/50 border border-yellow-200/50 rounded-xl">

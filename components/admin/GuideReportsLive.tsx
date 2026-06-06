@@ -51,11 +51,16 @@ export default function GuideReportsLive({ initialRows, viewerRole }: Props) {
     );
   }, []);
 
+  const handleStatusChange = useCallback((reportId: string, status: string) => {
+    setRows((prev) => prev.map((r) => (r.id === reportId ? { ...r, status } : r)));
+  }, []);
+
   return (
     <GuideReportsPanel
       rows={rows}
       viewerRole={viewerRole}
       onGuideBanChange={handleGuideBanChange}
+      onStatusChange={handleStatusChange}
     />
   );
 }

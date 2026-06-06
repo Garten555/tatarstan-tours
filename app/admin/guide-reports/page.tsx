@@ -2,24 +2,13 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import GuideReportsLive from '@/components/admin/GuideReportsLive';
-import { type GuideReportRow } from '@/components/admin/GuideReportsList';
+import { GUIDE_REPORTS_DB_SELECT, mapGuideReportRow } from '@/lib/guide-reports/map-row';
 import { Flag } from 'lucide-react';
 
 export const metadata = {
   title: 'Жалобы на гидов — Админ',
   description: 'Жалобы участников на гидов в комнатах туров',
 };
-
-function unwrapRelation<T>(x: T | T[] | null | undefined): T | null {
-  if (x == null) return null;
-  return Array.isArray(x) ? x[0] ?? null : x;
-}
-
-function profileLabel(p: { first_name?: string | null; last_name?: string | null; email?: string | null } | null, fallback: string) {
-  if (!p) return fallback;
-  const name = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
-  return name || p.email || fallback;
-}
 
 export default async function GuideReportsPage() {
   const supabase = await createClient();
@@ -42,50 +31,11 @@ export default async function GuideReportsPage() {
 
   const { data: raw, error } = await serviceClient
     .from('guide_reports')
-    .select(
-      `
-      id,
-      room_id,
-      reason,
-      status,
-      created_at,
-      guide:profiles!guide_reports_guide_id_fkey(id, first_name, last_name, email, role, is_banned),
-      reporter:profiles!guide_reports_reporter_id_fkey(id, first_name, last_name, email, role)
-    `
-    )
+    .select(GUIDE_REPORTS_DB_SELECT)
     .order('created_at', { ascending: false })
     .limit(200);
 
-  const rows: GuideReportRow[] = (raw || []).map((r: Record<string, unknown>) => {
-    const g = unwrapRelation(r.guide as object) as {
-      id?: string;
-      first_name?: string | null;
-      last_name?: string | null;
-      email?: string | null;
-      role?: string | null;
-      is_banned?: boolean | null;
-    } | null;
-    const rep = unwrapRelation(r.reporter as object) as {
-      first_name?: string | null;
-      last_name?: string | null;
-      email?: string | null;
-      role?: string | null;
-    } | null;
-
-    return {
-      id: String(r.id),
-      room_id: r.room_id ? String(r.room_id) : null,
-      created_at: String(r.created_at),
-      reason: r.reason ? String(r.reason) : null,
-      status: String(r.status ?? 'open'),
-      guide_user_id: g?.id || '',
-      guide_label: profileLabel(g, 'Гид'),
-      guide_role: g?.role ?? null,
-      guide_is_banned: Boolean(g?.is_banned),
-      reporter_label: profileLabel(rep, 'Участник'),
-      reporter_role: rep?.role ?? null,
-    };
-  });
+  const rows = (raw || []).map((r) => mapGuideReportRow(r as Record<string, unknown>));
 
   return (
     <div>
@@ -99,8 +49,8 @@ export default async function GuideReportsPage() {
           Жалобы на гидов
         </h1>
         <p className="max-w-3xl text-lg font-bold text-gray-700">
-          Участники комнат туров могут пожаловаться на поведение гида. Здесь же можно заблокировать гида при необходимости (с
-          учётом прав вашей роли).
+          Участники комнат туров могут пожаловаться на поведение гида. Отметьте статус жалобы или заблокируйте гида при
+          необходимости.
         </p>
         <p className="mt-3 text-sm font-semibold text-gray-500">
           Загружено: <span className="tabular-nums text-gray-800">{rows.length}</span>

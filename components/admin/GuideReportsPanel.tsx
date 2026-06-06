@@ -44,9 +44,10 @@ type Props = {
   rows: GuideReportRow[];
   viewerRole: string;
   onGuideBanChange?: (guideUserId: string, profile: BanProfileUpdate) => void;
+  onStatusChange?: (reportId: string, status: string) => void;
 };
 
-export default function GuideReportsPanel({ rows, viewerRole, onGuideBanChange }: Props) {
+export default function GuideReportsPanel({ rows, viewerRole, onGuideBanChange, onStatusChange }: Props) {
   const [search, setSearch] = useState('');
   const [reasonFilter, setReasonFilter] = useState<ReasonFilter>('all');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -66,7 +67,7 @@ export default function GuideReportsPanel({ rows, viewerRole, onGuideBanChange }
 
       const st = (row.status || '').toLowerCase();
       if (statusFilter === 'open' && st !== 'open') return false;
-      if (statusFilter === 'closed' && st === 'open') return false;
+      if (statusFilter === 'closed' && !['resolved', 'dismissed'].includes(st)) return false;
 
       if (banFilter === 'banned' && !row.guide_is_banned) return false;
       if (banFilter === 'active' && row.guide_is_banned) return false;
@@ -158,8 +159,8 @@ export default function GuideReportsPanel({ rows, viewerRole, onGuideBanChange }
               className="rounded-xl border-2 border-gray-200 px-3 py-2.5 text-sm font-semibold outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25"
             >
               <option value="all">Любой</option>
-              <option value="open">Открыта (open)</option>
-              <option value="closed">Закрыта / иное</option>
+              <option value="open">Открыта</option>
+              <option value="closed">Закрыта (решена / отклонена)</option>
             </select>
           </label>
 
@@ -240,6 +241,7 @@ export default function GuideReportsPanel({ rows, viewerRole, onGuideBanChange }
         rows={filtered}
         viewerRole={viewerRole}
         onGuideBanChange={onGuideBanChange}
+        onStatusChange={onStatusChange}
         filteredEmpty={filtered.length === 0 && rows.length > 0}
         onResetFilters={resetFilters}
       />

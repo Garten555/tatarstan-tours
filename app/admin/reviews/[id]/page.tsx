@@ -1,6 +1,7 @@
 import { redirect, notFound } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import ReviewDetails from '@/components/admin/ReviewDetails';
+import { fetchProfilesByIds, mapReviewAuthor, unwrapRelation } from '@/lib/reviews/profile';
 import { Star, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
@@ -18,7 +19,6 @@ export default async function ReviewDetailPage({
   const supabase = await createClient();
   const serviceClient = await createServiceClient();
 
-  // Проверяем авторизацию
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -27,7 +27,6 @@ export default async function ReviewDetailPage({
     redirect('/auth/login');
   }
 
-  // Проверяем права (support_admin, tour_admin или super_admin)
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
@@ -41,11 +40,11 @@ export default async function ReviewDetailPage({
     redirect('/admin');
   }
 
-  // Загружаем отзыв с комментариями
   const { data: review, error } = await serviceClient
     .from('reviews')
     .select(`
       id,
+      user_id,
       rating,
       text,
       created_at,
@@ -54,10 +53,12 @@ export default async function ReviewDetailPage({
       is_reported,
       reported_at,
       report_reason,
-      profiles (
+      author:profiles!reviews_user_id_fkey (
+        id,
         first_name,
         last_name,
-        email
+        email,
+        avatar_url
       ),
       tours (
         title
@@ -89,59 +90,109 @@ export default async function ReviewDetailPage({
     notFound();
   }
 
-  // Преобразуем данные для компонента
-  const userData = Array.isArray(review.profiles)
-    ? review.profiles[0]
-    : review.profiles;
-  const tourData = Array.isArray(review.tours) ? review.tours[0] : review.tours;
-  
-  const reviewData = {
-    id: review.id,
-    rating: review.rating,
-    text: review.text,
-    created_at: review.created_at,
-    is_approved: review.is_approved,
-    is_published: review.is_published,
-    is_reported: review.is_reported,
-    reported_at: review.reported_at,
-    report_reason: review.report_reason,
-    user_name: userData ? `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || userData.email || 'Пользователь' : 'Пользователь',
-    user_email: userData?.email || null,
-    tour_title: tourData?.title || null,
-    media: (review.review_media || []).map((m: { media_type: string; media_url: string }) => ({
-      media_type: (m.media_type === 'image' || m.media_type === 'video' ? m.media_type : 'image') as 'image' | 'video',
-      media_url: m.media_url,
-    })),
-    comments: (review.review_comments || []).map((c: {
+  const reviewRecord = review as {
+    id: string;
+    user_id: string;
+    rating: number;
+    text: string | null;
+    created_at: string;
+    is_approved: boolean;
+    is_published: boolean;
+    is_reported: boolean;
+    reported_at: string | null;
+    report_reason: string | null;
+    author?: {
+      id: string;
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+      avatar_url: string | null;
+    } | {
+      id: string;
+      first_name: string | null;
+      last_name: string | null;
+      email: string | null;
+      avatar_url: string | null;
+    }[] | null;
+    tours?: { title: string } | { title: string }[] | null;
+    review_media?: { media_type: string; media_url: string }[] | null;
+    review_comments?: {
       id: string;
       message: string;
       created_at: string;
       is_reported: boolean;
       report_reason: string | null;
-      profiles?: { id: string; first_name: string; last_name: string; email: string; avatar_url: string | null; is_banned: boolean } | { id: string; first_name: string; last_name: string; email: string; avatar_url: string | null; is_banned: boolean }[] | null;
-    }) => {
-      const commentUser = Array.isArray(c.profiles) ? c.profiles[0] : c.profiles;
+      profiles?: {
+        id: string;
+        first_name: string | null;
+        last_name: string | null;
+        email: string | null;
+        avatar_url: string | null;
+        is_banned: boolean | null;
+      } | {
+        id: string;
+        first_name: string | null;
+        last_name: string | null;
+        email: string | null;
+        avatar_url: string | null;
+        is_banned: boolean | null;
+      }[] | null;
+    }[] | null;
+  };
+
+  const profileMap = unwrapRelation(reviewRecord.author)
+    ? new Map<string, { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; avatar_url?: string | null }>()
+    : await fetchProfilesByIds(serviceClient, [reviewRecord.user_id]);
+
+  const author = mapReviewAuthor(
+    reviewRecord.author,
+    profileMap.get(reviewRecord.user_id) ?? null,
+    reviewRecord.user_id
+  );
+  const tourData = unwrapRelation(reviewRecord.tours);
+
+  const reviewData = {
+    id: reviewRecord.id,
+    rating: reviewRecord.rating,
+    text: reviewRecord.text,
+    created_at: reviewRecord.created_at,
+    is_approved: reviewRecord.is_approved,
+    is_published: reviewRecord.is_published,
+    is_reported: reviewRecord.is_reported,
+    reported_at: reviewRecord.reported_at,
+    report_reason: reviewRecord.report_reason,
+    user_name: author.user_name,
+    user_email: author.user_email || null,
+    user_avatar_url: author.user_avatar_url,
+    tour_title: tourData?.title || null,
+    media: (reviewRecord.review_media || []).map((m) => ({
+      media_type: (m.media_type === 'image' || m.media_type === 'video' ? m.media_type : 'image') as 'image' | 'video',
+      media_url: m.media_url,
+    })),
+    comments: (reviewRecord.review_comments || []).map((c) => {
+      const commentUser = unwrapRelation(c.profiles);
       return {
         id: c.id,
         message: c.message,
         created_at: c.created_at,
         is_reported: c.is_reported,
         report_reason: c.report_reason,
-        user: commentUser ? {
-          id: commentUser.id,
-          first_name: commentUser.first_name,
-          last_name: commentUser.last_name,
-          email: commentUser.email,
-          avatar_url: commentUser.avatar_url,
-          is_banned: commentUser.is_banned,
-        } : null,
+        user: commentUser
+          ? {
+              id: commentUser.id,
+              first_name: commentUser.first_name,
+              last_name: commentUser.last_name,
+              email: commentUser.email,
+              avatar_url: commentUser.avatar_url,
+              is_banned: commentUser.is_banned,
+            }
+          : null,
       };
     }),
   };
 
   return (
     <div>
-      {/* Заголовок */}
       <div className="mb-8 py-6">
         <Link
           href="/admin/reviews"

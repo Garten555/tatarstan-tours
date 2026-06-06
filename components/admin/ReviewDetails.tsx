@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
+import ModerationUserChip from '@/components/admin/ModerationUserChip';
 
 type ReviewMedia = {
   media_type: 'image' | 'video';
@@ -21,6 +22,7 @@ type ReviewDetailsProps = {
     report_reason?: string | null;
     user_name: string;
     user_email: string | null;
+    user_avatar_url?: string | null;
     tour_title: string | null;
     media: ReviewMedia[];
     comments?: {
@@ -65,9 +67,12 @@ export default function ReviewDetails({ review }: ReviewDetailsProps) {
     <div className="bg-white rounded-2xl shadow-sm p-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">{review.user_name}</h1>
-          <p className="text-sm text-gray-500">{review.user_email || '—'}</p>
-          <p className="text-xs text-gray-400 mt-1">
+          <ModerationUserChip
+            name={review.user_name}
+            email={review.user_email}
+            avatarUrl={review.user_avatar_url}
+          />
+          <p className="text-xs text-gray-400 mt-3 ml-14">
             {new Date(review.created_at).toLocaleDateString('ru-RU')}
           </p>
         </div>

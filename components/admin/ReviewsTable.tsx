@@ -5,6 +5,7 @@ import { CheckCircle2, Loader2, Search, EyeOff } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
+import ModerationUserChip from '@/components/admin/ModerationUserChip';
 
 type ReviewRow = {
   id: string;
@@ -18,6 +19,7 @@ type ReviewRow = {
   created_at: string;
   user_name: string;
   user_email: string;
+  user_avatar_url: string | null;
   tour_title: string;
   media: { media_type: 'image' | 'video'; media_url: string }[];
 };
@@ -195,12 +197,16 @@ export default function ReviewsTable({
                 <td className="px-6 py-4 text-base text-gray-900">
                   <Link
                     href={`/admin/reviews/${review.id}`}
-                    className="text-purple-700 hover:text-purple-800 font-bold text-left transition-colors"
+                    className="block hover:opacity-90 transition-opacity"
                     title="Открыть отзыв"
                   >
-                    {review.user_name || '—'}
+                    <ModerationUserChip
+                      name={review.user_name}
+                      email={review.user_email}
+                      avatarUrl={review.user_avatar_url}
+                      size="sm"
+                    />
                   </Link>
-                  <div className="text-sm text-gray-600 mt-1">{review.user_email || '—'}</div>
                 </td>
                 <td className="px-6 py-4 text-base font-semibold text-gray-900">{review.tour_title || '—'}</td>
                 <td className="px-6 py-4 text-base font-bold text-gray-900">{review.rating} / 5</td>
