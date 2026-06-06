@@ -4,9 +4,14 @@ import { useMemo, useState } from 'react';
 import { Search, SlidersHorizontal } from 'lucide-react';
 import GuideReportsList, { type GuideReportRow } from '@/components/admin/GuideReportsList';
 import type { BanProfileUpdate } from '@/components/admin/BanUserButton';
+import {
+  GUIDE_REPORT_STATUSES,
+  type GuideReportStatus,
+  guideReportStatusLabel,
+} from '@/lib/guide-reports/status';
 
 type ReasonFilter = 'all' | 'with' | 'without';
-type StatusFilter = 'all' | 'open' | 'closed';
+type StatusFilter = 'all' | GuideReportStatus;
 type BanFilter = 'all' | 'banned' | 'active';
 type SortKey = 'created_desc' | 'created_asc';
 
@@ -66,8 +71,7 @@ export default function GuideReportsPanel({ rows, viewerRole, onGuideBanChange, 
       if (reasonFilter === 'without' && row.reason && row.reason.trim()) return false;
 
       const st = (row.status || '').toLowerCase();
-      if (statusFilter === 'open' && st !== 'open') return false;
-      if (statusFilter === 'closed' && !['resolved', 'dismissed'].includes(st)) return false;
+      if (statusFilter !== 'all' && st !== statusFilter) return false;
 
       if (banFilter === 'banned' && !row.guide_is_banned) return false;
       if (banFilter === 'active' && row.guide_is_banned) return false;
@@ -84,6 +88,7 @@ export default function GuideReportsPanel({ rows, viewerRole, onGuideBanChange, 
         row.reporter_role ?? '',
         row.reason ?? '',
         row.status,
+        guideReportStatusLabel(row.status),
         row.room_id ?? '',
         row.id,
       ]
@@ -159,8 +164,11 @@ export default function GuideReportsPanel({ rows, viewerRole, onGuideBanChange, 
               className="rounded-xl border-2 border-gray-200 px-3 py-2.5 text-sm font-semibold outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/25"
             >
               <option value="all">Любой</option>
-              <option value="open">Открыта</option>
-              <option value="closed">Закрыта (решена / отклонена)</option>
+              {GUIDE_REPORT_STATUSES.map((status) => (
+                <option key={status} value={status}>
+                  {guideReportStatusLabel(status)}
+                </option>
+              ))}
             </select>
           </label>
 
