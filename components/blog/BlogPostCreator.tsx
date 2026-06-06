@@ -4,8 +4,13 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { BookOpen, Loader2, Image as ImageIcon, Video, MapPin, X, Check, Route, Sparkles } from 'lucide-react';
-import toast from 'react-hot-toast';
+import {
+  getBookingDepartureStartIso,
+  isBookingDepartureUpcoming,
+  partitionBookingsByDeparture,
+} from '@/lib/bookings/booking-departure';
 import Image from 'next/image';
+import toast from 'react-hot-toast';
 import PromptDialog from '@/components/ui/PromptDialog';
 
 interface BlogPostCreatorProps {
@@ -41,8 +46,19 @@ export default function BlogPostCreator({ userId, completedTours = [], upcomingT
   } | null>(null);
   const [bookingsLoadStatus, setBookingsLoadStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
 
-  const mergedCompleted = bookingListsFromApi?.completed ?? completedTours;
-  const mergedUpcoming = bookingListsFromApi?.upcoming ?? upcomingTours;
+  const { mergedCompleted, mergedUpcoming } = useMemo(() => {
+    if (bookingListsFromApi) {
+      return {
+        mergedCompleted: bookingListsFromApi.completed,
+        mergedUpcoming: bookingListsFromApi.upcoming,
+      };
+    }
+    const raw = [...completedTours, ...upcomingTours].filter(
+      (b, i, arr) => b?.id && arr.findIndex((x) => x?.id === b.id) === i
+    );
+    const { completed, upcoming } = partitionBookingsByDeparture(raw);
+    return { mergedCompleted: completed, mergedUpcoming: upcoming };
+  }, [bookingListsFromApi, completedTours, upcomingTours]);
 
   useEffect(() => {
     if (!showForm) {
@@ -65,8 +81,7 @@ export default function BlogPostCreator({ userId, completedTours = [], upcomingT
             b?.tour &&
             (b.status === 'completed' || b.status === 'confirmed')
         );
-        const completed = raw.filter((b: any) => b.status === 'completed');
-        const upcoming = raw.filter((b: any) => b.status === 'confirmed');
+        const { completed, upcoming } = partitionBookingsByDeparture(raw);
         if (!cancelled) {
           setBookingListsFromApi({ completed, upcoming });
           setBookingsLoadStatus('done');
@@ -149,10 +164,7 @@ export default function BlogPostCreator({ userId, completedTours = [], upcomingT
   const formatTourDate = (booking: any) => {
     const tour = booking.tour;
     if (!tour) return '';
-    const isUpcoming = booking.status === 'confirmed';
-    const raw = isUpcoming
-      ? (tour.start_date || tour.end_date)
-      : (tour.end_date || tour.start_date);
+    const raw = getBookingDepartureStartIso(booking) || tour.end_date || tour.start_date;
     if (!raw) return '';
     try {
       return new Date(raw).toLocaleDateString('ru-RU', {
@@ -179,7 +191,7 @@ export default function BlogPostCreator({ userId, completedTours = [], upcomingT
 
     setSelectedBookingId(String(bookingId));
     const { tour } = booking;
-    const isUpcoming = booking.status === 'confirmed';
+    const isUpcoming = isBookingDepartureUpcoming(booking);
 
     if (tour.cover_image) setCoverImageUrl(tour.cover_image);
     if (tour.yandex_map_url) setMapUrl(tour.yandex_map_url);
@@ -586,7 +598,7 @@ export default function BlogPostCreator({ userId, completedTours = [], upcomingT
               const tour = booking.tour;
               const dateStr = formatTourDate(booking);
               const isSelected = String(selectedBookingId) === String(booking.id);
-              const isUpcoming = booking.status === 'confirmed';
+              const isUpcoming = isBookingDepartureUpcoming(booking);
               return (
                   <div
                     key={booking.id}

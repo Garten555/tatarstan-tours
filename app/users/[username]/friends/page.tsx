@@ -198,6 +198,7 @@ export default async function UserFriendsPage({
           friends={friendsWithActivity}
           commonFriendIds={commonFriendIds}
           showCommonTab={Boolean(currentUser && currentUser.id !== profile.id)}
+          currentUserId={currentUser?.id ?? null}
         />
       )}
     </FriendsPageLayout>

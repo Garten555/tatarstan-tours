@@ -33,10 +33,18 @@ type Props = {
   user: FriendListCardUser;
   index?: number;
   showMessage?: boolean;
+  currentUserId?: string | null;
 };
 
-export default function FriendListCard({ user, index = 0, showMessage = true }: Props) {
+export default function FriendListCard({
+  user,
+  index = 0,
+  showMessage = true,
+  currentUserId = null,
+}: Props) {
   const seen = formatLastSeen(user.last_activity_at);
+  const isSelf = currentUserId != null && user.id === currentUserId;
+  const canMessage = showMessage && !isSelf;
 
   return (
     <div
@@ -104,7 +112,7 @@ export default function FriendListCard({ user, index = 0, showMessage = true }: 
           </div>
         </div>
 
-        {showMessage ? (
+        {canMessage ? (
           <div className="w-full sm:w-auto">
             <Link
               href={`/messenger?user=${user.id}`}

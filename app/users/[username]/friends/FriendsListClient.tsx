@@ -8,12 +8,14 @@ type Props = {
   friends: FriendListCardUser[];
   commonFriendIds: string[];
   showCommonTab?: boolean;
+  currentUserId?: string | null;
 };
 
 export default function FriendsListClient({
   friends,
   commonFriendIds,
   showCommonTab = true,
+  currentUserId = null,
 }: Props) {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'all' | 'common'>('all');
@@ -99,7 +101,12 @@ export default function FriendsListClient({
       ) : (
         <div className="grid gap-4 md:gap-6">
           {visible.map((friend, index) => (
-            <FriendListCard key={friend.id} user={friend} index={index} />
+            <FriendListCard
+              key={friend.id}
+              user={friend}
+              index={index}
+              currentUserId={currentUserId}
+            />
           ))}
         </div>
       )}
