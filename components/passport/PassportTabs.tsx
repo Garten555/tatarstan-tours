@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import AchievementCard from './AchievementCard';
-import { ExportMapButton } from './ExportMapButton';
 import { ParticipatedTourCard } from './ParticipatedTourCard';
 
 interface PassportTabsProps {
@@ -156,8 +155,7 @@ export default function PassportTabs({
           {/* Путешествия */}
           {activeTab === 'tours' && (
             <div className="space-y-6">
-              <div className="flex items-center justify-between flex-wrap gap-4">
-                <div>
+              <div>
                   <h2 className="text-2xl md:text-3xl font-black text-gray-900 mb-2">
                     Мои путешествия
                   </h2>
@@ -165,10 +163,6 @@ export default function PassportTabs({
                     Туры, в которых вы участвовали
                   </p>
                 </div>
-                {completedTours.length > 0 && (
-                  <ExportMapButton tours={completedTours} username={username} />
-                )}
-              </div>
 
               {completedTours.length > 0 ? (
                 <div className="space-y-6 max-w-3xl mx-auto">

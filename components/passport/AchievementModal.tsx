@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { X, Calendar, MapPin, BookOpen, Award } from 'lucide-react';
 import { escapeHtml } from '@/lib/utils/sanitize';
+import { formatTourCategoryLabel } from '@/lib/tours/category-labels';
 
 type AchievementModalProps = {
   isOpen: boolean;
@@ -265,7 +266,7 @@ export default function AchievementModal({
                   {achievement.tour.category && (
                     <div className="mb-2">
                       <span className="inline-block px-3 py-1.5 bg-blue-100 text-blue-700 text-xs font-bold rounded-lg">
-                        {achievement.tour.category}
+                        {formatTourCategoryLabel(achievement.tour.category)}
                       </span>
                     </div>
                   )}
@@ -316,7 +317,9 @@ export default function AchievementModal({
                     {achievement.verification_data.category && (
                       <div className="text-base text-gray-900">
                         <span className="font-semibold">Категория тура: </span>
-                        <span className="font-black text-purple-700 capitalize">{achievement.verification_data.category}</span>
+                        <span className="font-black text-purple-700">
+                          {formatTourCategoryLabel(achievement.verification_data.category)}
+                        </span>
                       </div>
                     )}
                     {achievement.verification_data.tour_date && (

@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import AchievementCard from './AchievementCard';
-import { ExportMapButton } from './ExportMapButton';
 import { ParticipatedTourCard } from './ParticipatedTourCard';
 
 interface PublicPassportSectionProps {
@@ -171,8 +170,7 @@ export default function PublicPassportSection({
         {/* Путешествия */}
         {activeTab === 'tours' && (
           <div className="space-y-3">
-            <div className="flex items-center justify-between flex-wrap gap-2">
-              <div>
+            <div>
                 <h2 className="text-lg md:text-xl font-black text-gray-900">
                   Путешествия
                 </h2>
@@ -180,10 +178,6 @@ export default function PublicPassportSection({
                   Туры, в которых вы участвовали
                 </p>
               </div>
-              {completedTours.length > 0 && (
-                <ExportMapButton tours={completedTours} username={username || null} />
-              )}
-            </div>
 
             {completedTours.length > 0 ? (
               <div className="space-y-6 max-w-3xl mx-auto">
