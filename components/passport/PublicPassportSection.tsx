@@ -153,6 +153,8 @@ export default function PublicPassportSection({
                       key={achievement.id}
                       achievement={achievement}
                       achievementStyle={style}
+                      viewerIsOwner={isOwner}
+                      profileUsername={username}
                     />
                   );
                 })}

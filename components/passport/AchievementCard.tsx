@@ -32,9 +32,16 @@ type AchievementCardProps = {
     bg: string;
     border: string;
   };
+  viewerIsOwner?: boolean;
+  profileUsername?: string | null;
 };
 
-export default function AchievementCard({ achievement, achievementStyle }: AchievementCardProps) {
+export default function AchievementCard({
+  achievement,
+  achievementStyle,
+  viewerIsOwner = true,
+  profileUsername = null,
+}: AchievementCardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   return (
@@ -68,6 +75,8 @@ export default function AchievementCard({ achievement, achievementStyle }: Achie
         isOpen={isModalOpen}
         achievement={achievement}
         achievementStyle={achievementStyle}
+        viewerIsOwner={viewerIsOwner}
+        profileUsername={profileUsername}
         onClose={() => setIsModalOpen(false)}
       />
     </>

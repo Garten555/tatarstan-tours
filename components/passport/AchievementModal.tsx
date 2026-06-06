@@ -37,6 +37,9 @@ type AchievementModalProps = {
     bg: string;
     border: string;
   };
+  /** Свой паспорт — «вам»; чужой профиль — нейтральные формулировки. */
+  viewerIsOwner?: boolean;
+  profileUsername?: string | null;
   onClose: () => void;
 };
 
@@ -44,6 +47,8 @@ export default function AchievementModal({
   isOpen,
   achievement,
   achievementStyle,
+  viewerIsOwner = true,
+  profileUsername = null,
   onClose,
 }: AchievementModalProps) {
   const [mounted, setMounted] = useState(false);
@@ -106,14 +111,13 @@ export default function AchievementModal({
       return 'за завершение 100 туров';
     }
 
-    // Для офлайн достижений, выдаваемых гидами во время туров
-    const offlineAchievementReasons: Record<string, string> = {
-      offline_participation: 'за активное участие в туре - гид отметил вашу вовлеченность',
+    const offlineAchievementReasonsOwner: Record<string, string> = {
+      offline_participation: 'за активное участие в туре — гид отметил вашу вовлечённость',
       helpful: 'за помощь другим участникам во время тура',
       photographer: 'за отличные фотографии, сделанные во время тура',
       social: 'за создание дружеской атмосферы в группе',
-      punctual: 'за пунктуальность - всегда приходили вовремя на все точки маршрута',
-      enthusiast: 'за особый интерес к истории и культуре, проявленный во время тура',
+      punctual: 'за пунктуальность — всегда вовремя на всех точках маршрута',
+      enthusiast: 'за особый интерес к истории и культуре во время тура',
       explorer: 'за активное исследование достопримечательностей',
       team_player: 'за отличную работу в команде во время тура',
       curious: 'за интересные вопросы, заданные гиду',
@@ -122,7 +126,25 @@ export default function AchievementModal({
       memory_keeper: 'за ведение заметок и запись интересных фактов',
     };
 
-    // Для офлайн достижений
+    const offlineAchievementReasonsGuest: Record<string, string> = {
+      offline_participation: 'за активное участие в туре — отмечено гидом',
+      helpful: 'за помощь другим участникам во время тура',
+      photographer: 'за отличные фотографии во время тура',
+      social: 'за создание дружеской атмосферы в группе',
+      punctual: 'за пунктуальность на всех точках маршрута',
+      enthusiast: 'за особый интерес к истории и культуре во время тура',
+      explorer: 'за активное исследование достопримечательностей',
+      team_player: 'за отличную работу в команде во время тура',
+      curious: 'за интересные вопросы гиду',
+      respectful: 'за уважение к культуре и традициям',
+      energetic: 'за высокую активность на протяжении тура',
+      memory_keeper: 'за ведение заметок и запись интересных фактов',
+    };
+
+    const offlineAchievementReasons = viewerIsOwner
+      ? offlineAchievementReasonsOwner
+      : offlineAchievementReasonsGuest;
+
     if (offlineAchievementReasons[badgeType]) {
       return offlineAchievementReasons[badgeType];
     }
@@ -141,6 +163,12 @@ export default function AchievementModal({
   };
 
   const achievementReason = getAchievementReason();
+
+  const tourAchievementCaption = viewerIsOwner
+    ? 'Этот тур принес вам данное достижение'
+    : profileUsername
+      ? `Этот тур принес @${escapeHtml(profileUsername)} данное достижение`
+      : 'Этот тур принес пользователю данное достижение';
 
   const modalContent = (
     <div
@@ -257,12 +285,9 @@ export default function AchievementModal({
                     </div>
                     <span className="text-xs font-bold text-blue-700 uppercase tracking-wide">Связанный тур</span>
                   </div>
-                  <Link
-                    href={`/tours/${achievement.tour.slug}`}
-                    className="text-xl font-black text-gray-900 hover:text-blue-600 transition-colors block mb-2"
-                  >
+                  <div className="text-xl font-black text-gray-900 mb-2">
                     {escapeHtml(achievement.tour.title)}
-                  </Link>
+                  </div>
                   {achievement.tour.category && (
                     <div className="mb-2">
                       <span className="inline-block px-3 py-1.5 bg-blue-100 text-blue-700 text-xs font-bold rounded-lg">
@@ -271,7 +296,7 @@ export default function AchievementModal({
                     </div>
                   )}
                   <p className="text-sm text-gray-600">
-                    Этот тур принес вам данное достижение
+                    {tourAchievementCaption}
                   </p>
                 </div>
               </div>
