@@ -1,6 +1,6 @@
 'use client';
 
-import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import ConfirmDialog, { type DialogIconKind } from '@/components/ui/ConfirmDialog';
 
 export type ConfirmModalProps = {
   open: boolean;
@@ -8,11 +8,19 @@ export type ConfirmModalProps = {
   description: string;
   confirmLabel?: string;
   cancelLabel?: string;
-  variant?: 'default' | 'danger';
+  /** default — зелёный; warning — янтарный; danger — красный */
+  variant?: 'default' | 'warning' | 'danger';
+  icon?: DialogIconKind;
   busy?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 };
+
+const variantMap = {
+  default: 'emerald',
+  warning: 'warning',
+  danger: 'danger',
+} as const;
 
 /** Единый стиль подтверждений — как «Отменить тур?» в админке. */
 export default function ConfirmModal({
@@ -22,6 +30,7 @@ export default function ConfirmModal({
   confirmLabel = 'Подтвердить',
   cancelLabel = 'Закрыть',
   variant = 'default',
+  icon = 'auto',
   busy = false,
   onConfirm,
   onCancel,
@@ -33,10 +42,13 @@ export default function ConfirmModal({
       message={description}
       confirmText={confirmLabel}
       cancelText={cancelLabel}
-      variant={variant === 'danger' ? 'warning' : 'emerald'}
+      variant={variantMap[variant]}
+      icon={icon}
       busy={busy}
       onConfirm={onConfirm}
       onCancel={onCancel}
     />
   );
 }
+
+export type { DialogIconKind };

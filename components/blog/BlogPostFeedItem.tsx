@@ -370,7 +370,14 @@ export default function BlogPostFeedItem({
             onClick={async (e) => {
               e.preventDefault();
               e.stopPropagation();
-              const confirmed = await confirm('Вы уверены, что хотите удалить этот пост?', 'Удаление поста');
+              const confirmed = await confirm(
+                'Вы уверены, что хотите удалить этот пост?',
+                'Удаление поста',
+                'danger',
+                'Удалить',
+                'Закрыть',
+                'delete'
+              );
               if (!confirmed) return;
               // Оптимистичное обновление - сразу скрываем пост
               setPostDeleted(true);
@@ -492,7 +499,14 @@ export default function BlogPostFeedItem({
                         <button
                           type="button"
                           onClick={async () => {
-                            const confirmed = await confirm('Вы уверены, что хотите удалить этот комментарий?', 'Удаление комментария');
+                            const confirmed = await confirm(
+                              'Вы уверены, что хотите удалить этот комментарий?',
+                              'Удаление комментария',
+                              'danger',
+                              'Удалить',
+                              'Закрыть',
+                              'delete'
+                            );
                             if (!confirmed) return;
                             try {
                               const response = await fetch(`/api/blog/posts/${post.id}/comments/${comment.id}`, {

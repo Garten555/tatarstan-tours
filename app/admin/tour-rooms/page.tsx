@@ -25,7 +25,8 @@ import ConfirmModal from '@/components/common/ConfirmModal';
 type TourRoomsConfirm = null | {
   title: string;
   description: string;
-  variant?: 'default' | 'danger';
+  variant?: 'default' | 'warning' | 'danger';
+  icon?: import('@/components/common/ConfirmModal').DialogIconKind;
   confirmLabel?: string;
   action: () => Promise<void>;
 };
@@ -260,6 +261,7 @@ export default function TourRoomsPage() {
       description:
         'Это действие удалит все сообщения, участников и медиа этой комнаты. Отменить будет нельзя.',
       variant: 'danger',
+      icon: 'room',
       confirmLabel: 'Удалить навсегда',
       action: async () => {
         try {
@@ -297,7 +299,8 @@ export default function TourRoomsPage() {
       title: 'Очистить комнаты по сроку?',
       description:
         'Будут удалены комнаты, у которых прошло более 14 дней после окончания выезда (слот) или тура. Медиа в облаке тоже будут удалены.',
-      variant: 'danger',
+      variant: 'warning',
+      icon: 'cleanup',
       confirmLabel: 'Удалить старые комнаты',
       action: async () => {
         try {
@@ -331,6 +334,7 @@ export default function TourRoomsPage() {
       description:
         'Будут удалены все комнаты туров, все сообщения, участники и медиа (в том числе файлы в облаке S3). Действие необратимо. Доступно только супер-админу.',
       variant: 'danger',
+      icon: 'delete-all',
       confirmLabel: 'Удалить все комнаты',
       action: async () => {
         try {
@@ -675,6 +679,7 @@ export default function TourRoomsPage() {
         title={confirmDialog?.title ?? ''}
         description={confirmDialog?.description ?? ''}
         variant={confirmDialog?.variant ?? 'default'}
+        icon={confirmDialog?.icon}
         confirmLabel={confirmDialog?.confirmLabel}
         busy={confirmBusy}
         onConfirm={() => void handleConfirmDialog()}

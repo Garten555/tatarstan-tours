@@ -119,7 +119,14 @@ export default function UserGallery({ media, userId, isOwner, username, showView
   };
 
   const handleDelete = async (mediaId: string) => {
-    const confirmed = await confirm('Вы уверены, что хотите удалить это медиа?', 'Удаление медиа');
+    const confirmed = await confirm(
+      'Вы уверены, что хотите удалить это медиа?',
+      'Удаление медиа',
+      'danger',
+      'Удалить',
+      'Закрыть',
+      'delete'
+    );
     if (!confirmed) return;
 
     try {

@@ -359,6 +359,7 @@ export default function RegisterForm() {
         confirmLabel="Да, изменить данные"
         cancelLabel="Остаться"
         variant="default"
+        icon="back"
         onConfirm={confirmBackToForm}
         onCancel={() => setBackToFormConfirmOpen(false)}
       />

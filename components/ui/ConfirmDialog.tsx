@@ -1,11 +1,12 @@
 'use client';
 
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import {
   DialogFrame,
   dialogCancelButtonClass,
   dialogConfirmButtonClass,
 } from '@/components/ui/DialogFrame';
+import { resolveDialogIcon, type DialogIconKind } from '@/components/ui/dialogIcons';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
   onCancel: () => void;
   variant?: 'danger' | 'warning' | 'info' | 'emerald';
+  icon?: DialogIconKind;
   busy?: boolean;
 }
 
@@ -55,9 +57,11 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
   variant = 'warning',
+  icon,
   busy = false,
 }: ConfirmDialogProps) {
   const styles = variantConfig[variant];
+  const Icon = resolveDialogIcon(icon, variant);
   const defaultConfirmText =
     confirmText ||
     (variant === 'danger' ? 'Удалить' : variant === 'emerald' ? 'Подтвердить' : 'OK');
@@ -67,7 +71,7 @@ export default function ConfirmDialog({
       isOpen={isOpen}
       title={title}
       message={message}
-      icon={AlertTriangle}
+      icon={Icon}
       iconClassName={styles.icon}
       iconBgClassName={styles.iconBg}
       iconBorderClassName={styles.iconBorder}
@@ -91,3 +95,5 @@ export default function ConfirmDialog({
     />
   );
 }
+
+export type { DialogIconKind };

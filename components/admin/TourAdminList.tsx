@@ -127,7 +127,8 @@ export default function TourAdminList() {
       'Отменить тур?',
       'warning',
       'Отменить тур',
-      'Закрыть'
+      'Закрыть',
+      'cancel'
     );
     if (!confirmed) return;
 
@@ -164,9 +165,10 @@ export default function TourAdminList() {
     const confirmed = await confirm(
       'Вы уверены, что хотите удалить этот тур? Все связанные медиафайлы, бронирования и отзывы будут удалены. Это действие нельзя отменить.',
       'Удаление тура',
-      'warning',
+      'danger',
       'Удалить тур',
-      'Закрыть'
+      'Закрыть',
+      'delete'
     );
     
     if (!confirmed) {

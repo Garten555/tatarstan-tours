@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
-import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import ConfirmDialog, { type DialogIconKind } from '@/components/ui/ConfirmDialog';
 import AlertDialog from '@/components/ui/AlertDialog';
 import PromptDialog from '@/components/ui/PromptDialog';
 
@@ -13,6 +13,7 @@ export function useDialog() {
     onConfirm: () => void;
     onCancel: () => void;
     variant?: 'danger' | 'warning' | 'info' | 'emerald';
+    icon?: DialogIconKind;
     confirmText?: string;
     cancelText?: string;
   }>({
@@ -60,7 +61,8 @@ export function useDialog() {
     title: string = 'Подтвердите действие',
     variant: 'danger' | 'warning' | 'info' | 'emerald' = 'warning',
     confirmText: string = 'OK',
-    cancelText: string = 'Закрыть'
+    cancelText: string = 'Закрыть',
+    icon: DialogIconKind = 'auto'
   ): Promise<boolean> => {
     return new Promise((resolve) => {
       setConfirmState({
@@ -68,6 +70,7 @@ export function useDialog() {
         title,
         message,
         variant,
+        icon,
         confirmText,
         cancelText,
         onConfirm: () => {
@@ -133,6 +136,7 @@ export function useDialog() {
         title={confirmState.title}
         message={confirmState.message}
         variant={confirmState.variant}
+        icon={confirmState.icon}
         confirmText={confirmState.confirmText}
         cancelText={confirmState.cancelText}
         onConfirm={confirmState.onConfirm}
