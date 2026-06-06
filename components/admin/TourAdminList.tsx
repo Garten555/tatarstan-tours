@@ -163,7 +163,10 @@ export default function TourAdminList() {
   const handleDelete = async (tourId: string) => {
     const confirmed = await confirm(
       'Вы уверены, что хотите удалить этот тур? Все связанные медиафайлы, бронирования и отзывы будут удалены. Это действие нельзя отменить.',
-      'Удаление тура'
+      'Удаление тура',
+      'warning',
+      'Удалить тур',
+      'Закрыть'
     );
     
     if (!confirmed) {

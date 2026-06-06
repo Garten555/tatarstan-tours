@@ -58,9 +58,9 @@ export function useDialog() {
   const confirm = useCallback((
     message: string,
     title: string = 'Подтвердите действие',
-    variant: 'danger' | 'warning' | 'info' | 'emerald' = 'danger',
+    variant: 'danger' | 'warning' | 'info' | 'emerald' = 'warning',
     confirmText: string = 'OK',
-    cancelText: string = 'Отмена'
+    cancelText: string = 'Закрыть'
   ): Promise<boolean> => {
     return new Promise((resolve) => {
       setConfirmState({

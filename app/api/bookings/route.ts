@@ -6,6 +6,7 @@ import { ensureTourRoomForSession } from '@/lib/tour/ensure-session-room';
 import { generatePaymentRef } from '@/lib/payment/payment-ref';
 import { sumActiveBookingSeatsForSession } from '@/lib/tour/session-participants';
 import { publishBookingsChanged } from '@/lib/pusher/data-sync';
+import { sendBookingConfirmationEmail } from '@/lib/bookings/send-booking-confirmation-email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -526,45 +527,22 @@ export async function POST(request: NextRequest) {
         .eq('id', booking.id);
     }
 
-    // Email в фоне — не задерживаем ответ клиенту
-    void (async () => {
-      try {
-        const userProfile = userProfileResult.data;
-        const tourData = tourDataResult.data;
-
-        if (userProfile?.email && tourData) {
-          const userName =
-            userProfile.first_name && userProfile.last_name
-              ? `${userProfile.first_name} ${userProfile.last_name}`
-              : userProfile.email;
-
-          const tourDate = new Date(tourData.start_date).toLocaleDateString('ru-RU', {
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          });
-
-          const { sendEmail, getBookingConfirmationEmail } = await import(
-            '@/lib/email/send-email'
-          );
-          await sendEmail({
-            to: userProfile.email,
-            subject: `Бронирование подтверждено: ${tourData.title}`,
-            html: getBookingConfirmationEmail(
-              userName,
-              tourData.title,
-              tourDate,
-              num_people,
-              parseFloat(total_price.toString())
-            ),
-          });
-        }
-      } catch (emailError) {
-        console.error('Ошибка отправки email уведомления:', emailError);
+    try {
+      const emailResult = await sendBookingConfirmationEmail({
+        serviceClient,
+        userId: user.id,
+        authEmail: user.email,
+        tourId: tour_id,
+        sessionStartAt: departureStartAt,
+        numPeople: num_people,
+        totalPrice: total_price,
+      });
+      if (!emailResult.sent) {
+        console.warn('[booking] confirmation email was not sent', emailResult);
       }
-    })();
+    } catch (emailError) {
+      console.error('Ошибка отправки email уведомления:', emailError);
+    }
 
     void publishBookingsChanged(user.id);
     return NextResponse.json({
