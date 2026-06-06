@@ -72,6 +72,22 @@ export function isTourVisibleInPublicCatalog(
   return false;
 }
 
+type TourLinkFields = TourDates & {
+  slug?: string | null;
+  status?: string | null;
+};
+
+/** Можно ли вести на /tours/[slug] (активный и не завершён по дате). */
+export function isTourPageLinkable(
+  tour: TourLinkFields | null | undefined,
+  now: Date = new Date()
+): boolean {
+  if (!tour?.slug) return false;
+  if (tour.status !== 'active') return false;
+  if (isTourEndedByEndDate(tour, now)) return false;
+  return true;
+}
+
 /** Бронирование: выезд ещё не начался. */
 export function isSessionBookable(startAt: string, now: Date = new Date()): boolean {
   return isUpcomingSession(startAt, now);

@@ -1,7 +1,8 @@
 import { createServiceClient } from '@/lib/supabase/server';
-import Link from 'next/link';
 import Image from 'next/image';
 import { Star, Quote } from 'lucide-react';
+import { ReviewTourContext } from '@/components/reviews/ReviewTourContext';
+import { isTourPageLinkable } from '@/lib/tours/tour-public-visibility';
 
 type ReviewItem = {
   id: string;
@@ -10,7 +11,19 @@ type ReviewItem = {
   user_id: string;
   created_at: string;
   tour_id?: string | null;
-  tours?: { slug: string; title: string } | { slug: string; title: string }[] | null;
+  tours?: {
+    slug: string;
+    title: string;
+    status?: string | null;
+    end_date?: string | null;
+    start_date?: string | null;
+  } | {
+    slug: string;
+    title: string;
+    status?: string | null;
+    end_date?: string | null;
+    start_date?: string | null;
+  }[] | null;
 };
 
 type ProfileItem = {
@@ -38,7 +51,7 @@ export async function TestimonialsSection() {
   const supabase = await createServiceClient();
   const { data: reviews } = await supabase
     .from('reviews')
-    .select('id, text, rating, user_id, created_at, tour_id, tours (slug, title)')
+    .select('id, text, rating, user_id, created_at, tour_id, tours (slug, title, status, end_date, start_date)')
     .eq('is_published', true)
     .eq('is_approved', true)
     .not('text', 'is', null)
@@ -110,25 +123,33 @@ export async function TestimonialsSection() {
           {reviewItems.map((item) => {
             const profile = profileMap.get(item.user_id);
             const tour = Array.isArray(item.tours) ? item.tours[0] : item.tours;
-            const cardContent = (
+            const tourLinkable = tour ? isTourPageLinkable(tour) : false;
+
+            return (
               <div
-                className={`group relative rounded-2xl bg-white border-2 border-gray-100 p-6 md:p-8 shadow-sm hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 min-h-[220px] ${
+                key={item.id}
+                className={`group relative rounded-2xl bg-white border-2 border-gray-100 p-6 md:p-8 shadow-sm transition-all duration-300 min-h-[220px] ${
+                  tourLinkable ? 'hover:shadow-2xl hover:-translate-y-2' : ''
+                } ${
                   reviewItems.length > 3
                     ? 'snap-start min-w-[320px] md:min-w-[360px] lg:min-w-[380px]'
                     : ''
                 }`}
               >
-                {/* Иконка кавычек */}
                 <div className="absolute top-6 right-6 opacity-10 group-hover:opacity-20 transition-opacity">
                   <Quote className="w-12 h-12 text-emerald-600" />
                 </div>
 
-                {/* Текст отзыва */}
+                {tour?.title ? (
+                  <div className="mb-4 relative z-10">
+                    <ReviewTourContext tour={tour} />
+                  </div>
+                ) : null}
+
                 <p className="text-lg md:text-xl text-gray-700 leading-relaxed mb-6 relative z-10">
-                  "{item.text}"
+                  &ldquo;{item.text}&rdquo;
                 </p>
 
-                {/* Информация о пользователе */}
                 <div className="flex items-center gap-4 relative z-10">
                   {profile?.avatar_url ? (
                     <div className="relative h-12 w-12 rounded-full overflow-hidden border-2 border-emerald-100 flex-shrink-0">
@@ -169,18 +190,6 @@ export async function TestimonialsSection() {
                   </div>
                 </div>
               </div>
-            );
-
-            return tour?.slug ? (
-              <Link
-                key={item.id}
-                href={`/tours/${tour.slug}`}
-                className="block cursor-pointer"
-              >
-                {cardContent}
-              </Link>
-            ) : (
-              <div key={item.id}>{cardContent}</div>
             );
           })}
         </div>

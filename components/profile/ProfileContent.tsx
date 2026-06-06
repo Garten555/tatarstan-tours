@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { User, Mail, Phone, Calendar, Shield, Upload, Loader2, Trash2, Star, Edit2, Eye, Settings, CheckCircle2, BookOpen, Ban, CheckCircle, X } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import UserBookings from './UserBookings';
+import { ReviewTourContext } from '@/components/reviews/ReviewTourContext';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
 import UploadProgressBar from '@/components/common/UploadProgressBar';
 import { uploadFormDataWithProgress } from '@/lib/http/upload-form-progress';
@@ -906,12 +907,9 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
                 )}
 
                 {review.tour && (
-                  <a
-                    href={`/tours/${review.tour.slug}`}
-                    className="inline-flex items-center gap-2 text-emerald-600 hover:text-emerald-700 font-bold text-base transition-colors"
-                  >
-                    Посмотреть тур →
-                  </a>
+                  <div className="mt-4">
+                    <ReviewTourContext tour={review.tour} />
+                  </div>
                 )}
               </div>
             ))}

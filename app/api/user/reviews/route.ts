@@ -32,7 +32,10 @@ export async function GET(request: NextRequest) {
           id,
           title,
           slug,
-          cover_image
+          cover_image,
+          status,
+          end_date,
+          start_date
         )
       `)
       .eq('user_id', user.id)
