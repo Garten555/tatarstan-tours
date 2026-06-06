@@ -11,6 +11,7 @@ const ACHIEVEMENT_STYLES: Record<
   { icon: string; bg: string; border: string }
 > = {
   first_tour: { icon: '🥇', bg: 'from-yellow-50 to-amber-50', border: 'border-amber-200' },
+  first_blog_post: { icon: '✍️', bg: 'from-sky-50 to-blue-50', border: 'border-sky-200' },
   history: { icon: '🏛️', bg: 'from-amber-50 to-orange-50', border: 'border-orange-200' },
   nature: { icon: '🌿', bg: 'from-emerald-50 to-green-50', border: 'border-emerald-200' },
   culture: { icon: '🎭', bg: 'from-purple-50 to-fuchsia-50', border: 'border-purple-200' },

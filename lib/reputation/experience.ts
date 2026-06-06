@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 /** Опыт за тип достижения. */
 const ACHIEVEMENT_XP: Record<string, number> = {
   first_tour: 100,
+  first_blog_post: 75,
   '10_tours': 250,
   '25_tours': 400,
   '50_tours': 600,

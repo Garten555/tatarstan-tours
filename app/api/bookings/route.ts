@@ -6,6 +6,7 @@ import { ensureTourRoomForSession } from '@/lib/tour/ensure-session-room';
 import { generatePaymentRef } from '@/lib/payment/payment-ref';
 import { sumActiveBookingSeatsForSession } from '@/lib/tour/session-participants';
 import { publishBookingsChanged } from '@/lib/pusher/data-sync';
+import { syncTourParticipationAchievements } from '@/lib/achievements/auto-award';
 import { sendBookingConfirmationEmail } from '@/lib/bookings/send-booking-confirmation-email';
 import {
   BOOKING_DUPLICATE_SELECT,
@@ -570,6 +571,9 @@ export async function POST(request: NextRequest) {
     }
 
     void publishBookingsChanged(user.id);
+    void syncTourParticipationAchievements(serviceClient, user.id, tour_id).catch((err) => {
+      console.error('[booking] syncTourParticipationAchievements:', err);
+    });
     return NextResponse.json({
       success: true,
       booking,

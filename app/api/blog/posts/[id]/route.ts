@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { publishUserNotification } from '@/lib/pusher/user-notification';
+import { syncBlogPostAchievements } from '@/lib/achievements/auto-award';
 import { notFound } from 'next/navigation';
 
 // GET /api/blog/posts/[id] - Получить пост по ID
@@ -236,6 +237,12 @@ export async function PATCH(
         console.error('Ошибка отправки уведомлений о новом посте:', error);
         // Не прерываем выполнение, если уведомления не удалось отправить
       }
+    }
+
+    if (body.status === 'published' && updatedPost) {
+      void syncBlogPostAchievements(serviceClient, user.id, updatedPost.id).catch((err) => {
+        console.error('[blog post update] syncBlogPostAchievements:', err);
+      });
     }
 
     return NextResponse.json({

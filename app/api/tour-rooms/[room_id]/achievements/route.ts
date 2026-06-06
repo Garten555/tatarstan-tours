@@ -4,6 +4,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { rateLimit } from '@/lib/security/rate-limit';
 import { publishAchievementEarned } from '@/lib/pusher/user-notification';
 import { syncUserReputationFromAchievements } from '@/lib/reputation/experience';
+import { syncTourParticipationAchievements } from '@/lib/achievements/auto-award';
 
 // POST /api/tour-rooms/[room_id]/achievements - выдача достижения участнику
 export async function POST(
@@ -108,6 +109,13 @@ export async function POST(
         badge_description: achievement.badge_description,
       });
       await syncUserReputationFromAchievements(serviceClient, user_id);
+      void syncTourParticipationAchievements(
+        serviceClient,
+        user_id,
+        (room as { tour_id?: string | null }).tour_id ?? null
+      ).catch((err) => {
+        console.error('[tour-room achievement] syncTourParticipationAchievements:', err);
+      });
     }
 
     return NextResponse.json({

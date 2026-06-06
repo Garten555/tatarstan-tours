@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { publishBookingsChanged } from '@/lib/pusher/data-sync';
+import { syncTourParticipationAchievements } from '@/lib/achievements/auto-award';
 
 // PATCH - Обновление бронирования
 export async function PATCH(
@@ -191,6 +192,15 @@ export async function PATCH(
       (booking as { user_id?: string } | null)?.user_id ?? oldBooking?.user_id;
     if (bookingUserId) {
       void publishBookingsChanged(bookingUserId);
+      if (updateData.status === 'completed' && oldBooking?.status !== 'completed') {
+        void syncTourParticipationAchievements(
+          serviceClient,
+          bookingUserId,
+          oldBooking?.tour_id ?? (booking as { tour_id?: string }).tour_id
+        ).catch((err) => {
+          console.error('[admin booking] syncTourParticipationAchievements:', err);
+        });
+      }
     }
 
     return NextResponse.json({
