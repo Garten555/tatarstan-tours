@@ -3,6 +3,7 @@
 import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import TourCard from '@/components/tours/TourCard';
+import CatalogCityCombobox, { type CatalogCity } from '@/components/tours/CatalogCityCombobox';
 import Link from 'next/link';
 import { 
   ArrowLeft, 
@@ -10,14 +11,13 @@ import {
   X, 
   SlidersHorizontal,
   Loader2,
-  MapPin,
   Sparkles,
   ChevronLeft,
   ChevronRight,
   TrendingUp,
   ChevronDown,
 } from 'lucide-react';
-import { sanitizeText, escapeHtml } from '@/lib/utils/sanitize';
+import { sanitizeText } from '@/lib/utils/sanitize';
 import { parseClientSortParam } from '@/lib/tours/catalog-sort';
 
 interface Tour {
@@ -38,10 +38,7 @@ interface Tour {
   is_available: boolean;
 }
 
-interface City {
-  id: string;
-  name: string;
-}
+interface City extends CatalogCity {}
 
 const TOUR_TYPES = [
   { value: '', label: 'Все типы', icon: '🎯' },
@@ -91,8 +88,9 @@ function ToursPageContent() {
   /** Мобильная панель «все фильтры» (не перекрывает сетку постоянно — только по запросу) */
   const [filtersSheetOpen, setFiltersSheetOpen] = useState(false);
   
-  // Города для фильтра
-  const [cities, setCities] = useState<City[]>([]);
+  // Города с активными турами (только они в фильтре)
+  const [catalogCities, setCatalogCities] = useState<City[]>([]);
+  const [catalogCitiesLoading, setCatalogCitiesLoading] = useState(true);
   const [citySearch, setCitySearch] = useState('');
   const [showCityDropdown, setShowCityDropdown] = useState(false);
   const [selectedCity, setSelectedCity] = useState<City | null>(null);
@@ -145,35 +143,28 @@ function ToursPageContent() {
     }
   }, [search, tourType, category, cityId, minPrice, maxPrice, sortBy, page, router]);
 
-  // Поиск городов
+  // Города каталога (только с активными турами)
   useEffect(() => {
-    if (citySearch.length < 2) {
-      setCities([]);
-      setShowCityDropdown(false);
-      return;
-    }
-
-    const timeoutId = setTimeout(async () => {
+    let cancelled = false;
+    const load = async () => {
+      setCatalogCitiesLoading(true);
       try {
-        const response = await fetch(`/api/admin/cities?search=${encodeURIComponent(citySearch)}`);
-        if (!response.ok) {
-          throw new Error('Ошибка запроса');
-        }
+        const response = await fetch('/api/cities/catalog', { cache: 'no-store' });
         const data = await response.json();
-        const foundCities = data.cities || [];
-        setCities(foundCities);
-        if (foundCities.length > 0 || citySearch.length >= 2) {
-          setShowCityDropdown(true);
+        if (!cancelled && response.ok) {
+          setCatalogCities(data.cities || []);
         }
       } catch (error) {
-        console.error('Ошибка поиска городов:', error);
-        setCities([]);
-        setShowCityDropdown(false);
+        console.error('Ошибка загрузки городов каталога:', error);
+      } finally {
+        if (!cancelled) setCatalogCitiesLoading(false);
       }
-    }, 300);
-
-    return () => clearTimeout(timeoutId);
-  }, [citySearch]);
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Закрытие dropdown при клике вне
   useEffect(() => {
@@ -190,22 +181,17 @@ function ToursPageContent() {
     }
   }, [showCityDropdown]);
 
-  // Загрузка выбранного города из URL
+  // Город из URL после загрузки каталога
   useEffect(() => {
     const urlCityId = searchParams.get('city_id');
-    if (urlCityId && !selectedCity) {
-      fetch(`/api/admin/cities/${urlCityId}`)
-        .then(res => res.json())
-        .then(data => {
-          if (data.city) {
-            setSelectedCity(data.city);
-            setCitySearch(data.city.name);
-            setCityId(data.city.id);
-          }
-        })
-        .catch(console.error);
+    if (!urlCityId || selectedCity) return;
+    const fromCatalog = catalogCities.find((c) => c.id === urlCityId);
+    if (fromCatalog) {
+      setSelectedCity(fromCatalog);
+      setCitySearch(fromCatalog.name);
+      setCityId(fromCatalog.id);
     }
-  }, [searchParams, selectedCity]);
+  }, [searchParams, selectedCity, catalogCities]);
 
   // Загрузка туров при изменении фильтров
   useEffect(() => {
@@ -230,6 +216,14 @@ function ToursPageContent() {
     setCitySearch('');
     setPage(1);
     router.replace('/tours', { scroll: false });
+  };
+
+  const handleCitySearchChange = (value: string) => {
+    setCitySearch(value);
+    if (selectedCity && value !== selectedCity.name) {
+      setSelectedCity(null);
+      setCityId('');
+    }
   };
 
   // Выбор города
@@ -481,61 +475,19 @@ function ToursPageContent() {
                   </div>
                 </div>
 
-                <div className="relative city-search-container rounded-2xl border border-gray-200 bg-white p-4 shadow-md sm:p-5">
+                <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-md sm:p-5">
                   <p className="mb-3 text-sm font-black text-gray-900">Город</p>
-                  <div className="relative">
-                    <MapPin className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-emerald-600" />
-                    <input
-                      type="text"
-                      value={citySearch}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setCitySearch(value);
-                        if (selectedCity && value !== selectedCity.name) {
-                          setSelectedCity(null);
-                          setCityId('');
-                        }
-                        if (value.length >= 2) setShowCityDropdown(true);
-                        else setShowCityDropdown(false);
-                      }}
-                      onFocus={() => {
-                        if (citySearch.length >= 2 && cities.length > 0) setShowCityDropdown(true);
-                      }}
-                      placeholder="От 2 букв…"
-                      className="w-full rounded-xl border-2 border-gray-300 bg-gray-50 py-3 pl-10 pr-9 text-sm font-medium shadow-sm transition-all hover:bg-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                    />
-                    {selectedCity ? (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleCityClear();
-                        }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        <X className="h-5 w-5" />
-                      </button>
-                    ) : null}
-                  </div>
-                  {showCityDropdown && citySearch.length >= 2 ? (
-                    <div className="absolute z-[60] mt-2 max-h-56 w-full overflow-y-auto rounded-xl border-2 border-gray-200 bg-white shadow-xl">
-                      {cities.length > 0 ? (
-                        cities.map((city) => (
-                          <button
-                            key={city.id}
-                            type="button"
-                            onClick={() => handleCitySelect(city)}
-                            className="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-2.5 text-left text-sm font-medium last:border-b-0 hover:bg-emerald-50"
-                          >
-                            <MapPin className="h-4 w-4 shrink-0 text-emerald-600" />
-                            <span>{escapeHtml(city.name)}</span>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="px-3 py-4 text-center text-sm text-gray-500">Не найден</div>
-                      )}
-                    </div>
-                  ) : null}
+                  <CatalogCityCombobox
+                    catalogCities={catalogCities}
+                    loading={catalogCitiesLoading}
+                    citySearch={citySearch}
+                    onCitySearchChange={handleCitySearchChange}
+                    selectedCity={selectedCity}
+                    onSelect={handleCitySelect}
+                    onClear={handleCityClear}
+                    showDropdown={showCityDropdown}
+                    onShowDropdown={setShowCityDropdown}
+                  />
                 </div>
               </div>
 
@@ -798,61 +750,21 @@ function ToursPageContent() {
                 </div>
               </div>
 
-              <div className="relative city-search-container">
+              <div>
                 <p className="mb-3 text-sm font-black text-gray-900">Город</p>
-                <div className="relative">
-                  <MapPin className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-emerald-600" />
-                  <input
-                    type="text"
-                    value={citySearch}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setCitySearch(value);
-                      if (selectedCity && value !== selectedCity.name) {
-                        setSelectedCity(null);
-                        setCityId('');
-                      }
-                      if (value.length >= 2) setShowCityDropdown(true);
-                      else setShowCityDropdown(false);
-                    }}
-                    onFocus={() => {
-                      if (citySearch.length >= 2 && cities.length > 0) setShowCityDropdown(true);
-                    }}
-                    placeholder="Город…"
-                    className="w-full rounded-xl border-2 border-gray-300 py-3 pl-10 pr-9 text-sm"
-                  />
-                  {selectedCity ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCityClear();
-                      }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400"
-                    >
-                      <X className="h-5 w-5" />
-                    </button>
-                  ) : null}
-                </div>
-                {showCityDropdown && citySearch.length >= 2 ? (
-                  <div className="absolute z-[170] mt-2 max-h-52 w-full overflow-y-auto rounded-xl border-2 border-gray-200 bg-white shadow-xl">
-                    {cities.length > 0 ? (
-                      cities.map((city) => (
-                        <button
-                          key={city.id}
-                          type="button"
-                          onClick={() => handleCitySelect(city)}
-                          className="flex w-full items-center gap-2 border-b border-gray-50 px-3 py-2.5 text-left text-sm hover:bg-emerald-50"
-                        >
-                          <MapPin className="h-4 w-4 text-emerald-600" />
-                          {escapeHtml(city.name)}
-                        </button>
-                      ))
-                    ) : (
-                      <div className="px-3 py-4 text-center text-sm text-gray-500">Не найден</div>
-                    )}
-                  </div>
-                ) : null}
+                <CatalogCityCombobox
+                  catalogCities={catalogCities}
+                  loading={catalogCitiesLoading}
+                  citySearch={citySearch}
+                  onCitySearchChange={handleCitySearchChange}
+                  selectedCity={selectedCity}
+                  onSelect={handleCitySelect}
+                  onClear={handleCityClear}
+                  showDropdown={showCityDropdown}
+                  onShowDropdown={setShowCityDropdown}
+                  dropdownClassName="z-[170]"
+                  inputClassName="bg-white"
+                />
               </div>
 
               <div className="relative">
