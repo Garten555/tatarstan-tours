@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import type { TourSessionRow } from '@/lib/types/tour-session';
-import { syncSessionCurrentParticipants } from '@/lib/tour/session-participants';
+import { isSessionBookable } from '@/lib/tours/tour-public-visibility';
 import BookingForm from '@/components/booking/BookingForm';
 
 export const metadata = {
@@ -89,12 +89,11 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
     if (srowFresh) {
       sessionRow = srowFresh as TourSessionRow;
     }
-    const endS = sessionRow.end_at ? new Date(sessionRow.end_at) : null;
-    const startS = new Date(sessionRow.start_at);
-    if (endS && endS <= now) {
+    if (!isSessionBookable(sessionRow.start_at, now)) {
       redirect(`/tours/${(tour as any).slug}?error=expired`);
     }
-    if (!endS && startS <= now) {
+    const endS = sessionRow.end_at ? new Date(sessionRow.end_at) : null;
+    if (endS && endS <= now) {
       redirect(`/tours/${(tour as any).slug}?error=expired`);
     }
     const spots =
@@ -103,6 +102,10 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
       redirect(`/tours/${(tour as any).slug}?error=full`);
     }
   } else {
+    const tourStart = (tour as { start_date?: string | null }).start_date;
+    if (tourStart && !isSessionBookable(tourStart, now)) {
+      redirect(`/tours/${(tour as any).slug}?error=expired`);
+    }
     const endDate = (tour as any).end_date ? new Date((tour as any).end_date) : null;
     if (endDate && endDate <= now) {
       redirect(`/tours/${(tour as any).slug}?error=expired`);

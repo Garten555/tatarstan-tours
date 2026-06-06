@@ -149,12 +149,8 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
   tourSessions = filterUpcomingSessions(tourSessions);
 
   if (tourSessions.length === 0 && t.start_date) {
-    const now = new Date();
     const start = new Date(t.start_date);
-    const futureStart = start > now;
-    const ongoing =
-      start <= now && (!t.end_date || new Date(t.end_date) >= now);
-    if (futureStart || ongoing) {
+    if (start > new Date()) {
       tourSessions = [
         {
           id: LEGACY_TOUR_SESSION_ID,

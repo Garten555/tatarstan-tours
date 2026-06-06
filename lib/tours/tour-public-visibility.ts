@@ -48,9 +48,8 @@ export function filterUpcomingSessions<T extends { start_at: string }>(
 }
 
 /**
- * Каталог и страница тура: end_date в прошлом — скрываем.
- * Есть будущий start_date в tours — показываем (даже если в БД остались только прошлые слоты).
- * Иначе — по будущим tour_sessions или по текущему периоду тура без слотов.
+ * Каталог и страница тура: только выезды, которые ещё не начались.
+ * Тур с end_date в прошлом — скрываем.
  */
 export function isTourVisibleInPublicCatalog(
   tour: TourDates,
@@ -66,12 +65,16 @@ export function isTourVisibleInPublicCatalog(
     return realSessions.some((s) => isUpcomingSession(s.start_at, now));
   }
 
-  if (tour.start_date && new Date(tour.start_date) <= now) {
-    if (!tour.end_date) return true;
-    return new Date(tour.end_date) >= now;
+  if (tour.start_date) {
+    return isUpcomingSession(tour.start_date, now);
   }
 
-  return true;
+  return false;
+}
+
+/** Бронирование: выезд ещё не начался. */
+export function isSessionBookable(startAt: string, now: Date = new Date()): boolean {
+  return isUpcomingSession(startAt, now);
 }
 
 export type CatalogTourRow = TourDates & Pick<TourRowForDedupe, 'id'>;

@@ -16,6 +16,7 @@ import {
   buildSafeCardPaymentMeta,
   validateCardPaymentInput,
 } from '@/lib/payment/card-validation';
+import { isSessionBookable } from '@/lib/tours/tour-public-visibility';
 
 export async function POST(request: NextRequest) {
   try {
@@ -155,15 +156,14 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Слот тура не найден или недоступен' }, { status: 400 });
       }
       sessionRow = srow as TourSessionRow;
-      const endS = sessionRow.end_at ? new Date(sessionRow.end_at) : null;
-      const startS = new Date(sessionRow.start_at);
-      if (endS && endS <= now) {
+      if (!isSessionBookable(sessionRow.start_at, now)) {
         return NextResponse.json(
-          { error: 'Бронирование недоступно: выбранная дата уже прошла' },
+          { error: 'Бронирование недоступно: выезд уже начался' },
           { status: 400 }
         );
       }
-      if (!endS && startS <= now) {
+      const endS = sessionRow.end_at ? new Date(sessionRow.end_at) : null;
+      if (endS && endS <= now) {
         return NextResponse.json(
           { error: 'Бронирование недоступно: выбранная дата уже прошла' },
           { status: 400 }
@@ -209,6 +209,13 @@ export async function POST(request: NextRequest) {
         );
       }
     } else {
+      const tourStart = (tour as { start_date?: string | null }).start_date;
+      if (tourStart && !isSessionBookable(tourStart, now)) {
+        return NextResponse.json(
+          { error: 'Бронирование недоступно: тур уже начался' },
+          { status: 400 }
+        );
+      }
       const endDate = (tour as any).end_date ? new Date((tour as any).end_date) : null;
       if (endDate && endDate <= now) {
         return NextResponse.json(

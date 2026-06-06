@@ -55,15 +55,18 @@ export default function TourScheduleBooking({
   const setSelectedId = ctx?.hasSessions ? ctx.setSelectedId : setLocalSelectedId;
 
   if (validSessions.length === 0) {
-    const availableSpots = tourMaxParticipants - (tourCurrentParticipants || 0);
     return (
-      <TourBookingCard
-        price={price}
-        availableSpots={availableSpots}
-        maxParticipants={tourMaxParticipants}
-        isFullyBooked={availableSpots <= 0}
-        bookingHref={`/booking?tour=${encodeURIComponent(tourId)}`}
-      />
+      <div className="rounded-2xl border-2 border-gray-200 bg-white p-6 shadow-lg">
+        <div className="flex items-center gap-3 text-gray-700">
+          <Calendar className="h-6 w-6 shrink-0 text-gray-400" />
+          <div>
+            <p className="font-bold text-gray-900">Бронирование недоступно</p>
+            <p className="mt-1 text-sm text-gray-600">
+              Нет предстоящих выездов. Тур уже начался или все даты прошли.
+            </p>
+          </div>
+        </div>
+      </div>
     );
   }
 
