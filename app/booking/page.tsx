@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import type { TourSessionRow } from '@/lib/types/tour-session';
 import { isSessionBookable } from '@/lib/tours/tour-public-visibility';
+import { syncSessionCurrentParticipants } from '@/lib/tour/session-participants';
 import BookingForm from '@/components/booking/BookingForm';
 
 export const metadata = {
