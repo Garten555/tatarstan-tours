@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import PublicProfileLayout from '@/components/profile/PublicProfileLayout';
 import { mergeLatestActivityTimestamps } from '@/lib/utils/presence';
-import { countUserParticipatedTours } from '@/lib/passport/user-tour-stats';
+import { countUserParticipatedTours, fetchUserParticipatedTours } from '@/lib/passport/user-tour-stats';
 import { syncUserReputationFromAchievements } from '@/lib/reputation/experience';
 
 interface PublicProfilePageProps {
@@ -511,9 +511,10 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
       .limit(6) : Promise.resolve({ data: [], error: null }),
   ]);
 
-  const [reputation, participatedToursCount] = await Promise.all([
+  const [reputation, participatedToursCount, participatedTours] = await Promise.all([
     syncUserReputationFromAchievements(serviceClient, profileData.id),
     countUserParticipatedTours(serviceClient, profileData.id),
+    fetchUserParticipatedTours(serviceClient, profileData.id),
   ]);
   profileData.reputation_score = reputation.reputation_score;
   profileData.status_level = reputation.status_level;
@@ -538,7 +539,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
     (Array.isArray(isFollowingCheckResult.data) ? isFollowingCheckResult.data.length > 0 : true);
   // Все туры (подтвержденные и завершенные) для блога
   const allToursForBlog = (toursWithLocationsResult?.data || []).filter((b: any) => b.tour);
-  const completedTours = allToursForBlog.filter((b: any) => b.status === 'completed');
+  const completedTours = participatedTours;
   const upcomingTours = allToursForBlog.filter((b: any) => b.status === 'confirmed');
   
   // Галерея пользователя
@@ -639,9 +640,9 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
   
   const locations = Array.from(locationsMap.values()).sort((a, b) => b.visit_count - a.visit_count).slice(0, 10);
 
-  // Для админа показываем максимальный уровень, для остальных - их реальный уровень
-  const displayStatusLevel = isAdmin ? 4 : profileData.status_level;
-  const statusLevel = STATUS_LEVELS[displayStatusLevel as keyof typeof STATUS_LEVELS] || STATUS_LEVELS[1];
+  // Уровень и бейдж — только по реальному опыту (достижения), без привилегий админа
+  const statusLevel =
+    STATUS_LEVELS[profileData.status_level as keyof typeof STATUS_LEVELS] || STATUS_LEVELS[1];
 
   // Проверяем, забанен ли пользователь
   // Проверяем is_banned и наличие banned_at как более надежный индикатор

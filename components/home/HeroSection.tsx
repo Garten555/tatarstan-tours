@@ -1,17 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import Pusher from 'pusher-js';
 import { Button } from '@/components/ui/Button';
 import type { HeroPopularTour } from '@/lib/tours/active-catalog-listing';
-import {
-  PUBLIC_CATALOG_CHANNEL,
-  PUBLIC_CATALOG_EVENT,
-} from '@/lib/pusher/channels';
-import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
+import { usePublicCatalogRefresh } from '@/lib/hooks/use-public-catalog-refresh';
 import { ArrowRight, MapPin, Calendar, Users } from 'lucide-react';
 
 type PopularTour = HeroPopularTour;
@@ -67,15 +62,18 @@ function GlassTourCard({ tour, linked }: { tour: PopularTour; linked: boolean })
 export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | null }) {
   const router = useRouter();
   const [items, setItems] = useState<PopularTour[]>(() => normalizeHeroItems(popularTours));
-  const pusherRef = useRef<Pusher | null>(null);
-  const channelRef = useRef<ReturnType<Pusher['subscribe']> | null>(null);
+  const [nextVisibilityChangeAt, setNextVisibilityChangeAt] = useState<string | null>(null);
 
   const refetchHeroTours = useCallback(async () => {
     try {
       const res = await fetch('/api/tours/hero-nearest', { cache: 'no-store' });
       if (!res.ok) return;
-      const data = (await res.json()) as { tours?: PopularTour[] };
+      const data = (await res.json()) as {
+        tours?: PopularTour[];
+        nextVisibilityChangeAt?: string | null;
+      };
       setItems(normalizeHeroItems(data.tours));
+      setNextVisibilityChangeAt(data.nextVisibilityChangeAt ?? null);
       router.refresh();
     } catch {
       /* ignore */
@@ -86,25 +84,12 @@ export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | n
     setItems(normalizeHeroItems(popularTours));
   }, [popularTours]);
 
-  useEffect(() => {
-    const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
-    if (!key) return;
+  const watchStartDates = useMemo(
+    () => items.map((tour) => tour.startDateIso),
+    [items]
+  );
 
-    const pusher = new Pusher(key, {
-      cluster: process.env.NEXT_PUBLIC_PUSHER_CLUSTER || 'eu',
-    });
-    pusherRef.current = pusher;
-
-    const channel = pusher.subscribe(PUBLIC_CATALOG_CHANNEL);
-    channelRef.current = channel;
-    channel.bind(PUBLIC_CATALOG_EVENT, refetchHeroTours);
-
-    return () => {
-      disconnectPusherSafely(pusherRef.current, [channelRef.current]);
-      pusherRef.current = null;
-      channelRef.current = null;
-    };
-  }, [refetchHeroTours]);
+  usePublicCatalogRefresh(refetchHeroTours, watchStartDates, nextVisibilityChangeAt);
 
   const activeTour = items[0];
 

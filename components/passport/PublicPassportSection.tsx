@@ -182,7 +182,7 @@ export default function PublicPassportSection({
                   Путешествия
                 </h2>
                 <p className="text-xs text-gray-600">
-                  Завершенные туры и поездки
+                  Туры, в которых вы участвовали
                 </p>
               </div>
               {completedTours.length > 0 && (
@@ -274,8 +274,8 @@ export default function PublicPassportSection({
             ) : (
               <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
                 <Compass className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                <p className="text-xl font-black mb-2 text-gray-700">Пока нет завершенных туров</p>
-                <p className="text-gray-600">Участвуйте в турах, чтобы они появились здесь!</p>
+                <p className="text-xl font-black mb-2 text-gray-700">Пока нет туров</p>
+                <p className="text-gray-600">Участвуйте в турах — они появятся здесь после бронирования или достижения</p>
               </div>
             )}
           </div>

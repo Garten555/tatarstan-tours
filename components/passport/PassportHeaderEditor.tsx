@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import Image from 'next/image';
 import { Upload, X, Loader2 } from 'lucide-react';
+import { LevelProgressBar } from '@/components/reputation/LevelProgressBar';
 
 interface PassportHeaderEditorProps {
   fullName: string;
@@ -214,6 +215,8 @@ export default function PassportHeaderEditor({
                   </div>
                 </div>
               </div>
+
+              <LevelProgressBar reputationScore={reputationScore} className="max-w-xl" />
             </div>
           </div>
         </div>

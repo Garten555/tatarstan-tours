@@ -77,6 +77,38 @@ export function isSessionBookable(startAt: string, now: Date = new Date()): bool
   return isUpcomingSession(startAt, now);
 }
 
+/** Ближайший момент, когда тур исчезнет из публичного каталога (старт выезда). */
+export function computeNextCatalogVisibilityChangeAt(
+  tours: CatalogTourRow[],
+  sessionsByTourId: Map<string, SessionRow[]>,
+  now: Date = new Date()
+): string | null {
+  const nowMs = now.getTime();
+  let minMs: number | null = null;
+
+  for (const tour of tours) {
+    const sessions = sessionsByTourId.get(tour.id) ?? [];
+    if (!isTourVisibleInPublicCatalog(tour, sessions, now)) continue;
+
+    const realSessions = sessions.filter((s) => s.id !== LEGACY_TOUR_SESSION_ID);
+    for (const session of realSessions) {
+      const t = new Date(session.start_at).getTime();
+      if (Number.isFinite(t) && t > nowMs) {
+        minMs = minMs === null ? t : Math.min(minMs, t);
+      }
+    }
+
+    if (tour.start_date) {
+      const t = new Date(tour.start_date).getTime();
+      if (Number.isFinite(t) && t > nowMs) {
+        minMs = minMs === null ? t : Math.min(minMs, t);
+      }
+    }
+  }
+
+  return minMs !== null ? new Date(minMs).toISOString() : null;
+}
+
 export type CatalogTourRow = TourDates & Pick<TourRowForDedupe, 'id'>;
 
 /** Оставляет в каталоге только туры с актуальными выездами (если слоты есть в БД). */

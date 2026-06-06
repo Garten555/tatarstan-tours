@@ -1,15 +1,56 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { ArrowRight, Sparkles } from 'lucide-react';
+
 import type { DisplayableCatalogTourRow } from '@/lib/tours/active-catalog-listing';
 import TourCard from '@/components/tours/TourCard';
 import { FeaturedToursCountBadge } from '@/components/home/FeaturedToursCountBadge';
-import Link from 'next/link';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import { usePublicCatalogRefresh } from '@/lib/hooks/use-public-catalog-refresh';
 
 type FeaturedToursProps = {
   tours: DisplayableCatalogTourRow[];
   totalAvailableTours: number;
 };
 
-export function FeaturedTours({ tours, totalAvailableTours }: FeaturedToursProps) {
+export function FeaturedTours({ tours: initialTours, totalAvailableTours: initialTotal }: FeaturedToursProps) {
+  const router = useRouter();
+  const [tours, setTours] = useState(initialTours);
+  const [totalAvailableTours, setTotalAvailableTours] = useState(initialTotal);
+  const [nextVisibilityChangeAt, setNextVisibilityChangeAt] = useState<string | null>(null);
+
+  useEffect(() => {
+    setTours(initialTours);
+    setTotalAvailableTours(initialTotal);
+  }, [initialTours, initialTotal]);
+
+  const refetchFeatured = useCallback(async () => {
+    try {
+      const res = await fetch('/api/tours/home-featured', { cache: 'no-store' });
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        tours?: DisplayableCatalogTourRow[];
+        totalAvailableTours?: number;
+        nextVisibilityChangeAt?: string | null;
+      };
+      setTours(data.tours ?? []);
+      setTotalAvailableTours(data.totalAvailableTours ?? 0);
+      setNextVisibilityChangeAt(data.nextVisibilityChangeAt ?? null);
+      router.refresh();
+    } catch {
+      /* ignore */
+    }
+  }, [router]);
+
+  const watchStartDates = useMemo(
+    () => tours.map((tour) => tour.start_date),
+    [tours]
+  );
+
+  usePublicCatalogRefresh(refetchFeatured, watchStartDates, nextVisibilityChangeAt);
+
   if (tours.length === 0) {
     return (
       <section className="py-16 md:py-20 relative overflow-hidden bg-white">

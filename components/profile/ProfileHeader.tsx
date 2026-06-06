@@ -21,6 +21,7 @@ import { ProfileSocialActions } from './ProfileSocialActions';
 import BanUserButton from '@/components/admin/BanUserButton';
 import UploadProgressBar from '@/components/common/UploadProgressBar';
 import { uploadFormDataWithProgress } from '@/lib/http/upload-form-progress';
+import { LevelProgressBar } from '@/components/reputation/LevelProgressBar';
 
 interface ProfileHeaderProps {
   profileData: {
@@ -360,8 +361,8 @@ export default function ProfileHeader({
                 </div>
               )}
             </div>
-            {/* Бейдж уровня */}
-            {!isBanned && !isAdmin && (
+            {/* Бейдж уровня (по опыту, для всех включая админов) */}
+            {!isBanned && (
               <div className={`absolute -bottom-2 -right-2 ${statusLevel.color} text-white rounded-full w-12 h-12 md:w-14 md:h-14 flex items-center justify-center text-xl md:text-2xl shadow-xl border-4 border-white`}>
                 {statusLevel.icon}
               </div>
@@ -500,6 +501,13 @@ export default function ProfileHeader({
                   </div>
                 </div>
               </div>
+            )}
+
+            {!isBanned && (
+              <LevelProgressBar
+                reputationScore={profileData.reputation_score || 0}
+                className="mb-6 max-w-xl"
+              />
             )}
 
             {/* Друзья и подписчики */}

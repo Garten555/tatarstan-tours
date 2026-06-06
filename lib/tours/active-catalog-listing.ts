@@ -5,7 +5,11 @@ import {
   dedupeTourRowsForCatalog,
   type TourRowForDedupe,
 } from '@/lib/tours/listing-dedupe';
-import { filterCatalogToursByUpcomingSessions } from '@/lib/tours/tour-public-visibility';
+import {
+  computeNextCatalogVisibilityChangeAt,
+  filterCatalogToursByUpcomingSessions,
+  isTourVisibleInPublicCatalog,
+} from '@/lib/tours/tour-public-visibility';
 
 export const FEATURED_HOME_TOUR_LIMIT = 3;
 
@@ -57,32 +61,77 @@ function isDisplayableCatalogTour(
   );
 }
 
+export type ActiveCatalogSnapshot = {
+  rows: ActiveCatalogTourRow[];
+  nextVisibilityChangeAt: string | null;
+};
+
 /** Активные туры каталога: как в /api/tours/filter до сортировки и пагинации. */
 export async function fetchActiveCatalogTourRows(
   supabase: SupabaseClient
 ): Promise<ActiveCatalogTourRow[]> {
-  const now = new Date().toISOString();
-  const currentTime = new Date();
+  const snapshot = await fetchActiveCatalogSnapshot(supabase);
+  return snapshot.rows;
+}
+
+export async function fetchActiveCatalogSnapshot(
+  supabase: SupabaseClient
+): Promise<ActiveCatalogSnapshot> {
+  const now = new Date();
+  const nowIso = now.toISOString();
 
   const { data, error } = await supabase
     .from('tours')
     .select(CATALOG_TOUR_SELECT)
     .eq('status', 'active')
-    .or(`end_date.is.null,end_date.gte.${now}`)
+    .or(`end_date.is.null,end_date.gte.${nowIso}`)
     .limit(ACTIVE_CATALOG_QUERY_LIMIT);
 
   if (error) {
-    console.error('fetchActiveCatalogTourRows:', error);
-    return [];
+    console.error('fetchActiveCatalogSnapshot:', error);
+    return { rows: [], nextVisibilityChangeAt: null };
   }
 
   const active = (data ?? []).filter((tour) => {
     if (!tour.end_date) return true;
-    return new Date(tour.end_date) >= currentTime;
+    return new Date(tour.end_date) >= now;
   }) as ActiveCatalogTourRow[];
 
-  const bookable = await filterCatalogToursByUpcomingSessions(supabase, active);
-  return dedupeTourRowsForCatalog(bookable);
+  if (active.length === 0) {
+    return { rows: [], nextVisibilityChangeAt: null };
+  }
+
+  const tourIds = active.map((t) => t.id);
+  const { data: sessionRows, error: sessionError } = await supabase
+    .from('tour_sessions')
+    .select('id, tour_id, start_at')
+    .eq('status', 'active')
+    .in('tour_id', tourIds);
+
+  if (sessionError) {
+    console.error('fetchActiveCatalogSnapshot sessions:', sessionError);
+    const bookable = await filterCatalogToursByUpcomingSessions(supabase, active);
+    return { rows: dedupeTourRowsForCatalog(bookable), nextVisibilityChangeAt: null };
+  }
+
+  const sessionsByTourId = new Map<string, { id: string; start_at: string }[]>();
+  for (const row of sessionRows ?? []) {
+    const list = sessionsByTourId.get(row.tour_id) ?? [];
+    list.push({ id: row.id, start_at: row.start_at });
+    sessionsByTourId.set(row.tour_id, list);
+  }
+
+  const bookable = active.filter((tour) =>
+    isTourVisibleInPublicCatalog(tour, sessionsByTourId.get(tour.id) ?? [], now)
+  );
+  const rows = dedupeTourRowsForCatalog(bookable);
+  const nextVisibilityChangeAt = computeNextCatalogVisibilityChangeAt(
+    bookable,
+    sessionsByTourId,
+    now
+  );
+
+  return { rows, nextVisibilityChangeAt };
 }
 
 export function pickHomeFeaturedTours(
@@ -107,6 +156,8 @@ export type HeroPopularTour = {
   price?: number | null;
   durationLabel?: string | null;
   startDateLabel?: string | null;
+  /** ISO для клиентского таймера скрытия после старта выезда. */
+  startDateIso?: string | null;
 };
 
 export function toHeroPopularTour(
@@ -135,6 +186,7 @@ export function toHeroPopularTour(
     startDateLabel: start
       ? new Date(start).toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' })
       : null,
+    startDateIso: start || null,
   };
 }
 

@@ -47,6 +47,55 @@ export function levelFromReputation(score: number): number {
   return 1;
 }
 
+const LEVEL_MIN_XP: Record<number, number> = {
+  1: 0,
+  2: 100,
+  3: 500,
+  4: 1500,
+};
+
+export type LevelProgress = {
+  level: number;
+  levelName: string;
+  currentLevelMin: number;
+  nextLevelMin: number | null;
+  progressPercent: number;
+  xpToNextLevel: number | null;
+};
+
+/** Прогресс до следующего уровня по reputation_score. */
+export function getLevelProgress(score: number): LevelProgress {
+  const level = levelFromReputation(score);
+  const levelName = STATUS_LEVEL_NAMES[level] ?? STATUS_LEVEL_NAMES[1];
+  const currentLevelMin = LEVEL_MIN_XP[level] ?? 0;
+  const nextLevelMin = level < 4 ? LEVEL_MIN_XP[level + 1] : null;
+
+  if (nextLevelMin == null) {
+    return {
+      level,
+      levelName,
+      currentLevelMin,
+      nextLevelMin: null,
+      progressPercent: 100,
+      xpToNextLevel: null,
+    };
+  }
+
+  const range = nextLevelMin - currentLevelMin;
+  const progress = Math.max(0, score - currentLevelMin);
+  const progressPercent = Math.min(100, Math.round((progress / range) * 100));
+  const xpToNextLevel = Math.max(0, nextLevelMin - score);
+
+  return {
+    level,
+    levelName,
+    currentLevelMin,
+    nextLevelMin,
+    progressPercent,
+    xpToNextLevel,
+  };
+}
+
 export function totalXpFromBadgeTypes(badgeTypes: string[]): number {
   return badgeTypes.reduce((sum, badgeType) => sum + getAchievementXp(badgeType), 0);
 }

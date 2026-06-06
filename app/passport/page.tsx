@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import PassportTabs from '@/components/passport/PassportTabs';
 import PassportHeaderEditor from '@/components/passport/PassportHeaderEditor';
-import { countUserParticipatedTours } from '@/lib/passport/user-tour-stats';
+import { countUserParticipatedTours, fetchUserParticipatedTours } from '@/lib/passport/user-tour-stats';
 import { syncUserReputationFromAchievements, STATUS_LEVEL_NAMES } from '@/lib/reputation/experience';
 
 const ACHIEVEMENT_STYLES: Record<
@@ -73,7 +73,6 @@ export default async function PassportPage() {
   // Получаем данные для паспорта
   const [
     achievementsResult,
-    completedToursResult,
     locationsResult,
   ] = await Promise.all([
     // Достижения
@@ -94,25 +93,6 @@ export default async function PassportPage() {
       .eq('user_id', user.id)
       .order('unlock_date', { ascending: false })
       .limit(50),
-    
-    // Завершенные туры
-    serviceClient
-      .from('bookings')
-      .select(`
-        id,
-        tour:tours!bookings_tour_id_fkey(
-          id,
-          title,
-          slug,
-          start_date,
-          cover_image,
-          city:cities(name),
-          yandex_map_url
-        )
-      `)
-      .eq('user_id', user.id)
-      .eq('status', 'completed')
-      .order('created_at', { ascending: false }),
     
     // Локации из дневников и туров
     Promise.all([
@@ -187,7 +167,6 @@ export default async function PassportPage() {
   ]);
 
   const achievements = achievementsResult.data || [];
-  const completedTours = completedToursResult.data || [];
   const locations = Array.isArray(locationsResult) ? locationsResult : [];
   const settingKey = `profile_cover:${user.id}`;
   const { data: coverSetting } = await serviceClient
@@ -208,9 +187,10 @@ export default async function PassportPage() {
     ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
     : 'Путешественник';
 
-  const [reputation, participatedToursCount] = await Promise.all([
+  const [reputation, participatedToursCount, participatedTours] = await Promise.all([
     syncUserReputationFromAchievements(serviceClient, user.id),
     countUserParticipatedTours(serviceClient, user.id),
+    fetchUserParticipatedTours(serviceClient, user.id),
   ]);
 
   return (
@@ -231,7 +211,7 @@ export default async function PassportPage() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <PassportTabs
           achievements={achievements}
-          completedTours={completedTours}
+          completedTours={participatedTours}
           locations={locations}
           reputationScore={reputation.reputation_score}
           statusLevel={reputation.status_level}
