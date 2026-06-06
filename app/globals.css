@@ -3,6 +3,31 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* Единая высота fixed-шапки — Header.tsx и отступы страниц */
+  --site-header-height: 3.5rem;
+  --hero-safe-top: calc(var(--site-header-height) + 0.75rem);
+  --scroll-anchor-offset: calc(var(--site-header-height) + 0.5rem);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --site-header-height: 4rem;
+    --hero-safe-top: calc(var(--site-header-height) + 1rem);
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --site-header-height: 4.5rem;
+    --hero-safe-top: calc(var(--site-header-height) + 1.125rem);
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --site-header-height: 5rem;
+    --hero-safe-top: calc(var(--site-header-height) + 1.25rem);
+  }
 }
 
 @theme inline {
@@ -152,6 +177,8 @@ html {
   overflow-x: clip;
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  scroll-padding-top: var(--scroll-anchor-offset);
+  font-size: 100%;
 }
 
 body {
@@ -1079,11 +1106,29 @@ body {
   background: #059669;
 }
 
-/* Main Content */
+/* Main Content — единый отступ под fixed-шапку (кроме full-bleed hero на главной) */
 .main-with-sidebar {
   margin-top: 0;
   padding: 0;
-  min-height: calc(100vh - 4.5rem);
+  min-height: 100svh;
+  box-sizing: border-box;
+}
+
+.main-with-sidebar:not(:has(> .hero-home)) {
+  padding-top: var(--site-header-height);
+}
+
+/* Утилиты для страниц вне main-shell или якорей */
+.pt-site-header {
+  padding-top: var(--site-header-height);
+}
+
+.scroll-mt-site-header {
+  scroll-margin-top: var(--scroll-anchor-offset);
+}
+
+.min-h-below-header {
+  min-height: calc(100svh - var(--site-header-height));
 }
 
 /* Полноэкранная комната тура: без отступов под fixed-панель */
@@ -1096,7 +1141,12 @@ body {
 @media (min-width: 1024px) {
   .main-with-sidebar {
     margin-top: 0;
-    padding: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .main-with-sidebar:not(:has(> .hero-home)) {
+    padding-top: var(--site-header-height);
   }
 }
 
@@ -1142,19 +1192,6 @@ body {
   textarea,
   select {
     font-size: 16px !important;
-  }
-}
-
-/* Плотный режим: масштаб 125% Windows / узкий ноутбук (641px+, не телефоны) */
-@media (max-width: 1536px) and (min-width: 641px) {
-  html {
-    font-size: 93.75%;
-  }
-}
-
-@media (max-width: 1280px) and (min-width: 641px) {
-  html {
-    font-size: 87.5%;
   }
 }
 

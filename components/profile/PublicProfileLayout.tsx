@@ -58,8 +58,8 @@ export default function PublicProfileLayout({
   achievementStyles,
 }: PublicProfileLayoutProps) {
   return (
-    <div className="min-h-screen bg-slate-100 pt-14 sm:pt-16 md:pt-[4.5rem] xl:pt-20 overflow-x-clip">
-      <div id="profile" className="scroll-mt-20">
+    <div className="min-h-screen bg-slate-100 overflow-x-clip">
+      <div id="profile" className="scroll-mt-site-header">
         <ProfileHeader
           profileData={profileData}
           profileCoverUrl={profileCoverUrl}
@@ -234,13 +234,15 @@ export default function PublicProfileLayout({
           </aside>
         </div>
 
-        <div id="passport" className="scroll-mt-20 mt-4 sm:mt-5 rounded-xl sm:rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div id="passport" className="scroll-mt-site-header mt-4 sm:mt-5 rounded-xl sm:rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           {(isBanned || profileData.is_banned) ? null : (
             <PublicPassportSection
               achievements={recentAchievements}
               completedTours={completedTours}
               locations={locations}
               reputationScore={profileData.reputation_score || 0}
+              statusLevel={profileData.status_level || 1}
+              statusLevelName={statusLevel.name}
               achievementStyles={achievementStyles}
               isOwner={currentUser?.id === profileData.id}
               username={profileData.username}

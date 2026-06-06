@@ -22,6 +22,8 @@ interface PublicPassportSectionProps {
   completedTours: any[];
   locations: any[];
   reputationScore: number;
+  statusLevel: number;
+  statusLevelName: string;
   achievementStyles: Record<string, { icon: string; bg: string; border: string }>;
   isOwner: boolean;
   username?: string | null;
@@ -32,6 +34,8 @@ export default function PublicPassportSection({
   completedTours,
   locations,
   reputationScore,
+  statusLevel,
+  statusLevelName,
   achievementStyles,
   isOwner,
   username,
@@ -128,14 +132,16 @@ export default function PublicPassportSection({
                   Награды за участие в турах и активность
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {isOwner && <AchievementsRefreshButton />}
-                {isOwner && (
-                  <div className="px-4 py-2 bg-emerald-50 rounded-lg border border-emerald-200">
-                    <div className="text-xs text-emerald-700 font-medium mb-1">Очки опыта</div>
-                    <div className="text-xl font-black text-emerald-700">{reputationScore}</div>
-                  </div>
-                )}
+                <div className="px-4 py-2 bg-emerald-50 rounded-lg border border-emerald-200">
+                  <div className="text-xs text-emerald-700 font-medium mb-1">Опыт</div>
+                  <div className="text-xl font-black text-emerald-700">{reputationScore}</div>
+                </div>
+                <div className="px-4 py-2 bg-blue-50 rounded-lg border border-blue-200">
+                  <div className="text-xs text-blue-700 font-medium mb-1">Уровень {statusLevel}</div>
+                  <div className="text-base font-black text-blue-900">{statusLevelName}</div>
+                </div>
               </div>
             </div>
 

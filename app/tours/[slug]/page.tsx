@@ -303,7 +303,7 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
   const fallbackDurationLabel = tourDurationLabel(t.start_date, t.end_date ?? null);
 
   return (
-    <div className="min-h-screen bg-gray-50 relative w-full pt-14 sm:pt-16 md:pt-[4.5rem] lg:pt-20">
+    <div className="min-h-screen bg-gray-50 relative w-full">
       <div className="relative z-10 container mx-auto px-3 sm:px-4 md:px-6 lg:px-8 pb-6 sm:pb-8 lg:pb-12 max-w-7xl w-full overflow-x-hidden">
         {/* Кнопка назад: отступ сверху под fixed Header, стиль как в каталоге туров */}
         <Link

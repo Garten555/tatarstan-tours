@@ -3,6 +3,8 @@ import { notFound } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import PublicProfileLayout from '@/components/profile/PublicProfileLayout';
 import { mergeLatestActivityTimestamps } from '@/lib/utils/presence';
+import { countUserParticipatedTours } from '@/lib/passport/user-tour-stats';
+import { syncUserReputationFromAchievements } from '@/lib/reputation/experience';
 
 interface PublicProfilePageProps {
   params: Promise<{ username: string }>;
@@ -509,12 +511,19 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
       .limit(6) : Promise.resolve({ data: [], error: null }),
   ]);
 
+  const [reputation, participatedToursCount] = await Promise.all([
+    syncUserReputationFromAchievements(serviceClient, profileData.id),
+    countUserParticipatedTours(serviceClient, profileData.id),
+  ]);
+  profileData.reputation_score = reputation.reputation_score;
+  profileData.status_level = reputation.status_level;
+
   const stats = {
     diaries_count: diariesCountResult.count || 0, // Оставляем для обратной совместимости
     blog_posts_count: diariesCountResult.count || 0, // Новое поле
     achievements_count: achievementsCountResult.count || 0,
     reviews_count: reviewsCountResult.count || 0,
-    completed_tours_count: bookingsCountResult.count || 0,
+    completed_tours_count: participatedToursCount,
     followers_count: followersCountResult.count || 0,
     following_count: followingCountResult.count || 0,
   };

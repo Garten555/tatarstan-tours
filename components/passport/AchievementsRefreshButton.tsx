@@ -20,6 +20,8 @@ export default function AchievementsRefreshButton() {
       }
       if ((data.awarded || 0) > 0) {
         toast.success(`Добавлено достижений: ${data.awarded}`);
+      } else if (typeof data.reputation_score === 'number') {
+        toast.success(`Опыт обновлён: ${data.reputation_score}`);
       } else {
         toast('Новых достижений нет', { icon: 'ℹ️' });
       }

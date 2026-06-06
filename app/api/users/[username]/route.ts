@@ -1,6 +1,7 @@
 // API для получения публичного профиля по username
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { countUserParticipatedTours } from '@/lib/passport/user-tour-stats';
 
 // GET /api/users/[username] - Получить публичный профиль
 export async function GET(
@@ -134,6 +135,8 @@ export async function GET(
       isFollowing = !!follow;
     }
 
+    const participatedToursCount = await countUserParticipatedTours(serviceClient, profile.id);
+
     return NextResponse.json({
       success: true,
       profile: {
@@ -142,7 +145,7 @@ export async function GET(
           diaries_count: diariesResult.count || 0,
           achievements_count: achievementsResult.count || 0,
           reviews_count: reviewsResult.count || 0,
-          completed_tours_count: bookingsResult.count || 0,
+          completed_tours_count: participatedToursCount,
           followers_count: followersResult.count || 0,
           following_count: followingResult.count || 0,
         },

@@ -57,7 +57,7 @@ export function Header() {
       }`}
     >
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-5 lg:px-6">
-        <div className="flex items-center justify-between h-14 sm:h-16 md:h-18 lg:h-20">
+        <div className="flex h-[var(--site-header-height)] items-center justify-between">
           {/* Левый блок: Логотип */}
           <Link 
             href="/" 

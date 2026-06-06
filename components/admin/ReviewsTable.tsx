@@ -280,12 +280,6 @@ export default function ReviewsTable({
                 </td>
                 <td className="px-6 py-4 text-base">
                   <div className="flex items-center gap-2">
-                    <Link
-                      href={`/admin/reviews/${review.id}`}
-                      className="inline-flex items-center gap-2 px-4 py-2.5 border-2 border-gray-200 rounded-xl text-base font-bold text-gray-700 hover:bg-gray-50 transition-all duration-200"
-                    >
-                      Подробнее
-                    </Link>
                     {!review.is_approved && (
                       <button
                         onClick={() => handleApprove(review.id)}

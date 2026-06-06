@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import PassportTabs from '@/components/passport/PassportTabs';
 import PassportHeaderEditor from '@/components/passport/PassportHeaderEditor';
+import { countUserParticipatedTours } from '@/lib/passport/user-tour-stats';
+import { syncUserReputationFromAchievements, STATUS_LEVEL_NAMES } from '@/lib/reputation/experience';
 
 const ACHIEVEMENT_STYLES: Record<
   string,
@@ -206,6 +208,11 @@ export default async function PassportPage() {
     ? `${profile.first_name || ''} ${profile.last_name || ''}`.trim()
     : 'Путешественник';
 
+  const [reputation, participatedToursCount] = await Promise.all([
+    syncUserReputationFromAchievements(serviceClient, user.id),
+    countUserParticipatedTours(serviceClient, user.id),
+  ]);
+
   return (
     <div className="min-h-screen bg-gray-100">
       <PassportHeaderEditor
@@ -213,9 +220,11 @@ export default async function PassportPage() {
         initialAvatarUrl={profile.avatar_url}
         initialCoverUrl={profileCoverUrl}
         achievementsCount={achievements.length}
-        completedToursCount={completedTours.length}
+        completedToursCount={participatedToursCount}
         locationsCount={locations.length}
-        reputationScore={profile.reputation_score || 0}
+        reputationScore={reputation.reputation_score}
+        statusLevel={reputation.status_level}
+        statusLevelName={STATUS_LEVEL_NAMES[reputation.status_level] ?? STATUS_LEVEL_NAMES[1]}
       />
 
       {/* Основной контент с табами */}
@@ -224,7 +233,9 @@ export default async function PassportPage() {
           achievements={achievements}
           completedTours={completedTours}
           locations={locations}
-          reputationScore={profile.reputation_score || 0}
+          reputationScore={reputation.reputation_score}
+          statusLevel={reputation.status_level}
+          statusLevelName={STATUS_LEVEL_NAMES[reputation.status_level] ?? STATUS_LEVEL_NAMES[1]}
           achievementStyles={ACHIEVEMENT_STYLES}
           username={profile.username}
         />

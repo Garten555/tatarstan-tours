@@ -42,7 +42,7 @@ export default function AchievementCard({ achievement, achievementStyle }: Achie
       <button
         onClick={() => setIsModalOpen(true)}
         className={`text-center p-5 bg-gradient-to-br ${achievementStyle.bg} rounded-2xl border-2 ${achievementStyle.border} hover:shadow-lg transition-all duration-200 transform hover:-translate-y-1 cursor-pointer w-full`}
-        title="Нажмите, чтобы узнать больше"
+        title="Открыть достижение"
       >
         {achievement.badge_icon_url ? (
           <Image
@@ -50,11 +50,13 @@ export default function AchievementCard({ achievement, achievementStyle }: Achie
             alt={escapeHtml(achievement.badge_name)}
             width={72}
             height={72}
-            className="mx-auto mb-3"
+            className="mx-auto mb-3 h-[4.5rem] w-[4.5rem] object-contain"
           />
         ) : (
-          <div className="w-18 h-18 bg-white/90 rounded-full flex items-center justify-center text-3xl mx-auto mb-3 border-2 border-white shadow-md">
-            {achievementStyle.icon}
+          <div className="mx-auto mb-3 flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-full border-2 border-white bg-white/90 shadow-md">
+            <span className="select-none text-[2.75rem] leading-none" role="img" aria-hidden>
+              {achievementStyle.icon}
+            </span>
           </div>
         )}
         <div className="text-base font-bold text-gray-900">

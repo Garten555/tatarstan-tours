@@ -43,7 +43,8 @@ export async function GET(request: NextRequest) {
           last_name,
           avatar_url,
           bio,
-          status_level
+          status_level,
+          reputation_score
         ),
         user:profiles!user_friends_user_id_fkey(
           id,
@@ -53,7 +54,8 @@ export async function GET(request: NextRequest) {
           last_name,
           avatar_url,
           bio,
-          status_level
+          status_level,
+          reputation_score
         )
       `)
       .or(`user_id.eq.${user.id},friend_id.eq.${user.id}`)

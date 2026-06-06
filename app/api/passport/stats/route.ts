@@ -1,6 +1,7 @@
 // API для получения статистики туристического паспорта
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { countUserParticipatedTours } from '@/lib/passport/user-tour-stats';
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,7 +21,6 @@ export async function GET(request: NextRequest) {
       diariesCount,
       achievementsCount,
       reviewsCount,
-      bookingsCount,
       followersCount,
       followingCount,
       locationsCount,
@@ -45,13 +45,6 @@ export async function GET(request: NextRequest) {
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id)
         .eq('is_published', true),
-      
-      // Завершенные туры
-      serviceClient
-        .from('bookings')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('status', 'completed'),
       
       // Подписчики
       serviceClient
@@ -93,13 +86,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const participatedToursCount = await countUserParticipatedTours(serviceClient, user.id);
+
     return NextResponse.json({
       success: true,
       stats: {
         diaries_count: diariesCount.count || 0,
         achievements_count: achievementsCount.count || 0,
         reviews_count: reviewsCount.count || 0,
-        completed_tours_count: bookingsCount.count || 0,
+        completed_tours_count: participatedToursCount,
         followers_count: followersCount.count || 0,
         following_count: followingCount.count || 0,
         locations_visited: locationsSet.size,

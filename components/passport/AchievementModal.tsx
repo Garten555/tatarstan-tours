@@ -169,17 +169,24 @@ export default function AchievementModal({
             {/* Иконка достижения - сверху */}
             <div className="flex justify-center mb-6">
               {achievement.badge_icon_url ? (
-                <div className="relative w-36 h-36 lg:w-44 lg:h-44">
+                <div className="relative h-28 w-28 lg:h-32 lg:w-32 shrink-0">
                   <Image
                     src={achievement.badge_icon_url}
                     alt={escapeHtml(achievement.badge_name)}
                     fill
-                    className="object-contain drop-shadow-2xl"
+                    sizes="128px"
+                    className="object-contain drop-shadow-2xl scale-110"
                   />
                 </div>
               ) : (
-                <div className={`w-36 h-36 lg:w-44 lg:h-44 bg-white/95 rounded-full flex items-center justify-center text-7xl border-4 border-white shadow-2xl`}>
-                  {achievementStyle.icon}
+                <div className="flex h-28 w-28 lg:h-32 lg:w-32 shrink-0 items-center justify-center rounded-full border-4 border-white bg-white/95 shadow-2xl">
+                  <span
+                    className="select-none text-[4.75rem] leading-none lg:text-[5.5rem]"
+                    role="img"
+                    aria-hidden
+                  >
+                    {achievementStyle.icon}
+                  </span>
                 </div>
               )}
             </div>

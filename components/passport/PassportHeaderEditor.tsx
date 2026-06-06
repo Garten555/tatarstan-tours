@@ -13,6 +13,8 @@ interface PassportHeaderEditorProps {
   completedToursCount: number;
   locationsCount: number;
   reputationScore: number;
+  statusLevel: number;
+  statusLevelName: string;
 }
 
 export default function PassportHeaderEditor({
@@ -23,6 +25,8 @@ export default function PassportHeaderEditor({
   completedToursCount,
   locationsCount,
   reputationScore,
+  statusLevel,
+  statusLevelName,
 }: PassportHeaderEditorProps) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initialAvatarUrl);
   const [coverUrl, setCoverUrl] = useState<string | null>(initialCoverUrl);
@@ -179,6 +183,18 @@ export default function PassportHeaderEditor({
               </div>
 
               <div className="flex flex-wrap gap-4 md:gap-6 mb-6">
+                <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200">
+                  <div>
+                    <div className="text-xs text-emerald-700 font-medium">Опыт</div>
+                    <div className="text-lg font-black text-emerald-800">{reputationScore || 0}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-lg border border-blue-200">
+                  <div>
+                    <div className="text-xs text-blue-700 font-medium">Уровень {statusLevel}</div>
+                    <div className="text-lg font-black text-blue-900">{statusLevelName}</div>
+                  </div>
+                </div>
                 <div className="flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-lg">
                   <div>
                     <div className="text-xs text-gray-500 font-medium">Достижения</div>
@@ -195,12 +211,6 @@ export default function PassportHeaderEditor({
                   <div>
                     <div className="text-xs text-gray-500 font-medium">Места</div>
                     <div className="text-lg font-black text-gray-900">{locationsCount}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200">
-                  <div>
-                    <div className="text-xs text-gray-500 font-medium">Очки опыта</div>
-                    <div className="text-lg font-black text-emerald-700">{reputationScore || 0}</div>
                   </div>
                 </div>
               </div>

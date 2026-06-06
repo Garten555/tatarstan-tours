@@ -89,7 +89,7 @@ export default function FeedPage() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-slate-100 pt-24 pb-10">
+    <div className="min-h-below-header bg-slate-100 pb-10">
       <div className="max-w-5xl mx-auto px-4">
         <div className="mb-4 flex items-center gap-3">
           <div className="p-2.5 rounded-xl bg-emerald-100">
@@ -313,7 +313,7 @@ export default function FeedPage() {
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }
 

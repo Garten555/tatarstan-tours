@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { publishAchievementEarned } from '@/lib/pusher/user-notification';
+import { syncUserReputationFromAchievements } from '@/lib/reputation/experience';
 
 export async function POST(_request: NextRequest) {
   try {
@@ -38,7 +39,13 @@ export async function POST(_request: NextRequest) {
     );
 
     if (uniqueTourIds.length === 0) {
-      return NextResponse.json({ success: true, awarded: 0 });
+      const reputation = await syncUserReputationFromAchievements(serviceClient, user.id);
+      return NextResponse.json({
+        success: true,
+        awarded: 0,
+        reputation_score: reputation.reputation_score,
+        status_level: reputation.status_level,
+      });
     }
 
     let awardedTotal = 0;
@@ -69,7 +76,13 @@ export async function POST(_request: NextRequest) {
     }
 
     if (awardedTotal > 0) {
-      return NextResponse.json({ success: true, awarded: awardedTotal });
+      const reputation = await syncUserReputationFromAchievements(serviceClient, user.id);
+      return NextResponse.json({
+        success: true,
+        awarded: awardedTotal,
+        reputation_score: reputation.reputation_score,
+        status_level: reputation.status_level,
+      });
     }
 
     // Fallback: ручная выдача без использования ON CONFLICT
@@ -182,7 +195,14 @@ export async function POST(_request: NextRequest) {
       );
     }
 
-    return NextResponse.json({ success: true, awarded: awardedTotal });
+    const reputation = await syncUserReputationFromAchievements(serviceClient, user.id);
+
+    return NextResponse.json({
+      success: true,
+      awarded: awardedTotal,
+      reputation_score: reputation.reputation_score,
+      status_level: reputation.status_level,
+    });
   } catch (error) {
     console.error('Ошибка обновления достижений:', error);
     return NextResponse.json(

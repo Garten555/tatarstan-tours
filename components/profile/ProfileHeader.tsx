@@ -489,6 +489,12 @@ export default function ProfileHeader({
                 </div>
                 <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200">
                   <div>
+                    <div className="text-xs text-emerald-700 font-medium">Опыт</div>
+                    <div className="text-lg font-black text-emerald-800">{profileData.reputation_score || 0}</div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200">
+                  <div>
                     <div className="text-xs text-gray-500 font-medium">Туров</div>
                     <div className="text-lg font-black text-emerald-700">{stats.completed_tours_count}</div>
                   </div>

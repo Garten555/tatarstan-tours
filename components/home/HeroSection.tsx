@@ -109,7 +109,7 @@ export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | n
   const activeTour = items[0];
 
   return (
-    <section className="relative flex max-h-[900px] min-h-[500px] w-full items-center justify-center overflow-hidden sm:min-h-[600px] md:min-h-[700px] h-screen">
+    <section className="hero-home relative w-full overflow-hidden min-h-[min(100svh,900px)]">
       <div className="absolute inset-0 z-0">
         <Image
           src="/hero-tatarstan.jpg"
@@ -134,7 +134,7 @@ export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | n
         />
       </div>
 
-      <div className="relative z-10 flex h-full w-full items-center">
+      <div className="relative z-10 flex min-h-[min(100svh,900px)] w-full items-center pb-6 pt-[var(--hero-safe-top)] sm:pb-8 md:pb-10">
         <div className="container relative mx-auto w-full px-4 sm:px-5 md:px-6 lg:px-8">
           <div className="max-w-5xl xl:max-w-6xl xl:pr-[22rem] 2xl:pr-[23rem]">
             <div className="animate-fadeIn mb-4 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 backdrop-blur-md sm:mb-6 sm:gap-2 sm:px-4 sm:py-2">
