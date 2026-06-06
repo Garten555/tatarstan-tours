@@ -129,7 +129,7 @@ export default function PassportHeaderEditor({
   return (
     <>
       <div className="bg-white border-b border-gray-200 shadow-sm">
-        <div className="relative h-64 md:h-80">
+        <div className="relative h-40 sm:h-56 md:h-64 lg:h-80">
           {finalCover ? (
             <>
               <Image src={finalCover} alt="Шапка паспорта" fill className="object-cover" />
@@ -143,14 +143,14 @@ export default function PassportHeaderEditor({
             </>
           )}
 
-          <div className="absolute right-4 top-4 z-20">
+          <div className="absolute right-2 top-2 z-20 sm:right-4 sm:top-4">
             <button
               type="button"
               onClick={() => {
                 resetModalState();
                 setIsModalOpen(true);
               }}
-              className="inline-flex items-center gap-2 rounded-xl border border-emerald-300/80 bg-emerald-50/95 hover:bg-emerald-100 text-emerald-950 px-3.5 py-2 text-sm font-semibold shadow-sm backdrop-blur-sm transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300/80 bg-emerald-50/95 hover:bg-emerald-100 text-emerald-950 px-2.5 py-1.5 text-xs font-semibold shadow-sm backdrop-blur-sm transition-colors sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
             >
               <Upload className="w-4 h-4" />
               Настроить шапку и аватар
@@ -158,10 +158,10 @@ export default function PassportHeaderEditor({
           </div>
         </div>
 
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="relative -mt-20 pb-6">
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
+          <div className="relative -mt-12 pb-4 sm:-mt-16 sm:pb-5 md:-mt-20 md:pb-6">
             <div className="relative inline-block">
-              <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white bg-white shadow-xl overflow-hidden">
+              <div className="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 rounded-full border-4 border-white bg-white shadow-xl overflow-hidden">
                 {finalAvatar ? (
                   <Image src={finalAvatar} alt={fullName} width={160} height={160} className="w-full h-full object-cover" />
                 ) : (
@@ -172,8 +172,8 @@ export default function PassportHeaderEditor({
               </div>
             </div>
 
-            <div className="mt-4">
-              <h1 className="text-3xl md:text-4xl font-black text-gray-900 mb-1">{fullName}</h1>
+            <div className="mt-3 sm:mt-4">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-black text-gray-900 mb-1">{fullName}</h1>
               <div className="flex items-center gap-2 text-gray-600 mb-4">
                 <span className="font-semibold">Туристический паспорт</span>
               </div>

@@ -1,8 +1,8 @@
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { mergeLatestActivityTimestamps } from '@/lib/utils/presence';
-import { Users } from 'lucide-react';
+import FriendsPageLayout from '@/components/friends/FriendsPageLayout';
 import FriendsListClient from './FriendsListClient';
 
 type FriendUser = {
@@ -11,6 +11,9 @@ type FriendUser = {
   first_name: string | null;
   last_name: string | null;
   avatar_url: string | null;
+  bio: string | null;
+  reputation_score: number | null;
+  status_level: number | null;
   last_activity_at: string | null;
 };
 
@@ -38,6 +41,10 @@ export default async function UserFriendsPage({
     notFound();
   }
 
+  if (currentUser?.id === profile.id) {
+    redirect('/friends');
+  }
+
   const { data: isFriendship } =
     currentUser && currentUser.id !== profile.id
       ? await serviceClient
@@ -48,27 +55,27 @@ export default async function UserFriendsPage({
           )
           .eq('status', 'accepted')
           .maybeSingle()
-      : { data: null as any };
+      : { data: null as { id: string } | null };
 
-  const canViewFriends =
-    !!currentUser && (currentUser.id === profile.id || !!isFriendship);
+  const canViewFriends = !!currentUser && (currentUser.id === profile.id || !!isFriendship);
 
   if (!canViewFriends) {
     return (
-      <main className="min-h-screen bg-slate-100 pt-24">
-        <div className="max-w-3xl mx-auto px-4">
-          <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center">
-            <h1 className="text-2xl font-black text-gray-900 mb-2">Список друзей скрыт</h1>
-            <p className="text-gray-600 mb-4">Доступен только владельцу профиля и его друзьям.</p>
-            <Link
-              href={`/users/${profile.username || profile.id}`}
-              className="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-white font-bold hover:bg-emerald-700"
-            >
-              Вернуться в профиль
-            </Link>
-          </div>
+      <FriendsPageLayout
+        title="Список друзей скрыт"
+        subtitle="Доступен только владельцу профиля и его друзьям"
+        backHref={`/users/${profile.username || profile.id}`}
+        backLabel="Вернуться в профиль"
+      >
+        <div className="rounded-2xl border-2 border-gray-100 bg-white p-8 text-center">
+          <Link
+            href={`/users/${profile.username || profile.id}`}
+            className="inline-flex items-center rounded-xl bg-emerald-600 px-5 py-2.5 font-bold text-white hover:bg-emerald-700"
+          >
+            Вернуться в профиль
+          </Link>
         </div>
-      </main>
+      </FriendsPageLayout>
     );
   }
 
@@ -78,8 +85,12 @@ export default async function UserFriendsPage({
       `
       user_id,
       friend_id,
-      friend:profiles!user_friends_friend_id_fkey(id, username, first_name, last_name, avatar_url),
-      user:profiles!user_friends_user_id_fkey(id, username, first_name, last_name, avatar_url)
+      friend:profiles!user_friends_friend_id_fkey(
+        id, username, first_name, last_name, avatar_url, bio, reputation_score, status_level
+      ),
+      user:profiles!user_friends_user_id_fkey(
+        id, username, first_name, last_name, avatar_url, bio, reputation_score, status_level
+      )
     `
     )
     .or(`user_id.eq.${profile.id},friend_id.eq.${profile.id}`)
@@ -88,14 +99,15 @@ export default async function UserFriendsPage({
     .order('created_at', { ascending: false });
 
   const friends: FriendUser[] = (friendships || [])
-    .map((row: any) => {
+    .map((row: Record<string, unknown>) => {
       const isUser1 = row.user_id === profile.id;
-      return (isUser1 ? row.friend : row.user) as FriendUser;
+      const rel = isUser1 ? row.friend : row.user;
+      const f = Array.isArray(rel) ? rel[0] : rel;
+      return f as FriendUser | null;
     })
-    .filter((f) => !!f?.id)
+    .filter((f): f is FriendUser => !!f?.id)
     .map((f) => ({ ...f, last_activity_at: null }));
 
-  // Общие друзья (между текущим пользователем и владельцем страницы)
   let commonFriendIds: string[] = [];
   if (currentUser && currentUser.id !== profile.id) {
     const { data: myFriendships } = await serviceClient
@@ -104,7 +116,7 @@ export default async function UserFriendsPage({
       .or(`user_id.eq.${currentUser.id},friend_id.eq.${currentUser.id}`)
       .eq('status', 'accepted');
     const myFriendSet = new Set<string>(
-      (myFriendships || []).map((row: any) =>
+      (myFriendships || []).map((row: { user_id: string; friend_id: string }) =>
         row.user_id === currentUser.id ? row.friend_id : row.user_id
       )
     );
@@ -113,7 +125,6 @@ export default async function UserFriendsPage({
     commonFriendIds = friends.map((f) => f.id);
   }
 
-  // Последняя активность (по сообщениям) для метки "в сети/был ... назад"
   const friendIds = friends.map((f) => f.id);
   const activityMap = new Map<string, string>();
   if (friendIds.length) {
@@ -133,12 +144,12 @@ export default async function UserFriendsPage({
     ]);
 
     for (const row of directMessages || []) {
-      const id = (row as any).sender_id as string;
-      if (!activityMap.has(id)) activityMap.set(id, (row as any).created_at as string);
+      const id = (row as { sender_id: string }).sender_id;
+      if (!activityMap.has(id)) activityMap.set(id, (row as { created_at: string }).created_at);
     }
     for (const row of roomMessages || []) {
-      const id = (row as any).user_id as string;
-      const createdAt = (row as any).created_at as string;
+      const id = (row as { user_id: string }).user_id;
+      const createdAt = (row as { created_at: string }).created_at;
       const existing = activityMap.get(id);
       if (!existing || new Date(createdAt).getTime() > new Date(existing).getTime()) {
         activityMap.set(id, createdAt);
@@ -164,32 +175,31 @@ export default async function UserFriendsPage({
     last_activity_at: activityMap.get(f.id) || null,
   }));
 
-  return (
-    <main className="min-h-screen bg-slate-100 pt-24 pb-12">
-      <div className="max-w-5xl mx-auto px-4">
-        <div className="mb-6 flex items-center gap-3">
-          <div className="rounded-xl bg-emerald-100 p-2.5">
-            <Users className="w-6 h-6 text-emerald-700" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-black text-gray-900">Друзья @{profile.username}</h1>
-            <p className="text-gray-600">{friends.length} пользователей</p>
-          </div>
-        </div>
+  const countLabel =
+    friends.length === 1
+      ? '1 друг'
+      : friends.length >= 2 && friends.length <= 4
+        ? `${friends.length} друга`
+        : `${friends.length} друзей`;
 
-        {friendsWithActivity.length === 0 ? (
-          <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-gray-600">
-            Пока нет друзей
-          </div>
-        ) : (
-          <FriendsListClient
-            username={profile.username}
-            friends={friendsWithActivity}
-            commonFriendIds={commonFriendIds}
-          />
-        )}
-      </div>
-    </main>
+  return (
+    <FriendsPageLayout
+      title={`Друзья @${profile.username}`}
+      subtitle={`${countLabel}${commonFriendIds.length && currentUser ? ` · ${commonFriendIds.length} общих с вами` : ''}`}
+      backHref={`/users/${profile.username || profile.id}`}
+      backLabel="Вернуться в профиль"
+    >
+      {friendsWithActivity.length === 0 ? (
+        <div className="rounded-2xl border-2 border-gray-100 bg-white p-10 text-center text-gray-600">
+          Пока нет друзей
+        </div>
+      ) : (
+        <FriendsListClient
+          friends={friendsWithActivity}
+          commonFriendIds={commonFriendIds}
+          showCommonTab={Boolean(currentUser && currentUser.id !== profile.id)}
+        />
+      )}
+    </FriendsPageLayout>
   );
 }
-

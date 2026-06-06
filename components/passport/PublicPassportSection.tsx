@@ -42,11 +42,11 @@ export default function PublicPassportSection({
     <div className="bg-white">
       {/* Табы навигации */}
       <div className="bg-white border-b border-gray-200">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex gap-1">
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8">
+          <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-thin">
             <button
               onClick={() => setActiveTab('achievements')}
-              className={`relative px-4 py-3 text-center font-semibold text-sm transition-all rounded-t-lg ${
+              className={`relative shrink-0 px-3 py-2.5 text-center text-xs font-semibold transition-all rounded-t-lg sm:px-4 sm:py-3 sm:text-sm ${
                 activeTab === 'achievements'
                   ? 'bg-emerald-50 text-emerald-700 border-b-2 border-emerald-600'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -68,7 +68,7 @@ export default function PublicPassportSection({
             </button>
             <button
               onClick={() => setActiveTab('tours')}
-              className={`relative px-4 py-3 text-center font-semibold text-sm transition-all rounded-t-lg ${
+              className={`relative shrink-0 px-3 py-2.5 text-center text-xs font-semibold transition-all rounded-t-lg sm:px-4 sm:py-3 sm:text-sm ${
                 activeTab === 'tours'
                   ? 'bg-emerald-50 text-emerald-700 border-b-2 border-emerald-600'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -90,7 +90,7 @@ export default function PublicPassportSection({
             </button>
             <button
               onClick={() => setActiveTab('locations')}
-              className={`relative px-4 py-3 text-center font-semibold text-sm transition-all rounded-t-lg ${
+              className={`relative shrink-0 px-3 py-2.5 text-center text-xs font-semibold transition-all rounded-t-lg sm:px-4 sm:py-3 sm:text-sm ${
                 activeTab === 'locations'
                   ? 'bg-emerald-50 text-emerald-700 border-b-2 border-emerald-600'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -115,7 +115,7 @@ export default function PublicPassportSection({
       </div>
 
       {/* Контент табов */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-2">
         {/* Достижения */}
         {activeTab === 'achievements' && (
           <div className="space-y-3">

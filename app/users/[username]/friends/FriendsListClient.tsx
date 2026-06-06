@@ -1,31 +1,28 @@
 'use client';
 
-import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { Search } from 'lucide-react';
-import { formatLastSeen } from '@/lib/utils/presence';
-
-type FriendUser = {
-  id: string;
-  username: string | null;
-  first_name: string | null;
-  last_name: string | null;
-  avatar_url: string | null;
-  last_activity_at: string | null;
-};
+import { Search, Users } from 'lucide-react';
+import FriendListCard, { type FriendListCardUser } from '@/components/friends/FriendListCard';
 
 type Props = {
-  username: string | null;
-  friends: FriendUser[];
+  friends: FriendListCardUser[];
   commonFriendIds: string[];
+  showCommonTab?: boolean;
 };
 
-export default function FriendsListClient({ username, friends, commonFriendIds }: Props) {
+export default function FriendsListClient({
+  friends,
+  commonFriendIds,
+  showCommonTab = true,
+}: Props) {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'all' | 'common'>('all');
 
   const visible = useMemo(() => {
-    const base = tab === 'common' ? friends.filter((f) => commonFriendIds.includes(f.id)) : friends;
+    const base =
+      tab === 'common' && showCommonTab
+        ? friends.filter((f) => commonFriendIds.includes(f.id))
+        : friends;
     const q = search.trim().toLowerCase();
     if (!q) return base;
     return base.filter((f) => {
@@ -33,87 +30,79 @@ export default function FriendsListClient({ username, friends, commonFriendIds }
       const uname = (f.username || '').toLowerCase();
       return full.includes(q) || uname.includes(q);
     });
-  }, [friends, tab, search, commonFriendIds]);
+  }, [friends, tab, search, commonFriendIds, showCommonTab]);
+
+  const onlineCount = useMemo(
+    () =>
+      friends.filter((f) => {
+        if (!f.last_activity_at) return false;
+        const diffMin = Math.floor((Date.now() - new Date(f.last_activity_at).getTime()) / 60000);
+        return diffMin <= 5;
+      }).length,
+    [friends]
+  );
 
   return (
-    <>
-      <div className="mb-4 flex flex-wrap gap-2">
-        <button
-          onClick={() => setTab('all')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-bold border ${
-            tab === 'all'
-              ? 'bg-emerald-600 text-white border-emerald-600'
-              : 'bg-white text-gray-700 border-gray-300'
-          }`}
-        >
-          Все друзья ({friends.length})
-        </button>
-        <button
-          onClick={() => setTab('common')}
-          className={`px-3 py-1.5 rounded-lg text-sm font-bold border ${
-            tab === 'common'
-              ? 'bg-emerald-600 text-white border-emerald-600'
-              : 'bg-white text-gray-700 border-gray-300'
-          }`}
-        >
-          Общие друзья ({commonFriendIds.length})
-        </button>
+    <div className="space-y-6">
+      <div className="rounded-2xl border-2 border-gray-100 bg-white p-2 shadow-sm">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => setTab('all')}
+            className={`flex-1 rounded-xl px-4 py-3 text-sm font-bold transition-all sm:text-base ${
+              tab === 'all'
+                ? 'bg-blue-600 text-white shadow-lg'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <span className="flex items-center justify-center gap-2">
+              <Users className="h-5 w-5" />
+              Все друзья ({friends.length})
+            </span>
+          </button>
+          {showCommonTab ? (
+            <button
+              type="button"
+              onClick={() => setTab('common')}
+              className={`flex-1 rounded-xl px-4 py-3 text-sm font-bold transition-all sm:text-base ${
+                tab === 'common'
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Общие друзья ({commonFriendIds.length})
+            </button>
+          ) : null}
+        </div>
       </div>
 
-      <div className="mb-5 relative">
-        <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+      {onlineCount > 0 ? (
+        <p className="text-sm font-semibold text-emerald-700 sm:text-base">
+          ● {onlineCount} {onlineCount === 1 ? 'друг' : onlineCount < 5 ? 'друга' : 'друзей'} в сети
+        </p>
+      ) : null}
+
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Поиск по друзьям..."
-          className="w-full rounded-xl border border-gray-300 bg-white pl-10 pr-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          className="w-full rounded-xl border-2 border-gray-200 bg-white py-3 pl-12 pr-4 text-sm font-medium shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 sm:text-base"
         />
       </div>
 
       {visible.length === 0 ? (
-        <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-gray-600">
+        <div className="rounded-2xl border-2 border-gray-100 bg-white p-10 text-center text-gray-600">
           Ничего не найдено
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {visible.map((friend) => {
-            const fullName = [friend.first_name, friend.last_name].filter(Boolean).join(' ').trim();
-            const seen = formatLastSeen(friend.last_activity_at);
-            return (
-              <Link
-                key={friend.id}
-                href={`/users/${friend.username || friend.id}`}
-                className="rounded-2xl border border-gray-200 bg-white p-4 hover:border-emerald-300 hover:shadow-sm transition"
-              >
-                <div className="flex items-center gap-3">
-                  {friend.avatar_url ? (
-                    <img
-                      src={friend.avatar_url}
-                      alt={friend.username || 'user'}
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                      {(friend.username || 'U').slice(0, 1).toUpperCase()}
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <div className="font-bold text-gray-900 truncate">
-                      {fullName || friend.username || 'Пользователь'}
-                    </div>
-                    <div className="text-sm text-gray-500 truncate">@{friend.username || friend.id}</div>
-                    <div className={`text-xs mt-1 font-semibold ${seen.online ? 'text-emerald-600' : 'text-gray-400'}`}>
-                      {seen.online ? '● ' : ''}
-                      {seen.label}
-                    </div>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
+        <div className="grid gap-4 md:gap-6">
+          {visible.map((friend, index) => (
+            <FriendListCard key={friend.id} user={friend} index={index} />
+          ))}
         </div>
       )}
-    </>
+    </div>
   );
 }
-

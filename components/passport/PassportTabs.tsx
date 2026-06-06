@@ -41,10 +41,10 @@ export default function PassportTabs({
     <div className="space-y-6">
       {/* Табы навигации */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-        <div className="flex border-b border-gray-200">
+        <div className="flex overflow-x-auto border-b border-gray-200 scrollbar-thin">
           <button
             onClick={() => setActiveTab('achievements')}
-            className={`flex-1 px-6 py-4 text-center font-bold transition-all ${
+            className={`min-w-[7.5rem] shrink-0 flex-1 px-3 py-3 text-center text-sm font-bold transition-all sm:px-6 sm:py-4 ${
               activeTab === 'achievements'
                 ? 'bg-emerald-50 text-emerald-700 border-b-2 border-emerald-600'
                 : 'text-gray-600 hover:bg-gray-50'
@@ -62,7 +62,7 @@ export default function PassportTabs({
           </button>
           <button
             onClick={() => setActiveTab('tours')}
-            className={`flex-1 px-6 py-4 text-center font-bold transition-all border-x border-gray-200 ${
+            className={`min-w-[7.5rem] shrink-0 flex-1 px-3 py-3 text-center text-sm font-bold transition-all border-x border-gray-200 sm:px-6 sm:py-4 ${
               activeTab === 'tours'
                 ? 'bg-emerald-50 text-emerald-700 border-b-2 border-emerald-600'
                 : 'text-gray-600 hover:bg-gray-50'
@@ -80,7 +80,7 @@ export default function PassportTabs({
           </button>
           <button
             onClick={() => setActiveTab('locations')}
-            className={`flex-1 px-6 py-4 text-center font-bold transition-all ${
+            className={`min-w-[7.5rem] shrink-0 flex-1 px-3 py-3 text-center text-sm font-bold transition-all sm:px-6 sm:py-4 ${
               activeTab === 'locations'
                 ? 'bg-emerald-50 text-emerald-700 border-b-2 border-emerald-600'
                 : 'text-gray-600 hover:bg-gray-50'
@@ -99,7 +99,7 @@ export default function PassportTabs({
         </div>
 
         {/* Контент табов */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {/* Достижения */}
           {activeTab === 'achievements' && (
             <div className="space-y-6">

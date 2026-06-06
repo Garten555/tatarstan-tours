@@ -480,7 +480,7 @@ export default function FriendsPage() {
     <div className="space-y-8">
       {/* Вкладки */}
       <div className="bg-white rounded-2xl border-2 border-gray-100 shadow-sm p-2">
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <button
             onClick={() => setActiveTab('friends')}
             className={`flex-1 px-6 py-3 rounded-xl font-bold text-base transition-all duration-200 ${

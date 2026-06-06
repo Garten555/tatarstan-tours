@@ -234,7 +234,7 @@ export default function PublicProfileLayout({
           </aside>
         </div>
 
-        <div id="passport" className="scroll-mt-20 mt-5 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+        <div id="passport" className="scroll-mt-20 mt-4 sm:mt-5 rounded-xl sm:rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
           {(isBanned || profileData.is_banned) ? null : (
             <PublicPassportSection
               achievements={recentAchievements}

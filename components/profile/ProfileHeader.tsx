@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useRef, useState, useEffect, type ChangeEvent } from 'react';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -88,6 +88,7 @@ export default function ProfileHeader({
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [profileMediaUploadKind, setProfileMediaUploadKind] = useState<'cover' | 'avatar' | null>(null);
   const [profileMediaUploadPercent, setProfileMediaUploadPercent] = useState<number | null>(null);
+  const [friendActivity, setFriendActivity] = useState<Record<string, string | null>>({});
   const [coverError, setCoverError] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
@@ -97,6 +98,30 @@ export default function ProfileHeader({
   const [editorError, setEditorError] = useState<string | null>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const isOwnProfile = currentUser?.id === profileData.id;
+  const friendsPageHref = isOwnProfile ? '/friends' : `/users/${cleanUsername}/friends`;
+
+  useEffect(() => {
+    const ids = friendsList.map((f: { id?: string }) => f.id).filter(Boolean) as string[];
+    if (ids.length === 0) return;
+    let cancelled = false;
+    void fetch('/api/users/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_ids: ids }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.success && data.activityByUserId) {
+          setFriendActivity(data.activityByUserId);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [friendsList]);
 
   const isOwner = Boolean(currentUser && currentUser.id === profileData.id);
   useBodyScrollLock(isOwner && isEditorOpen);
@@ -482,18 +507,21 @@ export default function ProfileHeader({
                         Друзья
                       </h3>
                       <Link
-                        href={`/users/${cleanUsername}/friends`}
+                        href={friendsPageHref}
                         className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors"
                       >
                         Все
                       </Link>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {friendsList.slice(0, 6).map((friend: any) => (
+                      {friendsList.slice(0, 6).map((friend: any) => {
+                        const seen = formatLastSeen(friendActivity[friend.id] ?? friend.last_activity_at ?? null);
+                        return (
                         <Link
                           key={friend.id}
                           href={`/users/${friend.username || friend.id}`}
                           className="group relative"
+                          title={seen.label}
                         >
                           {friend.avatar_url ? (
                             <Image
@@ -509,8 +537,15 @@ export default function ProfileHeader({
                               {(friend.first_name?.[0] || friend.username?.[0] || 'Д').toUpperCase()}
                             </div>
                           )}
+                          {seen.online ? (
+                            <span
+                              className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-white bg-emerald-500"
+                              title="в сети"
+                            />
+                          ) : null}
                         </Link>
-                      ))}
+                      );
+                      })}
                     </div>
                   </div>
                 )}
