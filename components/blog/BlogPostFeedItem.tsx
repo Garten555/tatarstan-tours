@@ -236,7 +236,6 @@ export default function BlogPostFeedItem({
 
   const displayDate = post.published_at || post.created_at;
   const authorUsername = post.user?.username || post.user?.id;
-  const postUrl = `/users/${encodeURIComponent(String(authorUsername || ''))}/blog/${encodeURIComponent(post.slug)}`;
 
   // Если пост удален, не рендерим его (после всех хуков)
   if (postDeleted) {
@@ -435,13 +434,6 @@ export default function BlogPostFeedItem({
           />
         )}
 
-        <Link
-          href={postUrl}
-          className="mt-4 inline-block text-sm font-semibold text-emerald-700 transition-colors hover:text-emerald-900 hover:underline"
-        >
-          Открыть на отдельной странице
-        </Link>
-        
       </div>
 
       {/* Реакции - как в отзывах */}
