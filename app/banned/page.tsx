@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import BanAppealForm from '@/components/ban/BanAppealForm';
+import { BannedPageLiveSync } from '@/components/ban/BannedPageLiveSync';
 import { escapeHtml } from '@/lib/utils/sanitize';
 
 export const metadata = {
@@ -49,7 +50,9 @@ export default async function BannedPage() {
     .order('created_at', { ascending: false });
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-8 sm:py-12 md:py-16">
+    <>
+      <BannedPageLiveSync />
+      <div className="min-h-screen bg-gradient-to-br from-red-50 via-white to-red-50 flex items-center justify-center px-4 sm:px-6 lg:px-8 py-8 sm:py-12 md:py-16">
       <div className="max-w-3xl w-full bg-white rounded-2xl sm:rounded-3xl shadow-2xl border-2 sm:border-4 border-red-200 p-6 sm:p-8 md:p-10 lg:p-12">
         <div className="text-center space-y-6 sm:space-y-8">
           {/* Иконка */}
@@ -142,7 +145,8 @@ export default async function BannedPage() {
           <BanAppealForm hasActiveAppeal={Boolean(appeals?.some((a: any) => ['pending', 'reviewing'].includes(a.status)))} />
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 

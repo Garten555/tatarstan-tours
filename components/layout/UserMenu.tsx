@@ -444,6 +444,11 @@ export default function UserMenu() {
       if (d.channel === 'admin-sync' && d.event === 'forced-reload' && d.reason === 'banned') {
         window.location.assign('/banned');
       }
+      if (d.channel === 'admin-sync' && d.event === 'forced-reload' && d.reason === 'unban') {
+        if (window.location.pathname === '/banned') {
+          window.location.assign('/profile');
+        }
+      }
     };
     window.addEventListener(PUSHER_BRIDGE_EVENT, onPusherBridge);
 
