@@ -16,13 +16,19 @@ import {
   CheckCircle2,
   AlertCircle,
   Plus,
-  Trash2,
   X,
   Phone
 } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import PaymentQrDisplay from '@/components/booking/PaymentQrDisplay';
 import { generatePaymentRef } from '@/lib/payment/payment-ref';
+import {
+  CARD_BRAND_LABELS,
+  detectCardBrand,
+  formatCardNumberInput,
+  normalizeCardNumber,
+  validateCardPaymentInput,
+} from '@/lib/payment/card-validation';
 
 interface BookingFormProps {
   tour: any;
@@ -35,13 +41,6 @@ interface BookingFormProps {
     current_participants?: number | null;
   } | null;
   user: SupabaseUser;
-  savedCards: Array<{
-    id: string;
-    last_four_digits: string;
-    card_type: string;
-    cardholder_name?: string;
-    is_default: boolean;
-  }>;
 }
 
 type PaymentMethod = 'card' | 'cash' | 'qr_code';
@@ -63,7 +62,7 @@ type Attendee = {
   traveler_id?: string | null;
 };
 
-export default function BookingForm({ tour, session = null, user, savedCards }: BookingFormProps) {
+export default function BookingForm({ tour, session = null, user }: BookingFormProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'details' | 'payment'>('details');
@@ -79,16 +78,17 @@ export default function BookingForm({ tour, session = null, user, savedCards }: 
   const [formData, setFormData] = useState({
     num_people: 1,
     payment_method: 'card' as PaymentMethod,
-    selected_card_id: savedCards.find(c => c.is_default)?.id || null,
-    save_card: false,
     new_card: {
       number: '',
       expiry: '',
       cvv: '',
       cardholder_name: '',
-      save: false,
     },
   });
+
+  const detectedCardBrand = formData.new_card.number
+    ? detectCardBrand(normalizeCardNumber(formData.new_card.number))
+    : null;
 
   const totalPrice = tour.price_per_person * formData.num_people;
   const availableSpots = session
@@ -267,13 +267,14 @@ export default function BookingForm({ tour, session = null, user, savedCards }: 
     }
 
     if (formData.payment_method === 'card') {
-      if (!formData.selected_card_id && !formData.new_card.number) {
-        setError('Выберите карту или введите данные новой карты');
-        return false;
-      }
-
-      if (formData.new_card.number && (!formData.new_card.expiry || !formData.new_card.cvv || !formData.new_card.cardholder_name)) {
-        setError('Заполните все поля карты');
+      const cardCheck = validateCardPaymentInput({
+        number: formData.new_card.number,
+        expiry: formData.new_card.expiry,
+        cvv: formData.new_card.cvv,
+        cardholderName: formData.new_card.cardholder_name,
+      });
+      if (!cardCheck.ok) {
+        setError(cardCheck.errors[0] || 'Некорректные данные карты');
         return false;
       }
     }
@@ -325,37 +326,13 @@ export default function BookingForm({ tour, session = null, user, savedCards }: 
         };
       }
 
-      // Если выбрана сохраненная карта
-      if (formData.selected_card_id) {
+      if (formData.payment_method === 'card') {
         bookingData.payment_data = {
-          card_id: formData.selected_card_id,
-        };
-      }
-
-      // Если новая карта
-      if (formData.new_card.number) {
-        // Определяем тип карты
-        const cardType = formData.new_card.number.startsWith('4') ? 'visa' :
-                        formData.new_card.number.startsWith('5') ? 'mastercard' :
-                        formData.new_card.number.startsWith('2') ? 'mir' : 'unknown';
-        
-        const lastFour = formData.new_card.number.slice(-4);
-        
-        bookingData.payment_data = {
-          card_type: cardType,
-          last_four_digits: lastFour,
+          card_number: formData.new_card.number,
+          expiry: formData.new_card.expiry,
+          cvv: formData.new_card.cvv,
           cardholder_name: formData.new_card.cardholder_name,
         };
-
-        // Сохраняем карту если пользователь хочет
-        if (formData.new_card.save) {
-          bookingData.save_card = {
-            last_four_digits: lastFour,
-            card_type: cardType,
-            cardholder_name: formData.new_card.cardholder_name,
-            is_default: savedCards.length === 0, // Первая карта = по умолчанию
-          };
-        }
       }
 
       const response = await fetch('/api/bookings', {
@@ -838,192 +815,111 @@ export default function BookingForm({ tour, session = null, user, savedCards }: 
               {/* Форма для карты */}
               {formData.payment_method === 'card' && (
                 <div className="space-y-4 border-t pt-6">
-                  {/* Сохраненные карты */}
-                  {savedCards.length > 0 && (
-                    <div className="space-y-3">
-                      <h3 className="text-base font-bold text-gray-900 mb-4">
-                        Сохраненные карты
-                      </h3>
-                      {savedCards.map((card) => (
-                        <div
-                          key={card.id}
-                          className={`flex items-center gap-4 p-4 border-2 rounded-2xl transition-all duration-200 ${
-                            formData.selected_card_id === card.id
-                              ? 'border-emerald-500 bg-gradient-to-br from-emerald-50 to-emerald-100/50 shadow-md'
-                              : 'border-gray-200 hover:border-emerald-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          <label className="flex-1 flex items-center gap-3 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="selected_card"
-                              checked={formData.selected_card_id === card.id}
-                              onChange={() => {
-                                setFormData(prev => ({ 
-                                  ...prev, 
-                                  selected_card_id: card.id,
-                                  new_card: { number: '', expiry: '', cvv: '', cardholder_name: '', save: false }
-                                }));
-                              }}
-                              className="w-4 h-4 text-emerald-600"
-                            />
-                            <div className="flex-1 flex items-center justify-between">
-                              <div>
-                                <div className="font-bold text-lg text-gray-900">
-                                  {card.card_type.toUpperCase()} •••• {card.last_four_digits}
-                                </div>
-                                {card.cardholder_name && (
-                                  <div className="text-sm font-medium text-gray-600 mt-1">{card.cardholder_name}</div>
-                                )}
-                              </div>
-                              {card.is_default && (
-                                <span className="px-3 py-1 bg-emerald-100 text-emerald-700 text-xs font-bold rounded-full">По умолчанию</span>
-                              )}
-                            </div>
-                          </label>
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (confirm('Удалить эту карту?')) {
-                                const response = await fetch(`/api/user/cards/${card.id}`, {
-                                  method: 'DELETE',
-                                });
-                                if (response.ok) {
-                                  // Обновляем список карт
-                                  window.location.reload();
-                                }
-                              }
-                            }}
-                            className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-                            title="Удалить карту"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-900">
+                    Оплата картой — демо-режим (без реального списания). Поддерживаются Visa, Mastercard и МИР.
+                    Данные карты проверяются и не сохраняются.
+                  </div>
 
-                  {/* Новая карта */}
-                  <div className="space-y-4 border-t-2 border-gray-200 pt-6">
-                    <label className="flex items-center gap-3 cursor-pointer p-4 rounded-xl hover:bg-gray-50 transition-colors">
-                      <input
-                        type="radio"
-                        name="selected_card"
-                        checked={!formData.selected_card_id}
-                        onChange={() => {
-                          setFormData(prev => ({ ...prev, selected_card_id: null }));
-                        }}
-                        className="w-5 h-5 text-emerald-600"
-                      />
-                      <span className="text-base font-bold text-gray-900">
-                        {savedCards.length > 0 ? 'Использовать другую карту' : 'Ввести данные карты'}
-                      </span>
-                    </label>
-
-                    {!formData.selected_card_id && (
-                      <div className="space-y-5 pl-6 bg-gray-50/50 rounded-2xl p-5 border border-gray-200">
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Номер карты
-                          </label>
-                          <input
-                            type="text"
-                            maxLength={19}
-                            value={formData.new_card.number.replace(/\s/g, '').replace(/(.{4})/g, '$1 ').trim()}
-                            onChange={(e) => {
-                              const value = e.target.value.replace(/\s/g, '').replace(/\D/g, '');
-                              setFormData(prev => ({
-                                ...prev,
-                                new_card: { ...prev.new_card, number: value }
-                              }));
-                            }}
-                            placeholder="1234 5678 9012 3456"
-                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-500 bg-white font-medium transition-all duration-200"
-                          />
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">
-                              Срок действия
-                            </label>
-                            <input
-                              type="text"
-                              maxLength={5}
-                              value={formData.new_card.expiry}
-                              onChange={(e) => {
-                                let value = e.target.value.replace(/\D/g, '');
-                                if (value.length >= 2) {
-                                  value = value.slice(0, 2) + '/' + value.slice(2, 4);
-                                }
-                                setFormData(prev => ({
-                                  ...prev,
-                                  new_card: { ...prev.new_card, expiry: value }
-                                }));
-                              }}
-                              placeholder="MM/YY"
-                              className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-500 bg-white font-medium transition-all duration-200"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-sm font-semibold text-gray-700 mb-2">
-                              CVV
-                            </label>
-                            <input
-                              type="text"
-                              maxLength={4}
-                              value={formData.new_card.cvv}
-                              onChange={(e) => {
-                                const value = e.target.value.replace(/\D/g, '');
-                                setFormData(prev => ({
-                                  ...prev,
-                                  new_card: { ...prev.new_card, cvv: value }
-                                }));
-                              }}
-                              placeholder="123"
-                              className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-500 bg-white font-medium transition-all duration-200"
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-semibold text-gray-700 mb-2">
-                            Имя держателя карты
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.new_card.cardholder_name}
-                            onChange={(e) => {
-                              setFormData(prev => ({
-                                ...prev,
-                                new_card: { ...prev.new_card, cardholder_name: e.target.value.toUpperCase() }
-                              }));
-                            }}
-                            placeholder="IVAN IVANOV"
-                            className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-500 uppercase bg-white font-medium transition-all duration-200"
-                          />
-                        </div>
-
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={formData.new_card.save}
-                            onChange={(e) => {
-                              setFormData(prev => ({
-                                ...prev,
-                                new_card: { ...prev.new_card, save: e.target.checked }
-                              }));
-                            }}
-                            className="w-4 h-4 text-emerald-600 rounded"
-                          />
-                          <span className="text-sm text-gray-600">
-                            Сохранить карту для будущих покупок
+                  <div className="space-y-5 rounded-2xl border border-gray-200 bg-gray-50/50 p-5">
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-gray-700">
+                        Номер карты
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="cc-number"
+                          maxLength={23}
+                          value={formatCardNumberInput(formData.new_card.number)}
+                          onChange={(e) => {
+                            const value = normalizeCardNumber(e.target.value).slice(0, 19);
+                            setFormData((prev) => ({
+                              ...prev,
+                              new_card: { ...prev.new_card, number: value },
+                            }));
+                          }}
+                          placeholder="2200 0000 0000 0000"
+                          className="w-full rounded-xl border-2 border-gray-300 bg-white px-4 py-3 pr-24 font-medium transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                        />
+                        {detectedCardBrand ? (
+                          <span className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg bg-emerald-100 px-2 py-1 text-xs font-black text-emerald-800">
+                            {CARD_BRAND_LABELS[detectedCardBrand]}
                           </span>
-                        </label>
+                        ) : null}
                       </div>
-                    )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-gray-700">
+                          Срок действия
+                        </label>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="cc-exp"
+                          maxLength={5}
+                          value={formData.new_card.expiry}
+                          onChange={(e) => {
+                            let value = e.target.value.replace(/\D/g, '');
+                            if (value.length >= 2) {
+                              value = value.slice(0, 2) + '/' + value.slice(2, 4);
+                            }
+                            setFormData((prev) => ({
+                              ...prev,
+                              new_card: { ...prev.new_card, expiry: value },
+                            }));
+                          }}
+                          placeholder="MM/YY"
+                          className="w-full rounded-xl border-2 border-gray-300 bg-white px-4 py-3 font-medium transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="mb-2 block text-sm font-semibold text-gray-700">
+                          CVV
+                        </label>
+                        <input
+                          type="password"
+                          inputMode="numeric"
+                          autoComplete="cc-csc"
+                          maxLength={3}
+                          value={formData.new_card.cvv}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\D/g, '').slice(0, 3);
+                            setFormData((prev) => ({
+                              ...prev,
+                              new_card: { ...prev.new_card, cvv: value },
+                            }));
+                          }}
+                          placeholder="123"
+                          className="w-full rounded-xl border-2 border-gray-300 bg-white px-4 py-3 font-medium transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-gray-700">
+                        Имя держателя карты
+                      </label>
+                      <input
+                        type="text"
+                        autoComplete="cc-name"
+                        value={formData.new_card.cardholder_name}
+                        onChange={(e) => {
+                          setFormData((prev) => ({
+                            ...prev,
+                            new_card: {
+                              ...prev.new_card,
+                              cardholder_name: e.target.value.toUpperCase(),
+                            },
+                          }));
+                        }}
+                        placeholder="IVAN IVANOV"
+                        className="w-full rounded-xl border-2 border-gray-300 bg-white px-4 py-3 font-medium uppercase transition-all duration-200 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+                      />
+                    </div>
                   </div>
                 </div>
               )}

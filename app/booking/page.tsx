@@ -114,14 +114,6 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
     }
   }
 
-  // Загружаем сохраненные карты пользователя
-  const { data: savedCards } = await supabase
-    .from('user_cards')
-    .select('*')
-    .eq('user_id', user.id)
-    .order('is_default', { ascending: false })
-    .order('created_at', { ascending: false });
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-white to-blue-50/50 py-8 lg:py-12 relative overflow-x-hidden">
       {/* Декоративные элементы фона */}
@@ -136,7 +128,6 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
           tour={tour as any}
           session={sessionRow}
           user={user}
-          savedCards={savedCards || []}
         />
       </div>
     </div>

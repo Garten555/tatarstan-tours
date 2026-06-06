@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { User, Mail, Phone, Calendar, Shield, Upload, Loader2, CreditCard, Trash2, Star, Edit2, Eye, Settings, CheckCircle2, BookOpen, Ban, CheckCircle, X } from 'lucide-react';
+import { User, Mail, Phone, Calendar, Shield, Upload, Loader2, Trash2, Star, Edit2, Eye, Settings, CheckCircle2, BookOpen, Ban, CheckCircle, X } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import UserBookings from './UserBookings';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
@@ -29,14 +29,6 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [savedCards, setSavedCards] = useState<Array<{
-    id: string;
-    last_four_digits: string;
-    card_type: string;
-    cardholder_name?: string;
-    is_default: boolean;
-  }>>([]);
-  const [loadingCards, setLoadingCards] = useState(false);
   const [stats, setStats] = useState({
     activeBookings: 0,
     completedTours: 0,
@@ -169,37 +161,17 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
     setAvatarUrl(url);
   }, [isViewMode, profile?.avatar_url, user.user_metadata?.avatar_url]);
 
-  // Загрузка сохраненных карт, статистики и отзывов параллельно (оптимизация производительности)
+  // Загрузка статистики и отзывов
   useEffect(() => {
     const loadData = async () => {
-      setLoadingCards(true);
       setLoadingStats(true);
       setLoadingReviews(true);
       
       try {
-        // Загружаем карты, бронирования и отзывы параллельно для ускорения
-        const [cardsResponse, bookingsResponse, reviewsResponse] = await Promise.all([
-          fetch('/api/user/cards').catch(() => ({ ok: false })),
+        const [bookingsResponse, reviewsResponse] = await Promise.all([
           fetch('/api/user/bookings').catch(() => ({ ok: false })),
           fetch('/api/user/reviews').catch(() => ({ ok: false }))
         ]);
-        
-        // Обрабатываем карты
-        if (cardsResponse.ok && 'headers' in cardsResponse) {
-          try {
-            const contentType = cardsResponse.headers.get('content-type');
-            if (contentType && contentType.includes('application/json')) {
-              const cardsData = await cardsResponse.json();
-              if (cardsData.cards) {
-                setSavedCards(cardsData.cards);
-              }
-            }
-          } catch (error) {
-            console.error('Ошибка парсинга карт:', error);
-          }
-        }
-        
-        // Обрабатываем статистику
         if (bookingsResponse.ok && 'headers' in bookingsResponse) {
           try {
             const contentType = bookingsResponse.headers.get('content-type');
@@ -274,7 +246,6 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
           totalSpent: 0,
         });
       } finally {
-        setLoadingCards(false);
         setLoadingStats(false);
         setLoadingReviews(false);
       }
@@ -282,65 +253,6 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
     
     loadData();
   }, []);
-
-  // Удаление карты
-  const handleDeleteCard = async (cardId: string) => {
-    if (!confirm('Удалить эту карту?')) return;
-
-    try {
-      const response = await fetch(`/api/user/cards/${cardId}`, {
-        method: 'DELETE',
-      });
-
-      if (response.ok) {
-        setSavedCards(prev => prev.filter(card => card.id !== cardId));
-      } else {
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const data = await response.json();
-          alert(data.error || 'Не удалось удалить карту');
-        } else {
-          alert('Не удалось удалить карту');
-        }
-      }
-    } catch (error) {
-      console.error('Ошибка удаления карты:', error);
-      alert('Произошла ошибка при удалении карты');
-    }
-  };
-
-  // Установка карты по умолчанию
-  const handleSetDefaultCard = async (cardId: string) => {
-    try {
-      const response = await fetch(`/api/user/cards/${cardId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ is_default: true }),
-      });
-
-      if (response.ok) {
-        setSavedCards(prev => 
-          prev.map(card => ({
-            ...card,
-            is_default: card.id === cardId,
-          }))
-        );
-      } else {
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/json')) {
-          const data = await response.json();
-          alert(data.error || 'Не удалось установить карту по умолчанию');
-        } else {
-          alert('Не удалось установить карту по умолчанию');
-        }
-      }
-    } catch (error) {
-      console.error('Ошибка установки карты по умолчанию:', error);
-      alert('Произошла ошибка');
-    }
-  };
 
   const getRoleName = (role: string) => {
     const roles: Record<string, string> = {
@@ -897,84 +809,6 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
 
       {/* Мои бронирования */}
       <UserBookings isViewMode={isViewMode} />
-
-      {/* Сохраненные карты - только в своем профиле */}
-      {!isViewMode && (
-        <div className="bg-white rounded-2xl border-2 border-gray-100 shadow-sm p-6 md:p-8">
-        <h2 className="text-3xl md:text-4xl font-black text-gray-900 mb-6 flex items-center gap-3">
-          <div className="p-3 bg-emerald-600 rounded-xl text-white">
-            <CreditCard className="w-6 h-6 md:w-7 md:h-7" />
-          </div>
-          Сохраненные карты
-        </h2>
-        
-        {loadingCards ? (
-          <div className="text-center py-8">
-            <Loader2 className="w-8 h-8 text-gray-400 mx-auto animate-spin" />
-          </div>
-        ) : savedCards.length === 0 ? (
-          <div className="text-center py-16">
-            <CreditCard className="w-20 h-20 text-gray-300 mx-auto mb-6" />
-            <p className="text-xl md:text-2xl font-bold text-gray-700 mb-2">У вас нет сохраненных карт</p>
-            <p className="text-lg text-gray-600 font-medium">
-              Карты будут сохранены при бронировании тура
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {savedCards.map((card) => (
-              <div
-                key={card.id}
-                className="flex items-center justify-between p-5 md:p-6 border-2 border-gray-100 rounded-xl hover:border-emerald-300 hover:shadow-lg transition-all duration-300"
-              >
-                <div className="flex items-center gap-4 md:gap-6">
-                  <div className={`w-14 h-10 md:w-16 md:h-12 rounded-lg ${
-                    card.card_type === 'visa' ? 'bg-blue-600' :
-                    card.card_type === 'mastercard' ? 'bg-red-600' :
-                    card.card_type === 'mir' ? 'bg-emerald-600' :
-                    'bg-gray-400'
-                  } flex items-center justify-center text-white text-sm md:text-base font-black`}>
-                    {card.card_type.toUpperCase()}
-                  </div>
-                  <div>
-                    <div className="font-bold text-lg md:text-xl text-gray-900">
-                      •••• {card.last_four_digits}
-                    </div>
-                    {card.cardholder_name && (
-                      <div className="text-base text-gray-600 font-medium">{card.cardholder_name}</div>
-                    )}
-                  </div>
-                  {card.is_default && (
-                    <div className="flex items-center gap-2 text-emerald-600">
-                      <Star className="w-5 h-5 fill-current" />
-                      <span className="text-sm font-bold">По умолчанию</span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {!card.is_default && (
-                    <button
-                      onClick={() => handleSetDefaultCard(card.id)}
-                      className="p-2.5 text-gray-400 hover:text-emerald-600 transition-colors rounded-lg hover:bg-emerald-50"
-                      title="Установить по умолчанию"
-                    >
-                      <Star className="w-5 h-5 md:w-6 md:h-6" />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleDeleteCard(card.id)}
-                    className="p-2.5 text-gray-400 hover:text-red-600 transition-colors rounded-lg hover:bg-red-50"
-                    title="Удалить карту"
-                  >
-                    <Trash2 className="w-5 h-5 md:w-6 md:h-6" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        </div>
-      )}
 
       {/* Мои отзывы */}
       <div className="bg-white rounded-2xl border-2 border-gray-100 shadow-sm p-6 md:p-8">

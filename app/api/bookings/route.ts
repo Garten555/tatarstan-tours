@@ -7,6 +7,10 @@ import { generatePaymentRef } from '@/lib/payment/payment-ref';
 import { sumActiveBookingSeatsForSession } from '@/lib/tour/session-participants';
 import { publishBookingsChanged } from '@/lib/pusher/data-sync';
 import { sendBookingConfirmationEmail } from '@/lib/bookings/send-booking-confirmation-email';
+import {
+  buildSafeCardPaymentMeta,
+  validateCardPaymentInput,
+} from '@/lib/payment/card-validation';
 
 export async function POST(request: NextRequest) {
   try {
@@ -34,14 +38,14 @@ export async function POST(request: NextRequest) {
       num_people,
       total_price,
       payment_method,
-      payment_data,
-      save_card,
+      payment_data: paymentDataRaw,
+      save_card: _saveCardIgnored,
       attendees,
     } = bookingData;
+    let payment_data = paymentDataRaw;
     const session_id =
       typeof sessionIdRaw === 'string' && sessionIdRaw.length > 0 ? sessionIdRaw : null;
 
-    // Валидация
     if (!tour_id || !num_people || !total_price || !payment_method) {
       return NextResponse.json(
         { error: 'Не все обязательные поля заполнены' },
@@ -49,7 +53,50 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Проверяем доступность тура
+    // Валидация оплаты
+    if (!['card', 'cash', 'qr_code'].includes(payment_method)) {
+      return NextResponse.json({ error: 'Недопустимый способ оплаты' }, { status: 400 });
+    }
+
+    if (_saveCardIgnored) {
+      console.warn('[bookings] save_card ignored — storing cards is disabled');
+    }
+
+    if (payment_method === 'card') {
+      if (payment_data?.card_id) {
+        return NextResponse.json(
+          { error: 'Сохранённые карты больше не поддерживаются. Введите данные карты заново.' },
+          { status: 400 }
+        );
+      }
+
+      const cardValidation = validateCardPaymentInput({
+        number: String(payment_data?.card_number ?? ''),
+        expiry: String(payment_data?.expiry ?? ''),
+        cvv: String(payment_data?.cvv ?? ''),
+        cardholderName: String(payment_data?.cardholder_name ?? ''),
+      });
+
+      if (!cardValidation.ok) {
+        return NextResponse.json(
+          { error: cardValidation.errors[0] || 'Некорректные данные карты' },
+          { status: 400 }
+        );
+      }
+
+      const safeMeta = buildSafeCardPaymentMeta(
+        {
+          number: String(payment_data?.card_number ?? ''),
+          expiry: String(payment_data?.expiry ?? ''),
+          cvv: String(payment_data?.cvv ?? ''),
+          cardholderName: String(payment_data?.cardholder_name ?? ''),
+        },
+        cardValidation
+      );
+
+      payment_data = safeMeta ?? undefined;
+    }
+
     const { data: tour, error: tourError } = await serviceClient
       .from('tours')
       .select('max_participants, current_participants, price_per_person, status, start_date, end_date')
@@ -195,46 +242,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Сохраняем карту если нужно (только для новых карт, не для уже сохраненных)
-    let cardId = payment_data?.card_id || null;
-    
-    if (save_card && payment_data && !payment_data.card_id) {
-      try {
-        // Если устанавливаем как default, снимаем default с других карт
-        if (save_card.is_default) {
-          await serviceClient
-            .from('user_cards')
-            .update({ is_default: false })
-            .eq('user_id', user.id)
-            .eq('is_default', true);
-        }
-
-        const { data: newCard, error: cardError } = await serviceClient
-          .from('user_cards')
-          .insert({
-            user_id: user.id,
-            last_four_digits: save_card.last_four_digits,
-            card_type: save_card.card_type,
-            cardholder_name: save_card.cardholder_name || null,
-            is_default: save_card.is_default || false,
-          })
-          .select()
-          .single();
-
-        if (cardError) {
-          console.error('Ошибка сохранения карты:', cardError);
-          // Не прерываем выполнение, просто логируем ошибку
-        } else if (newCard) {
-          cardId = (newCard as any).id;
-          console.log('Карта успешно сохранена:', cardId);
-        }
-      } catch (error) {
-        console.error('Ошибка при сохранении карты:', error);
-        // Не прерываем выполнение бронирования, если сохранение карты не удалось
-      }
-    }
-
-    // Получаем данные пользователя и тура для email/участников
+    // Создаем бронирование
     const [userProfileResult, tourDataResult] = await Promise.all([
       serviceClient
         .from('profiles')
@@ -282,7 +290,6 @@ export async function POST(request: NextRequest) {
         payment_status: 'paid', // Билет создан = оплачен
         payment_data: {
           ...payment_data,
-          card_id: cardId || payment_data?.card_id || null,
           ...(qrPaymentRef
             ? { qr_payment_ref: qrPaymentRef, qr_demo: true }
             : {}),
