@@ -12,6 +12,8 @@ import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
 const FALLBACK_POLL_MS = 45_000;
 const MIN_TIMER_MS = 1_000;
 const BOUNDARY_BUFFER_MS = 500;
+/** Не чаще одного client-refetch (защита от циклов refresh). */
+const MIN_REFETCH_GAP_MS = 5_000;
 
 function delayUntilNextBoundary(
   nextVisibilityChangeAt: string | null | undefined,
@@ -45,13 +47,16 @@ export function usePublicCatalogRefresh(
   const refetchRef = useRef(refetch);
   refetchRef.current = refetch;
 
+  const lastRefetchAtRef = useRef(0);
+
   const runRefetch = useCallback(() => {
+    const now = Date.now();
+    if (now - lastRefetchAtRef.current < MIN_REFETCH_GAP_MS) return;
+    lastRefetchAtRef.current = now;
     void refetchRef.current();
   }, []);
 
-  useEffect(() => {
-    runRefetch();
-  }, [runRefetch]);
+  const watchKey = watchStartDates.filter(Boolean).join('|');
 
   useEffect(() => {
     const key = process.env.NEXT_PUBLIC_PUSHER_KEY;
@@ -88,7 +93,7 @@ export function usePublicCatalogRefresh(
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [nextVisibilityChangeAt, watchStartDates, runRefetch]);
+  }, [nextVisibilityChangeAt, watchKey, runRefetch]);
 
   useEffect(() => {
     const id = window.setInterval(() => {

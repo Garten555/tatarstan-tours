@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { ArrowRight, Sparkles } from 'lucide-react';
 
 import type { DisplayableCatalogTourRow } from '@/lib/tours/active-catalog-listing';
@@ -16,7 +15,6 @@ type FeaturedToursProps = {
 };
 
 export function FeaturedTours({ tours: initialTours, totalAvailableTours: initialTotal }: FeaturedToursProps) {
-  const router = useRouter();
   const [tours, setTours] = useState(initialTours);
   const [totalAvailableTours, setTotalAvailableTours] = useState(initialTotal);
   const [nextVisibilityChangeAt, setNextVisibilityChangeAt] = useState<string | null>(null);
@@ -38,11 +36,10 @@ export function FeaturedTours({ tours: initialTours, totalAvailableTours: initia
       setTours(data.tours ?? []);
       setTotalAvailableTours(data.totalAvailableTours ?? 0);
       setNextVisibilityChangeAt(data.nextVisibilityChangeAt ?? null);
-      router.refresh();
     } catch {
       /* ignore */
     }
-  }, [router]);
+  }, []);
 
   const watchStartDates = useMemo(
     () => tours.map((tour) => tour.start_date),

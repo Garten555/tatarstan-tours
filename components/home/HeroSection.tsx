@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import type { HeroPopularTour } from '@/lib/tours/active-catalog-listing';
 import { usePublicCatalogRefresh } from '@/lib/hooks/use-public-catalog-refresh';
@@ -60,7 +59,6 @@ function GlassTourCard({ tour, linked }: { tour: PopularTour; linked: boolean })
 }
 
 export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | null }) {
-  const router = useRouter();
   const [items, setItems] = useState<PopularTour[]>(() => normalizeHeroItems(popularTours));
   const [nextVisibilityChangeAt, setNextVisibilityChangeAt] = useState<string | null>(null);
 
@@ -74,11 +72,10 @@ export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | n
       };
       setItems(normalizeHeroItems(data.tours));
       setNextVisibilityChangeAt(data.nextVisibilityChangeAt ?? null);
-      router.refresh();
     } catch {
       /* ignore */
     }
-  }, [router]);
+  }, []);
 
   useEffect(() => {
     setItems(normalizeHeroItems(popularTours));
