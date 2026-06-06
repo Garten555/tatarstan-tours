@@ -102,7 +102,8 @@ export default function UserMessenger() {
   const [clearingThread, setClearingThread] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  
+  const [canSendToPeer, setCanSendToPeer] = useState(true);
+  const [cannotSendReason, setCannotSendReason] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messageTextareaRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -199,6 +200,50 @@ export default function UserMessenger() {
       autoScrollNextRef.current = true;
       void loadMessages(selectedConversation);
     }
+  }, [selectedConversation]);
+
+  useEffect(() => {
+    if (!selectedConversation) {
+      setCanSendToPeer(true);
+      setCannotSendReason(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/users/messages/can-message?user_id=${encodeURIComponent(selectedConversation)}`
+        );
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+
+        if (!res.ok) {
+          setCanSendToPeer(false);
+          setCannotSendReason(data.error || 'Нельзя отправить сообщение');
+          return;
+        }
+
+        if (data.canMessage === false) {
+          setCanSendToPeer(false);
+          setCannotSendReason(data.reason || 'Нельзя отправить сообщение');
+          return;
+        }
+
+        setCanSendToPeer(true);
+        setCannotSendReason(null);
+      } catch {
+        if (!cancelled) {
+          setCanSendToPeer(true);
+          setCannotSendReason(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [selectedConversation]);
 
   // Pusher только после известного id пользователя — иначе канал `user-null` и realtime молчит
@@ -425,6 +470,10 @@ export default function UserMessenger() {
 
   const sendMessage = async () => {
     if ((!newMessage.trim() && !selectedImage) || sending || !selectedConversation || uploadingImage) return;
+    if (!canSendToPeer) {
+      toast.error(cannotSendReason || 'Нельзя отправить сообщение этому пользователю');
+      return;
+    }
 
     try {
       setSending(true);
@@ -846,6 +895,12 @@ export default function UserMessenger() {
 
             {/* Поле ввода */}
             <div className="p-6 border-t-2 border-gray-100 bg-white">
+              {!canSendToPeer ? (
+                <div className="rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-800">
+                  {cannotSendReason || 'Нельзя отправить сообщение этому пользователю'}
+                </div>
+              ) : (
+              <>
               {selectedImage && (
                 <div className="mb-4 relative inline-block max-w-xs">
                   <img
@@ -923,6 +978,8 @@ export default function UserMessenger() {
                   )}
                 </button>
               </div>
+              </>
+              )}
             </div>
           </>
         ) : (

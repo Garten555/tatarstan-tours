@@ -4,6 +4,10 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import Pusher from 'pusher';
 import { publishUserNotification } from '@/lib/pusher/user-notification';
 import { dismissDmNotificationsForSender } from '@/lib/notifications/dismiss-on-chat-read';
+import {
+  BANNED_RECIPIENT_DM_REASON,
+  isProfileCurrentlyBanned,
+} from '@/lib/moderation/profile-ban';
 import { rateLimit } from '@/lib/security/rate-limit';
 
 const pusher = new Pusher({
@@ -271,6 +275,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'Нельзя отправить сообщение самому себе' },
         { status: 400 }
+      );
+    }
+
+    const { data: dmProfiles } = await serviceClient
+      .from('profiles')
+      .select('id, is_banned, ban_until, ban_reason')
+      .in('id', [user.id, recipient_id]);
+
+    const senderProfile = dmProfiles?.find((p) => p.id === user.id);
+    const recipientProfile = dmProfiles?.find((p) => p.id === recipient_id);
+
+    if (isProfileCurrentlyBanned(senderProfile)) {
+      return NextResponse.json(
+        { error: senderProfile?.ban_reason || 'Вы заблокированы' },
+        { status: 403 }
+      );
+    }
+
+    if (isProfileCurrentlyBanned(recipientProfile)) {
+      return NextResponse.json(
+        { error: BANNED_RECIPIENT_DM_REASON },
+        { status: 403 }
       );
     }
 

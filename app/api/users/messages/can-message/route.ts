@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import {
+  BANNED_RECIPIENT_DM_REASON,
+  isProfileCurrentlyBanned,
+} from '@/lib/moderation/profile-ban';
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,6 +35,30 @@ export async function GET(request: NextRequest) {
         { error: 'Нельзя отправить сообщение самому себе' },
         { status: 400 }
       );
+    }
+
+    const { data: dmProfiles } = await serviceClient
+      .from('profiles')
+      .select('id, is_banned, ban_until, ban_reason')
+      .in('id', [user.id, targetUserId]);
+
+    const senderProfile = dmProfiles?.find((p) => p.id === user.id);
+    const recipientProfile = dmProfiles?.find((p) => p.id === targetUserId);
+
+    if (isProfileCurrentlyBanned(senderProfile)) {
+      return NextResponse.json({
+        success: true,
+        canMessage: false,
+        reason: senderProfile?.ban_reason || 'Вы заблокированы',
+      });
+    }
+
+    if (isProfileCurrentlyBanned(recipientProfile)) {
+      return NextResponse.json({
+        success: true,
+        canMessage: false,
+        reason: BANNED_RECIPIENT_DM_REASON,
+      });
     }
 
     // Получаем настройки приватности целевого пользователя
