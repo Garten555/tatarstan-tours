@@ -143,7 +143,7 @@ export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | n
             </div>
 
             <h1
-              className="animate-fadeInUp mb-3 text-4xl font-black leading-[1.12] sm:mb-4 sm:text-5xl md:mb-5 md:text-6xl lg:text-6xl lg:leading-[1.1] xl:text-7xl 2xl:text-8xl"
+              className="animate-fadeInUp mb-3 text-3xl font-black leading-[1.12] sm:mb-4 sm:text-4xl md:mb-5 md:text-5xl lg:text-5xl lg:leading-[1.1] xl:text-6xl"
               style={{ animationDelay: '0.1s' }}
             >
               <span className="block text-white">Путешествие по</span>

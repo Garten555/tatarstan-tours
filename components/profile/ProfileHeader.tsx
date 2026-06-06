@@ -292,7 +292,7 @@ export default function ProfileHeader({
   return (
     <div className="bg-white border-b border-gray-200 shadow-sm">
       {/* Обложка профиля */}
-      <div className="relative h-52 md:h-64 border-b border-gray-200 overflow-hidden">
+      <div className="relative h-40 sm:h-48 md:h-56 border-b border-gray-200 overflow-hidden">
         {coverUrl ? (
           <>
             <Image
@@ -340,11 +340,11 @@ export default function ProfileHeader({
       </div>
 
       {/* Контент профиля */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="relative -mt-20 pb-6">
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 min-w-0">
+        <div className="relative -mt-12 sm:-mt-16 md:-mt-20 pb-4 sm:pb-6">
           {/* Аватар */}
           <div className="relative inline-block">
-            <div className="w-32 h-32 md:w-40 md:h-40 rounded-full border-4 border-white bg-white shadow-xl overflow-hidden">
+            <div className="w-24 h-24 sm:w-32 sm:h-32 md:w-36 md:h-36 rounded-full border-4 border-white bg-white shadow-xl overflow-hidden">
               {avatarUrl ? (
                 <Image
                   src={avatarUrl}

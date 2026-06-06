@@ -66,7 +66,7 @@ export default function TourHeaderCard({
         </div>
       </div>
       <div className="p-4 sm:p-5 md:p-6 lg:p-8 xl:p-10 w-full">
-        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-black text-gray-900 break-words [overflow-wrap:anywhere] leading-tight tracking-tight mb-3 sm:mb-4">
+        <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-4xl xl:text-5xl font-black text-gray-900 break-words [overflow-wrap:anywhere] leading-tight tracking-tight mb-3 sm:mb-4">
           {title}
         </h1>
         {shortDesc && (

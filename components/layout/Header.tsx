@@ -71,7 +71,7 @@ export function Header() {
           </Link>
 
           {/* Центральный блок: Навигация - стильные кнопки */}
-          <nav className="header-nav hidden lg:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
+          <nav className="header-nav hidden xl:flex items-center gap-1 absolute left-1/2 -translate-x-1/2">
             {navLinks.map((link) => {
               const Icon = link.icon;
               // Для /tours активной должна быть только точная страница, не подстраницы
@@ -108,13 +108,13 @@ export function Header() {
             )}
 
             {/* Меню пользователя */}
-            <div className="hidden lg:block">
+            <div className="hidden xl:block">
               <UserMenu />
             </div>
 
             {/* Кнопка мобильного меню */}
             <button
-              className="lg:hidden p-2 text-gray-700 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+              className="xl:hidden p-2 text-gray-700 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               aria-label="Меню"
             >
@@ -129,7 +129,7 @@ export function Header() {
 
         {/* Мобильное меню */}
         {isMobileMenuOpen && (
-          <div className="lg:hidden border-t border-gray-200 bg-white">
+          <div className="xl:hidden border-t border-gray-200 bg-white">
             <div className="px-4 py-4 space-y-3">
               {/* Уведомления для мобилки — только для вошедших пользователей */}
               {notificationAuthReady && notificationShowBell && (

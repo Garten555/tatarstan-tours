@@ -58,7 +58,7 @@ export default function PublicProfileLayout({
   achievementStyles,
 }: PublicProfileLayoutProps) {
   return (
-    <div className="min-h-screen bg-slate-100 pt-[4.5rem] lg:pt-[5rem]">
+    <div className="min-h-screen bg-slate-100 pt-14 sm:pt-16 md:pt-[4.5rem] xl:pt-20 overflow-x-clip">
       <div id="profile" className="scroll-mt-20">
         <ProfileHeader
           profileData={profileData}
@@ -80,8 +80,8 @@ export default function PublicProfileLayout({
         />
       </div>
 
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-5">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-5 min-w-0">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-5 min-w-0">
           <aside className="lg:col-span-3 space-y-4 lg:sticky lg:top-24 h-fit">
             {!isBanned && currentUser && currentUser.id === profileData.id && (
               <div className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4 space-y-3">

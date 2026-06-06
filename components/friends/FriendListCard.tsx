@@ -77,7 +77,7 @@ export default function FriendListCard({
 
         <div className="min-w-0 flex-1">
           <Link href={`/users/${user.username || user.id}`}>
-            <h3 className="mb-1 text-xl font-black text-gray-900 transition-colors hover:text-blue-600 sm:text-2xl md:text-3xl">
+            <h3 className="mb-1 text-lg font-black text-gray-900 transition-colors hover:text-blue-600 sm:text-xl md:text-2xl">
               {getUserName(user)}
             </h3>
           </Link>

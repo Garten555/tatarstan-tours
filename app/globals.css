@@ -147,14 +147,22 @@ body {
   animation-name: slideInFromTop;
 }
 
-/* Smooth scroll behavior */
 html {
   scroll-behavior: smooth;
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: clip;
+  min-width: 0;
 }
 
 /* Container max-width */
 .container {
-  max-width: 1280px;
+  max-width: min(1280px, 100%);
+  width: 100%;
 }
 
 /* Hide scrollbar for horizontal scroll */
@@ -479,7 +487,7 @@ html {
   margin-left: 1rem;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .header-nav {
     display: flex;
   }
@@ -547,7 +555,7 @@ html {
   transition: all 0.2s ease;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .header-mobile-toggle {
     display: none;
   }
@@ -565,7 +573,7 @@ html {
   padding: 0.75rem 0;
 }
 
-@media (min-width: 1024px) {
+@media (min-width: 1280px) {
   .header-mobile-menu {
     display: none;
   }
@@ -1112,36 +1120,9 @@ html {
 
 /* Дополнительные стили для очень маленьких экранов (320px-480px) */
 @media (max-width: 480px) {
-  /* Улучшение читаемости текста на маленьких экранах */
-  body {
-    font-size: 14px;
-  }
-  
-  /* Уменьшение отступов для контейнеров */
-  .container {
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
-  }
-  
-  /* Адаптация кнопок */
-  button, a[role="button"] {
-    min-height: 40px;
-    padding: 0.5rem 1rem;
-    font-size: 0.875rem;
-  }
-  
-  /* Улучшение форм */
-  input, textarea, select {
-    font-size: 16px; /* Предотвращает зум на iOS */
-    padding: 0.75rem;
-  }
-}
-
-/* Улучшение для средних экранов (481px-768px) */
-@media (min-width: 481px) and (max-width: 768px) {
-  .container {
-    padding-left: 1rem;
-    padding-right: 1rem;
+  /* Улучшение контрастности на маленьких экранах */
+  .text-gray-600, .text-gray-500, .text-gray-400 {
+    color: rgb(75 85 99) !important;
   }
 }
 
@@ -1164,75 +1145,46 @@ html {
   }
 }
 
-/* Адаптация для разных масштабов экрана (zoom levels) */
-/* Масштаб 50-75% (очень маленький) */
-@media screen and (max-width: 960px) {
-  /* Улучшение читаемости текста */
-  body {
-    font-size: 15px;
-  }
-  
-  /* Увеличение минимальных размеров текста */
-  p, span, div, li, td, th {
-    font-size: clamp(13px, 1.5vw, 16px);
-  }
-  
-  /* Улучшение контрастности */
-  .text-gray-600, .text-gray-500, .text-gray-400 {
-    color: rgb(75 85 99) !important; /* Более темный серый */
-  }
-  
-  /* Увеличение размеров кнопок */
-  button, a[role="button"], .btn {
-    min-height: 44px;
-    padding: 0.625rem 1.25rem;
-    font-size: clamp(14px, 1.5vw, 16px);
-  }
-  
-  /* Улучшение заголовков */
-  h1 {
-    font-size: clamp(24px, 5vw, 32px) !important;
-  }
-  
-  h2 {
-    font-size: clamp(20px, 4vw, 28px) !important;
-  }
-  
-  h3 {
-    font-size: clamp(18px, 3.5vw, 24px) !important;
+/* Плотный режим: масштаб 125% Windows / узкий ноутбук (641px+, не телефоны) */
+@media (max-width: 1536px) and (min-width: 641px) {
+  html {
+    font-size: 93.75%;
   }
 }
 
-/* Масштаб 75-90% (маленький) */
-@media screen and (min-width: 961px) and (max-width: 1280px) {
+@media (max-width: 1280px) and (min-width: 641px) {
+  html {
+    font-size: 87.5%;
+  }
+}
+
+/* Мелкие экраны — читаемый базовый размер */
+@media (max-width: 640px) {
   body {
     font-size: 16px;
   }
-  
-  p, span, div, li, td, th {
-    font-size: clamp(14px, 1.2vw, 16px);
-  }
-  
-  .text-gray-600, .text-gray-500 {
-    color: rgb(71 85 105) !important;
-  }
-}
 
-/* Масштаб 90-110% (нормальный) */
-@media screen and (min-width: 1281px) and (max-width: 1920px) {
-  body {
-    font-size: 16px;
-  }
-}
-
-/* Масштаб 110%+ (большой) */
-@media screen and (min-width: 1921px) {
-  body {
-    font-size: 18px;
-  }
-  
   .container {
-    max-width: 1400px;
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+
+  button, a[role="button"] {
+    min-height: 40px;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+  }
+
+  input, textarea, select {
+    font-size: 16px;
+    padding: 0.75rem;
+  }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 }
 

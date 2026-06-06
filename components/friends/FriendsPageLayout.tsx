@@ -20,7 +20,7 @@ export default function FriendsPageLayout({
 }: Props) {
   return (
     <main className="min-h-screen bg-white">
-      <section className="relative overflow-hidden bg-white py-12 sm:py-16 md:py-20 lg:py-24">
+      <section className="relative overflow-hidden bg-white py-8 sm:py-10 md:py-12 lg:py-16">
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -right-32 top-1/4 h-72 w-72 rounded-full bg-blue-100/40 blur-3xl sm:h-96 sm:w-96" />
           <div className="absolute -left-32 bottom-1/4 h-72 w-72 rounded-full bg-purple-100/40 blur-3xl sm:h-96 sm:w-96" />
@@ -43,11 +43,11 @@ export default function FriendsPageLayout({
               </span>
             </div>
 
-            <h1 className="mb-3 text-3xl font-black text-gray-900 sm:mb-5 sm:text-4xl md:text-5xl lg:text-6xl">
+            <h1 className="mb-3 text-2xl font-black text-gray-900 sm:mb-4 sm:text-3xl md:text-4xl lg:text-5xl">
               {title}
             </h1>
 
-            <p className="text-base font-medium leading-relaxed text-gray-600 sm:text-lg md:text-xl lg:text-2xl">
+            <p className="text-sm font-medium leading-relaxed text-gray-600 sm:text-base md:text-lg">
               {subtitle}
             </p>
           </div>
