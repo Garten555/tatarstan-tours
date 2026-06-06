@@ -64,11 +64,25 @@ export async function POST(request: NextRequest) {
       ? await deleteAllTourRooms(serviceClient)
       : await cleanupExpiredTourRooms(serviceClient);
 
-    const message = deleteAll
-      ? `Удалено всех комнат: ${result.deleted}, файлов в облаке: ${result.s3Files}`
-      : result.deleted > 0
-        ? `Удалено комнат: ${result.deleted}, файлов в облаке: ${result.s3Files}`
-        : `Нет комнат старше ${TOUR_ROOM_RETENTION_DAYS} дней после окончания выезда/тура`;
+    let message: string;
+    if (deleteAll) {
+      message = `Удалено всех комнат: ${result.deleted}, файлов в облаке: ${result.s3Files}`;
+    } else if (result.deleted > 0) {
+      message = `Удалено комнат: ${result.deleted}, файлов в облаке: ${result.s3Files}`;
+    } else {
+      const retention = result as Awaited<ReturnType<typeof cleanupExpiredTourRooms>>;
+      message =
+        retention.totalRooms > 0
+          ? `Нет комнат для удаления: ${retention.activeCount} из ${retention.totalRooms} ещё активны (выезд не завершён или не прошло ${TOUR_ROOM_RETENTION_DAYS} дн.)`
+          : `Нет комнат старше ${TOUR_ROOM_RETENTION_DAYS} дней после окончания выезда/тура`;
+    }
+
+    const retentionMeta = deleteAll
+      ? {}
+      : (() => {
+          const r = result as Awaited<ReturnType<typeof cleanupExpiredTourRooms>>;
+          return { total_rooms: r.totalRooms, active_rooms: r.activeCount };
+        })();
 
     return NextResponse.json({
       success: true,
@@ -76,6 +90,7 @@ export async function POST(request: NextRequest) {
       s3_files_deleted: result.s3Files,
       retention_days: TOUR_ROOM_RETENTION_DAYS,
       mode: deleteAll ? 'all' : 'retention',
+      ...retentionMeta,
       message,
     });
   } catch (error) {

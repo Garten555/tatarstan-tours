@@ -62,7 +62,8 @@ export async function GET(request: NextRequest) {
           cover_image,
           city:cities(name)
         ),
-        session:tour_sessions(
+        session:tour_sessions!tour_rooms_tour_session_id_fkey(
+          id,
           start_at,
           end_at
         ),
