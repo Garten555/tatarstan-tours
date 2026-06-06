@@ -4,7 +4,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import PublicProfileLayout from '@/components/profile/PublicProfileLayout';
 import { mergeLatestActivityTimestamps } from '@/lib/utils/presence';
 import { countUserParticipatedTours, fetchUserParticipatedTours } from '@/lib/passport/user-tour-stats';
-import { syncUserReputationFromAchievements } from '@/lib/reputation/experience';
+import { syncAllUserAchievements } from '@/lib/achievements/auto-award';
 
 interface PublicProfilePageProps {
   params: Promise<{ username: string }>;
@@ -213,6 +213,11 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
   }
 
   // Получаем статистику и данные паспорта параллельно
+  // Синхронизация пропущенных достижений (Первый шаг, Блогер…) до отображения
+  const syncResult = await syncAllUserAchievements(serviceClient, profileData.id);
+  profileData.reputation_score = syncResult.reputation_score;
+  profileData.status_level = syncResult.status_level;
+
   const [
     diariesCountResult,
     achievementsCountResult,
@@ -512,13 +517,8 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
       .limit(6) : Promise.resolve({ data: [], error: null }),
   ]);
 
-  const [reputation, participatedToursCount, participatedTours] = await Promise.all([
-    syncUserReputationFromAchievements(serviceClient, profileData.id),
-    countUserParticipatedTours(serviceClient, profileData.id),
-    fetchUserParticipatedTours(serviceClient, profileData.id),
-  ]);
-  profileData.reputation_score = reputation.reputation_score;
-  profileData.status_level = reputation.status_level;
+  const participatedToursCount = await countUserParticipatedTours(serviceClient, profileData.id);
+  const participatedTours = await fetchUserParticipatedTours(serviceClient, profileData.id);
 
   const stats = {
     diaries_count: diariesCountResult.count || 0, // Оставляем для обратной совместимости

@@ -33,6 +33,17 @@ const ACHIEVEMENT_TOUR_SELECT = `
   )
 `;
 
+const TOUR_CARD_SELECT = `
+  id,
+  title,
+  slug,
+  cover_image,
+  start_date,
+  end_date,
+  yandex_map_url,
+  city:cities(id, name)
+`;
+
 export type ParticipatedTourRow = {
   id: string;
   tour_id: string;
@@ -54,9 +65,10 @@ function normalizeTourJoin(raw: unknown): ParticipatedTourRow['tour'] {
   const tour = Array.isArray(raw) ? raw[0] : raw;
   if (!tour || typeof tour !== 'object') return null;
   const t = tour as Record<string, unknown>;
-  if (typeof t.id !== 'string' || typeof t.title !== 'string' || typeof t.slug !== 'string') {
-    return null;
-  }
+  if (typeof t.id !== 'string') return null;
+
+  const title = typeof t.title === 'string' && t.title.trim() ? t.title : 'Тур';
+  const slug = typeof t.slug === 'string' && t.slug.trim() ? t.slug : t.id;
   const cityRaw = Array.isArray(t.city) ? t.city[0] : t.city;
   const city =
     cityRaw &&
@@ -68,13 +80,26 @@ function normalizeTourJoin(raw: unknown): ParticipatedTourRow['tour'] {
 
   return {
     id: t.id,
-    title: t.title,
-    slug: t.slug,
+    title,
+    slug,
     cover_image: typeof t.cover_image === 'string' ? t.cover_image : null,
     start_date: typeof t.start_date === 'string' ? t.start_date : '',
     end_date: typeof t.end_date === 'string' ? t.end_date : null,
     yandex_map_url: typeof t.yandex_map_url === 'string' ? t.yandex_map_url : null,
     city,
+  };
+}
+
+function stubTour(tourId: string): ParticipatedTourRow['tour'] {
+  return {
+    id: tourId,
+    title: 'Тур',
+    slug: tourId,
+    cover_image: null,
+    start_date: '',
+    end_date: null,
+    yandex_map_url: null,
+    city: null,
   };
 }
 
@@ -84,6 +109,34 @@ function sortParticipatedTours(rows: ParticipatedTourRow[]): ParticipatedTourRow
     const bTs = b.booking_date ? new Date(b.booking_date).getTime() : 0;
     return bTs - aTs;
   });
+}
+
+/** ID туров участия: брони + достижения (без join на tours). */
+export async function fetchUserParticipatedTourIds(
+  client: SupabaseClient,
+  userId: string
+): Promise<string[]> {
+  const [bookingsRes, achievementsRes] = await Promise.all([
+    client
+      .from('bookings')
+      .select('tour_id')
+      .eq('user_id', userId)
+      .in('status', ['confirmed', 'completed']),
+    client
+      .from('achievements')
+      .select('tour_id')
+      .eq('user_id', userId)
+      .not('tour_id', 'is', null),
+  ]);
+
+  const ids = new Set<string>();
+  for (const row of bookingsRes.data ?? []) {
+    if (row.tour_id) ids.add(row.tour_id as string);
+  }
+  for (const row of achievementsRes.data ?? []) {
+    if (row.tour_id) ids.add(row.tour_id as string);
+  }
+  return Array.from(ids);
 }
 
 /** Туры пользователя: бронирования (confirmed/completed) + достижения с tour_id. */
@@ -117,31 +170,51 @@ export async function fetchUserParticipatedTours(
 
   for (const row of bookingsRes.data ?? []) {
     const tourId = row.tour_id as string | null;
-    const tour = normalizeTourJoin(row.tour);
-    if (!tourId || !tour) continue;
+    if (!tourId) continue;
     byTourId.set(tourId, {
       id: row.id as string,
       tour_id: tourId,
       status: (row.status as string) || 'confirmed',
       booking_date: (row.booking_date as string | null) ?? null,
-      tour,
+      tour: normalizeTourJoin(row.tour),
     });
   }
 
   for (const row of achievementsRes.data ?? []) {
     const tourId = row.tour_id as string | null;
-    const tour = normalizeTourJoin(row.tour);
-    if (!tourId || !tour || byTourId.has(tourId)) continue;
+    if (!tourId || byTourId.has(tourId)) continue;
     byTourId.set(tourId, {
       id: `achievement-${row.id as string}`,
       tour_id: tourId,
       status: 'participated',
       booking_date: (row.unlock_date as string | null) ?? null,
-      tour,
+      tour: normalizeTourJoin(row.tour),
     });
   }
 
-  return sortParticipatedTours(Array.from(byTourId.values()));
+  const missingTourIds = [...byTourId.keys()].filter((id) => !byTourId.get(id)?.tour);
+  if (missingTourIds.length > 0) {
+    const { data: tours } = await client
+      .from('tours')
+      .select(TOUR_CARD_SELECT)
+      .in('id', missingTourIds);
+
+    const tourById = new Map<string, ParticipatedTourRow['tour']>();
+    for (const raw of tours ?? []) {
+      const normalized = normalizeTourJoin(raw);
+      if (normalized) tourById.set(normalized.id, normalized);
+    }
+
+    for (const tourId of missingTourIds) {
+      const row = byTourId.get(tourId);
+      if (!row || row.tour) continue;
+      row.tour = tourById.get(tourId) ?? stubTour(tourId);
+    }
+  }
+
+  return sortParticipatedTours(
+    [...byTourId.values()].filter((row) => row.tour)
+  );
 }
 
 /** Уникальные туры: бронирования (confirmed/completed) + достижения с tour_id. */
@@ -149,6 +222,6 @@ export async function countUserParticipatedTours(
   client: SupabaseClient,
   userId: string
 ): Promise<number> {
-  const tours = await fetchUserParticipatedTours(client, userId);
-  return tours.length;
+  const ids = await fetchUserParticipatedTourIds(client, userId);
+  return ids.length;
 }

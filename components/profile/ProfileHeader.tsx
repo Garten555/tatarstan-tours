@@ -361,8 +361,8 @@ export default function ProfileHeader({
                 </div>
               )}
             </div>
-            {/* Бейдж уровня (по опыту, для всех включая админов) */}
-            {!isBanned && (
+            {/* Бейдж уровня по опыту — не для staff-ролей (у них отдельный бейдж роли) */}
+            {!isBanned && !isAdmin && (
               <div className={`absolute -bottom-2 -right-2 ${statusLevel.color} text-white rounded-full w-12 h-12 md:w-14 md:h-14 flex items-center justify-center text-xl md:text-2xl shadow-xl border-4 border-white`}>
                 {statusLevel.icon}
               </div>
@@ -418,7 +418,7 @@ export default function ProfileHeader({
                   <span>{roleLabel}</span>
                 </div>
               )}
-              {!isBanned && (
+              {!isBanned && !isAdmin && (
                 <span className={`px-3 py-1.5 ${statusLevel.color} text-white text-sm font-bold rounded-lg shadow-md`}>
                   {statusLevel.name}
                 </span>

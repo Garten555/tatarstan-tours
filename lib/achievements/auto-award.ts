@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-import { fetchUserParticipatedTours } from '@/lib/passport/user-tour-stats';
+import { fetchUserParticipatedTourIds } from '@/lib/passport/user-tour-stats';
 import { publishAchievementEarned } from '@/lib/pusher/user-notification';
 import { syncUserReputationFromAchievements } from '@/lib/reputation/experience';
 
@@ -141,13 +141,13 @@ export async function syncTourParticipationAchievements(
 ): Promise<number> {
   let awarded = 0;
 
-  const participated = await fetchUserParticipatedTours(serviceClient, userId);
-  if (participated.length === 0) return 0;
+  const tourIds = await fetchUserParticipatedTourIds(serviceClient, userId);
+  if (tourIds.length === 0) return 0;
 
-  const tourIds = participated.map((row) => row.tour_id);
-  const anchorTourId = preferredTourId && tourIds.includes(preferredTourId)
-    ? preferredTourId
-    : participated[participated.length - 1]?.tour_id ?? tourIds[0];
+  const anchorTourId =
+    preferredTourId && tourIds.includes(preferredTourId)
+      ? preferredTourId
+      : tourIds[0];
 
   const { data: tours } = await serviceClient
     .from('tours')
@@ -172,7 +172,7 @@ export async function syncTourParticipationAchievements(
   });
   if (firstResult.awarded) awarded += 1;
 
-  const count = participated.length;
+  const count = tourIds.length;
   for (const milestone of [10, 25, 50, 100]) {
     if (count < milestone) continue;
     const badge = TOUR_MILESTONE_BADGES[milestone];
