@@ -12,11 +12,11 @@ import {
   Clock,
   MapPin,
   ArrowLeft,
-  Share2
 } from 'lucide-react';
 import { escapeHtml, sanitizeRichHtml } from '@/lib/utils/sanitize';
 import BlogLikeButton from '@/components/blog/BlogLikeButton';
 import BlogComments from '@/components/blog/BlogComments';
+import ShareButton from '@/components/common/ShareButton';
 import {
   pathSegmentLooksLikeUuid,
   resolveAuthorIdFromPathSegment,
@@ -236,10 +236,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
                 <MessageCircle className="w-5 h-5" />
                 <span>{post.comments_count || 0} комментариев</span>
               </div>
-              <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl hover:bg-gray-50">
-                <Share2 className="w-5 h-5" />
-                Поделиться
-              </button>
+              <ShareButton title={post.title} text={post.title} />
             </div>
           </div>
         </article>

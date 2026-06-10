@@ -21,6 +21,7 @@ type TourScheduleBookingProps = {
   tourCurrentParticipants: number;
   /** Передаётся, только если компонент не обёрнут в TourSessionsProvider */
   sessions?: TourSessionOption[];
+  shareTitle?: string;
 };
 
 /**
@@ -32,6 +33,7 @@ export default function TourScheduleBooking({
   tourMaxParticipants,
   tourCurrentParticipants,
   sessions: sessionsProp,
+  shareTitle,
 }: TourScheduleBookingProps) {
   const ctx = useTourSessions();
 
@@ -168,6 +170,7 @@ export default function TourScheduleBooking({
       bookingCtaLabel={
         validSessions.length > 1 ? 'Забронировать на эту дату' : undefined
       }
+      shareTitle={shareTitle}
     />
   );
 }

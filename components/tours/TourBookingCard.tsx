@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
-import { Share2, CheckCircle2, Users } from 'lucide-react';
+import { CheckCircle2, Users } from 'lucide-react';
+import ShareButton from '@/components/common/ShareButton';
 
 type TourBookingCardProps = {
   price: number;
@@ -14,6 +15,8 @@ type TourBookingCardProps = {
   bookingCtaLabel?: string;
   /** Подписи «Шаг 1/2» при нескольких датах */
   bookingFlowSteps?: boolean;
+  /** Заголовок для шаринга (название тура) */
+  shareTitle?: string;
 };
 
 export default function TourBookingCard({
@@ -25,6 +28,7 @@ export default function TourBookingCard({
   beforeAvailability,
   bookingCtaLabel = 'Забронировать',
   bookingFlowSteps = false,
+  shareTitle,
 }: TourBookingCardProps) {
   const availabilityPercentage = (availableSpots / maxParticipants) * 100;
 
@@ -119,11 +123,11 @@ export default function TourBookingCard({
           </div>
         </div>
 
-        {/* Кнопка "Поделиться" */}
-        <button className="w-full py-3 sm:py-3.5 md:py-4 lg:py-4 xl:py-5 rounded-lg sm:rounded-xl md:rounded-xl lg:rounded-2xl border-2 border-gray-200 text-sm sm:text-base md:text-base lg:text-lg font-black text-gray-700 hover:border-emerald-500 hover:text-emerald-600 hover:bg-emerald-50 transition-all duration-300 flex items-center justify-center gap-2.5 sm:gap-3 shadow-md hover:shadow-xl transform hover:-translate-y-0.5 active:scale-95">
-          <Share2 className="w-5 h-5 sm:w-5 md:w-5 lg:w-6 lg:h-6" />
-          Поделиться
-        </button>
+        <ShareButton
+          variant="card"
+          title={shareTitle}
+          text={shareTitle ? `Тур «${shareTitle}»` : undefined}
+        />
       </div>
     </aside>
   );

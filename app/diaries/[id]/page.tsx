@@ -12,12 +12,12 @@ import {
   ArrowLeft,
   Edit,
   Trash2,
-  Share2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import { LikeButton } from '@/components/diaries/LikeButton';
+import ShareButton from '@/components/common/ShareButton';
 
 interface DiaryPageProps {
   params: Promise<{ id: string }>;
@@ -191,10 +191,7 @@ export default async function DiaryPage({ params }: DiaryPageProps) {
                 {user && (
                   <LikeButton diaryId={id} isLiked={isLiked} />
                 )}
-                <button className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-xl hover:bg-gray-50">
-                  <Share2 className="w-5 h-5" />
-                  Поделиться
-                </button>
+                <ShareButton title={diary.title} text={diary.title} />
                 {isOwner && (
                   <>
                     <Link

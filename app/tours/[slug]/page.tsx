@@ -461,6 +461,7 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
                 price={t.price_per_person}
                 tourMaxParticipants={t.max_participants}
                 tourCurrentParticipants={t.current_participants || 0}
+                shareTitle={t.title}
               />
             )}
           </div>
