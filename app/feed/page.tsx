@@ -8,7 +8,9 @@ import ClampedText from '@/components/ui/ClampedText';
 import { FeedAspectCover } from '@/components/feed/FeedAspectCover';
 import BlogPostFeedItem from '@/components/blog/BlogPostFeedItem';
 import FormattedDate from '@/components/common/FormattedDate';
+import UserAvatar from '@/components/common/UserAvatar';
 import { createClient } from '@/lib/supabase/client';
+import { profileDisplayName } from '@/lib/profile/display';
 
 type FeedType = 'post' | 'review' | 'achievement';
 
@@ -22,6 +24,7 @@ type FeedItem = {
     first_name?: string | null;
     last_name?: string | null;
     avatar_url?: string | null;
+    role?: string | null;
   };
   payload: Record<string, any>;
 };
@@ -32,11 +35,6 @@ const FILTERS: { id: FeedType | 'all'; label: string }[] = [
   { id: 'review', label: 'Отзывы' },
   { id: 'achievement', label: 'Достижения' },
 ];
-
-function actorName(actor: FeedItem['actor']) {
-  const full = [actor.first_name, actor.last_name].filter(Boolean).join(' ').trim();
-  return full || actor.username || 'Пользователь';
-}
 
 export default function FeedPage() {
   const [items, setItems] = useState<FeedItem[]>([]);
@@ -140,22 +138,22 @@ export default function FeedPage() {
         ) : (
           <div className="space-y-6">
             {items.map((item) => {
-              const name = actorName(item.actor);
-              const username = item.actor.username || item.actor.id;
-              const profileHref = `/users/${username}`;
+              const name = profileDisplayName(item.actor);
+              const profileSlug = item.actor.username || item.actor.id;
+              const profileHref = `/users/${profileSlug}`;
               return (
                 <section
                   key={item.id}
                   className="rounded-2xl border border-gray-200 bg-white p-4 min-w-0 shadow-sm"
                 >
                   <div className="flex items-center gap-3 mb-3">
-                    {item.actor.avatar_url ? (
-                      <img src={item.actor.avatar_url} alt={name} className="w-10 h-10 rounded-full object-cover" />
-                    ) : (
-                      <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center">
-                        {name.slice(0, 1).toUpperCase()}
-                      </div>
-                    )}
+                    <UserAvatar
+                      avatarUrl={item.actor.avatar_url}
+                      displayName={name}
+                      username={item.actor.username}
+                      role={item.actor.role}
+                      size="sm"
+                    />
                     <div>
                       <Link href={profileHref} className="font-bold text-gray-900 hover:text-emerald-700">
                         {escapeHtml(name)}
@@ -202,7 +200,10 @@ export default function FeedPage() {
                             user: {
                               id: item.actor.id,
                               username: item.actor.username,
+                              first_name: item.actor.first_name ?? null,
+                              last_name: item.actor.last_name ?? null,
                               avatar_url: item.actor.avatar_url ?? null,
+                              role: item.actor.role ?? null,
                             },
                           }}
                           isOwner={meId != null && meId === item.actor.id}

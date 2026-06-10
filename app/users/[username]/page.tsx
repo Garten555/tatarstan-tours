@@ -84,6 +84,8 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
     .select(`
       id,
       username,
+      first_name,
+      last_name,
       bio,
       avatar_url,
       public_profile_enabled,

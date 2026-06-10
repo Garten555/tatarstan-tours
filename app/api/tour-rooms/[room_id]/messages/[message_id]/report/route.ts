@@ -70,8 +70,25 @@ export async function POST(
       .select('id')
       .single();
 
-    if (error || !updated) {
+    if (error) {
+      const missingColumn =
+        error.code === '42703' ||
+        /is_reported|reported_at|reported_by|report_reason/i.test(error.message || '');
+      if (missingColumn) {
+        return NextResponse.json(
+          {
+            error:
+              'В базе нет полей для жалоб на сообщения. Выполните SQL из database/migrations/009_tour_room_message_reports.sql в Supabase.',
+          },
+          { status: 503 }
+        );
+      }
+      console.error('[tour-room-message-report]', error);
       return NextResponse.json({ error: 'Не удалось отправить жалобу' }, { status: 500 });
+    }
+
+    if (!updated) {
+      return NextResponse.json({ error: 'Сообщение не найдено' }, { status: 404 });
     }
 
     void publishAdminModerationChanged();

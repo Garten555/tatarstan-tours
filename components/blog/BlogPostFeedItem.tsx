@@ -14,6 +14,7 @@ import { useDialog } from '@/hooks/useDialog';
 import toast from 'react-hot-toast';
 import { bindPlyrRussianSpeedUi, type PlyrRussianUiHost } from '@/lib/video/plyr-ru-speed-ui';
 import { loadPlyr } from '@/lib/video/load-plyr';
+import { profileDisplayName } from '@/lib/profile/display';
 
 interface BlogPostFeedItemProps {
   /** Лайк текущего пользователя (например из /api/feed) */
@@ -33,6 +34,8 @@ interface BlogPostFeedItemProps {
     user?: {
       id: string;
       username?: string | null;
+      first_name?: string | null;
+      last_name?: string | null;
       avatar_url?: string | null;
       role?: string | null;
     };
@@ -235,7 +238,17 @@ export default function BlogPostFeedItem({
   }, [post.content]);
 
   const displayDate = post.published_at || post.created_at;
-  const authorUsername = post.user?.username || post.user?.id;
+  const authorProfileSlug = post.user?.username || post.user?.id;
+  const authorDisplayName = profileDisplayName(
+    post.user
+      ? {
+          id: post.user.id,
+          username: post.user.username,
+          first_name: post.user.first_name,
+          last_name: post.user.last_name,
+        }
+      : null
+  );
 
   // Если пост удален, не рендерим его (после всех хуков)
   if (postDeleted) {
@@ -334,7 +347,7 @@ export default function BlogPostFeedItem({
       {/* Заголовок поста с автором - как в отзывах */}
       <div className="flex items-start justify-between gap-4 mb-6">
         <div className="flex items-center gap-4">
-          <Link href={`/users/${authorUsername}`} className="flex items-center gap-4 hover:opacity-80 transition-opacity">
+          <Link href={`/users/${authorProfileSlug}`} className="flex items-center gap-4 hover:opacity-80 transition-opacity">
             <button
               type="button"
               onClick={(e) => {
@@ -347,7 +360,7 @@ export default function BlogPostFeedItem({
             >
               <UserAvatar
                 avatarUrl={post.user?.avatar_url}
-                displayName={authorUsername || undefined}
+                displayName={authorDisplayName}
                 username={post.user?.username}
                 role={post.user?.role}
                 size="lg"
@@ -355,7 +368,7 @@ export default function BlogPostFeedItem({
             </button>
             <div>
               <div className="font-semibold text-gray-900 text-base md:text-lg">
-                {authorUsername || 'Пользователь'}
+                {authorDisplayName}
               </div>
               <div className="text-sm md:text-base text-gray-400 mt-1">
                 <FormattedDate value={displayDate} variant="date" />
@@ -610,7 +623,7 @@ export default function BlogPostFeedItem({
         <ImageViewerModal
           isOpen={avatarViewerOpen}
           images={[post.user.avatar_url]}
-          title={`Аватар ${authorUsername || 'Пользователя'}`}
+          title={`Аватар ${authorDisplayName}`}
           onClose={() => setAvatarViewerOpen(false)}
         />
       )}

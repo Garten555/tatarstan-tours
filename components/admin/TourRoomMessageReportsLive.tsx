@@ -30,6 +30,10 @@ export default function TourRoomMessageReportsLive({ initialRows, viewerRole }: 
   }, [initialRows]);
 
   useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
     const onBridge = (e: Event) => {
       const detail = (e as CustomEvent<PusherBridgeDetail>).detail;
       if (detail?.channel === 'moderation' && detail.event === 'reports-changed') {

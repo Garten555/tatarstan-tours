@@ -18,6 +18,10 @@ import {
   validateCardPaymentInput,
 } from '@/lib/payment/card-validation';
 import { isSessionBookable } from '@/lib/tours/tour-public-visibility';
+import {
+  initialBookingStatus,
+  initialPaymentStatus,
+} from '@/lib/bookings/initial-payment';
 
 export async function POST(request: NextRequest) {
   try {
@@ -292,8 +296,9 @@ export async function POST(request: NextRequest) {
       ? sessionRow.end_at ?? null
       : (tour as { end_date?: string | null }).end_date ?? null;
 
-    // Создаем бронирование
-    // Когда билет создан, статус оплаты сразу "оплачен"
+    const payment_status = initialPaymentStatus(payment_method);
+    const booking_status = initialBookingStatus(payment_method);
+
     const { data: booking, error: bookingError } = await (serviceClient as any)
       .from('bookings')
       .insert({
@@ -306,14 +311,14 @@ export async function POST(request: NextRequest) {
         num_people,
         total_price,
         payment_method,
-        payment_status: 'paid', // Билет создан = оплачен
+        payment_status,
         payment_data: {
           ...payment_data,
           ...(qrPaymentRef
             ? { qr_payment_ref: qrPaymentRef, qr_demo: true }
             : {}),
         },
-        status: 'confirmed', // Подтверждено сразу, так как оплачено
+        status: booking_status,
       })
       .select()
       .single();

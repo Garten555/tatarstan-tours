@@ -22,11 +22,14 @@ import BanUserButton from '@/components/admin/BanUserButton';
 import UploadProgressBar from '@/components/common/UploadProgressBar';
 import { uploadFormDataWithProgress } from '@/lib/http/upload-form-progress';
 import { LevelProgressBar } from '@/components/reputation/LevelProgressBar';
+import { profileDisplayName, profileInitials } from '@/lib/profile/display';
 
 interface ProfileHeaderProps {
   profileData: {
     id: string;
     username: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
     bio: string | null;
     avatar_url: string | null;
     status_level: number;
@@ -102,6 +105,7 @@ export default function ProfileHeader({
 
   const isOwnProfile = currentUser?.id === profileData.id;
   const friendsPageHref = isOwnProfile ? '/friends' : `/users/${cleanUsername}/friends`;
+  const displayName = profileDisplayName(profileData);
 
   useEffect(() => {
     const ids = friendsList.map((f: { id?: string }) => f.id).filter(Boolean) as string[];
@@ -349,7 +353,7 @@ export default function ProfileHeader({
               {avatarUrl ? (
                 <Image
                   src={avatarUrl}
-                  alt={escapeHtml(profileData.username || 'Пользователь')}
+                  alt={escapeHtml(displayName)}
                   width={160}
                   height={160}
                   className="w-full h-full object-cover"
@@ -357,7 +361,7 @@ export default function ProfileHeader({
                 />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white text-4xl md:text-5xl font-black">
-                  {escapeHtml((profileData.username || 'U')[0].toUpperCase())}
+                  {profileInitials(displayName)}
                 </div>
               )}
             </div>
@@ -402,9 +406,9 @@ export default function ProfileHeader({
 
           {/* Информация о пользователе */}
           <div className="mt-4">
-            <div className="flex flex-wrap items-center gap-3 mb-2">
+            <div className="flex flex-wrap items-center gap-3 mb-1">
               <h1 className="text-3xl md:text-4xl font-black text-gray-900">
-                {escapeHtml(profileData.username || 'Пользователь')}
+                {escapeHtml(displayName)}
               </h1>
               {!isBanned && currentUser && currentUser.id !== profileData.id && (
                 <span className={`px-3 py-1.5 rounded-lg text-sm font-bold ${seen.online ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-600'}`}>
@@ -440,7 +444,10 @@ export default function ProfileHeader({
                 />
               )}
             </div>
-            
+            {profileData.username && displayName !== profileData.username ? (
+              <p className="mb-2 text-sm font-semibold text-gray-500">@{escapeHtml(profileData.username)}</p>
+            ) : null}
+
             {!isBanned && profileData.bio && (
               <p className="text-base md:text-lg text-gray-600 mb-4">{escapeHtml(profileData.bio)}</p>
             )}

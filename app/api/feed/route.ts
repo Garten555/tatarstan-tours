@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { normalizeProfileSnippet, type ProfileSnippet } from '@/lib/profile/display';
 
 type FeedType = 'post' | 'review' | 'achievement';
 
@@ -7,13 +8,7 @@ type FeedItem = {
   id: string;
   type: FeedType;
   created_at: string;
-  actor: {
-    id: string;
-    username: string | null;
-    first_name?: string | null;
-    last_name?: string | null;
-    avatar_url?: string | null;
-  };
+  actor: ProfileSnippet;
   payload: Record<string, unknown>;
 };
 
@@ -109,7 +104,7 @@ export async function GET(request: NextRequest) {
           id: `post:${post.id}`,
           type: 'post',
           created_at: post.created_at,
-          actor: post.user || { id: post.user_id, username: null },
+          actor: normalizeProfileSnippet(post.user, post.user_id),
           payload: {
             post_id: post.id,
             title: post.title,
@@ -137,7 +132,7 @@ export async function GET(request: NextRequest) {
           rating,
           text,
           created_at,
-          user:profiles!reviews_user_id_fkey(id, username, first_name, last_name, avatar_url),
+          user:profiles!reviews_user_id_fkey(id, username, first_name, last_name, avatar_url, role),
           tour:tours!reviews_tour_id_fkey(id, title, slug, cover_image)
         `
         )
@@ -153,7 +148,7 @@ export async function GET(request: NextRequest) {
           id: `review:${review.id}`,
           type: 'review',
           created_at: review.created_at,
-          actor: review.user || { id: review.user_id, username: null },
+          actor: normalizeProfileSnippet(review.user, review.user_id),
           payload: {
             review_id: review.id,
             rating: review.rating,
@@ -177,7 +172,7 @@ export async function GET(request: NextRequest) {
           badge_icon_url,
           unlock_date,
           created_at,
-          user:profiles!achievements_user_id_fkey(id, username, first_name, last_name, avatar_url)
+          user:profiles!achievements_user_id_fkey(id, username, first_name, last_name, avatar_url, role)
         `
         )
         .in('user_id', ids)
@@ -191,7 +186,7 @@ export async function GET(request: NextRequest) {
           id: `achievement:${ach.id}`,
           type: 'achievement',
           created_at: ach.created_at,
-          actor: ach.user || { id: ach.user_id, username: null },
+          actor: normalizeProfileSnippet(ach.user, ach.user_id),
           payload: {
             achievement_id: ach.id,
             badge_type: ach.badge_type,
