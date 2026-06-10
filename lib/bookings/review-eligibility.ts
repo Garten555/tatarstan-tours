@@ -1,9 +1,16 @@
+import {
+  getBookingDepartureEndIso,
+  getBookingDepartureStartIso,
+} from '@/lib/bookings/booking-departure';
+
 /**
  * Можно ли оставить отзыв по брони (логика совпадает с «Мои бронирования»).
  */
 export type BookingForReview = {
   status: string;
   session_id?: string | null;
+  departure_start_at?: string | null;
+  departure_end_at?: string | null;
   tour_session?: { start_at?: string | null; end_at?: string | null } | null;
   tour?: {
     status?: string | null;
@@ -18,28 +25,36 @@ function parseMs(value: string | null | undefined): number | null {
   return Number.isNaN(ms) ? null : ms;
 }
 
-/** Тур фактически завершён по дате (как isTourCompleted в UserBookings). */
-export function isTourCompletedForReview(booking: BookingForReview): boolean {
+/** Тур по брони фактически завершён (дата выезда/окончания уже прошла). */
+export function isTourCompletedForReview(
+  booking: BookingForReview,
+  now: number = Date.now()
+): boolean {
   if (booking.tour?.status === 'completed') {
     return true;
   }
 
-  const slotEnd = parseMs(booking.tour_session?.end_at);
-  if (slotEnd !== null && slotEnd <= Date.now()) {
+  const endIso = getBookingDepartureEndIso(booking);
+  const endMs = parseMs(endIso);
+  if (endMs !== null && endMs <= now) {
     return true;
   }
 
-  const completionDate = booking.tour?.end_date || booking.tour?.start_date;
-  const tourEnd = parseMs(completionDate);
-  if (tourEnd !== null && tourEnd <= Date.now()) {
+  const startIso = getBookingDepartureStartIso(booking);
+  const startMs = parseMs(startIso);
+  if (startMs !== null && startMs <= now && endMs === null) {
     return true;
   }
 
   return false;
 }
 
+/** Статус для UI и отчётов: прошедший выезд → completed (кроме отменённых). */
 export function getEffectiveBookingStatus(booking: BookingForReview): string {
-  if (isTourCompletedForReview(booking) && booking.status === 'confirmed') {
+  if (booking.status === 'cancelled' || booking.status === 'completed') {
+    return booking.status;
+  }
+  if (isTourCompletedForReview(booking)) {
     return 'completed';
   }
   return booking.status;

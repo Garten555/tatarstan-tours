@@ -46,7 +46,7 @@ export function partitionBookingsByDeparture<T extends { status?: string; tour?:
     if (!b?.tour) continue;
     if (b.status === 'completed') {
       completed.push(b);
-    } else if (b.status === 'confirmed') {
+    } else if (b.status === 'confirmed' || b.status === 'pending') {
       if (isBookingDepartureUpcoming(b as BookingWithDeparture)) {
         upcoming.push(b);
       } else {

@@ -1,6 +1,8 @@
 // API для получения бронирований пользователя
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { syncPastBookingsToCompleted } from '@/lib/bookings/complete-past-bookings';
+import { completeFinishedActiveTours } from '@/lib/tours/tour-lifecycle-status';
 
 export async function GET(request: NextRequest) {
   try {
@@ -19,6 +21,9 @@ export async function GET(request: NextRequest) {
         { status: 401 }
       );
     }
+
+    await completeFinishedActiveTours(serviceClient);
+    await syncPastBookingsToCompleted(serviceClient, { userId: user.id });
 
     // Загружаем бронирования пользователя
     // Оптимизировано: только нужные поля, без лишних данных

@@ -19,6 +19,10 @@ import {
   Edit
 } from 'lucide-react';
 import Link from 'next/link';
+import {
+  getEffectiveBookingStatus,
+  type BookingForReview,
+} from '@/lib/bookings/review-eligibility';
 
 interface Booking {
   id: string;
@@ -45,8 +49,29 @@ interface Booking {
     title: string;
     slug: string;
     start_date: string;
+    end_date?: string | null;
+    status?: string | null;
     price_per_person: number;
   };
+  tour_session?: { start_at?: string | null; end_at?: string | null } | null;
+}
+
+function bookingForStatus(b: Booking): BookingForReview {
+  const tour_session = Array.isArray(b.tour_session)
+    ? b.tour_session[0] ?? null
+    : b.tour_session ?? null;
+  const tour = Array.isArray(b.tour) ? b.tour[0] ?? null : b.tour;
+  return {
+    status: b.status,
+    departure_start_at: b.departure_start_at,
+    departure_end_at: b.departure_end_at,
+    tour_session,
+    tour,
+  };
+}
+
+function effectiveStatus(b: Booking): string {
+  return getEffectiveBookingStatus(bookingForStatus(b));
 }
 
 interface BookingsListProps {
@@ -81,7 +106,7 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
       booking.user?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       booking.tour?.title?.toLowerCase().includes(searchQuery.toLowerCase());
     
-    const matchesStatus = statusFilter === 'all' || booking.status === statusFilter;
+    const matchesStatus = statusFilter === 'all' || effectiveStatus(booking) === statusFilter;
     const matchesPayment = paymentFilter === 'all' || booking.payment_status === paymentFilter;
 
     return matchesSearch && matchesStatus && matchesPayment;
@@ -253,13 +278,13 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
           <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm p-6 hover:shadow-xl hover:border-yellow-400 transition-all duration-200">
             <div className="text-sm font-bold text-gray-600 uppercase tracking-wide mb-2">Ожидают подтверждения</div>
             <div className="text-4xl font-black text-yellow-600">
-              {items.filter(b => b.status === 'pending').length}
+              {items.filter((b) => effectiveStatus(b) === 'pending').length}
             </div>
           </div>
           <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm p-6 hover:shadow-xl hover:border-green-400 transition-all duration-200">
             <div className="text-sm font-bold text-gray-600 uppercase tracking-wide mb-2">Подтверждено</div>
             <div className="text-4xl font-black text-green-600">
-              {items.filter(b => b.status === 'confirmed').length}
+              {items.filter((b) => effectiveStatus(b) === 'confirmed').length}
             </div>
           </div>
           <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm p-6 hover:shadow-xl hover:border-emerald-400 transition-all duration-200">
@@ -365,8 +390,8 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-bold ${getStatusColor(booking.status)}`}>
-                        {getStatusLabel(booking.status)}
+                      <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-bold ${getStatusColor(effectiveStatus(booking))}`}>
+                        {getStatusLabel(effectiveStatus(booking))}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">

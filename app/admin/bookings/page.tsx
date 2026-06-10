@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import BookingsList from '@/components/admin/BookingsList';
 import { Calendar } from 'lucide-react';
+import { completeFinishedActiveTours } from '@/lib/tours/tour-lifecycle-status';
+import { syncPastBookingsToCompleted } from '@/lib/bookings/complete-past-bookings';
 
 export const metadata = {
   title: 'Бронирования - Админ панель',
@@ -34,7 +36,9 @@ export default async function BookingsPage() {
     redirect('/admin');
   }
 
-  // Загружаем бронирования
+  await completeFinishedActiveTours(serviceClient);
+  await syncPastBookingsToCompleted(serviceClient);
+
   const { data: bookings, error } = await serviceClient
     .from('bookings')
     .select(`
@@ -48,11 +52,17 @@ export default async function BookingsPage() {
         last_name,
         email
       ),
+      tour_session:tour_sessions!bookings_session_id_fkey(
+        start_at,
+        end_at
+      ),
       tour:tours!bookings_tour_id_fkey(
         id,
         title,
         slug,
         start_date,
+        end_date,
+        status,
         price_per_person
       )
     `)
