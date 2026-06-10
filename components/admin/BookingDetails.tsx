@@ -27,6 +27,7 @@ import {
   getEffectiveBookingStatus,
   type BookingForReview,
 } from '@/lib/bookings/review-eligibility';
+import { canCancelBooking } from '@/lib/bookings/booking-cancellation';
 import { getTourPageHrefForBooking } from '@/lib/tours/booking-tour-link';
 import {
   getBookingDepartureEndForDisplay,
@@ -68,6 +69,7 @@ export default function BookingDetails({ booking, attendees }: BookingDetailsPro
     booking.payment_status === 'unpaid' ? 'pending' : booking.payment_status
   );
   const isLocked = currentStatus === 'completed' && currentPaymentStatus === 'paid';
+  const cancellationAllowed = canCancelBooking(bookingForStatus());
 
   // Синхронизация состояний при обновлении booking
   useEffect(() => {
@@ -138,6 +140,12 @@ export default function BookingDetails({ booking, attendees }: BookingDetailsPro
   // Обновление статуса бронирования
   const updateStatus = async (newStatus: string) => {
     if (newStatus === currentStatus) return;
+
+    if (newStatus === 'cancelled' && !cancellationAllowed) {
+      setError('Нельзя отменить завершённое бронирование');
+      setCurrentStatus(getEffectiveBookingStatus(bookingForStatus()));
+      return;
+    }
     
     if (!confirm(`Изменить статус бронирования на "${getStatusLabel(newStatus)}"?`)) {
       // Если пользователь отменил, возвращаем значение обратно
@@ -410,7 +418,7 @@ export default function BookingDetails({ booking, attendees }: BookingDetailsPro
                 >
                   <option value="pending">Ожидает подтверждения</option>
                   <option value="confirmed">Подтверждено</option>
-                  <option value="cancelled">Отменено</option>
+                  {cancellationAllowed ? <option value="cancelled">Отменено</option> : null}
                   <option value="completed">Завершено</option>
                 </select>
                 {loading && (
@@ -468,6 +476,11 @@ export default function BookingDetails({ booking, attendees }: BookingDetailsPro
             {isLocked && (
               <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-600">
                 Завершенное и оплаченное бронирование нельзя редактировать.
+              </div>
+            )}
+            {!cancellationAllowed && currentStatus !== 'cancelled' && (
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-900">
+                Завершённое бронирование нельзя отменить.
               </div>
             )}
             {error && (

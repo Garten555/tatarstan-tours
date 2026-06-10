@@ -7,6 +7,8 @@ import {
 } from '@/lib/bookings/admin-booking-patch';
 import { publishBookingsChanged } from '@/lib/pusher/data-sync';
 import { syncTourParticipationAchievements } from '@/lib/achievements/auto-award';
+import { bookingCancellationBlockedReason } from '@/lib/bookings/booking-cancellation';
+import type { BookingForReview } from '@/lib/bookings/review-eligibility';
 
 // PATCH - Обновление бронирования
 export async function PATCH(
@@ -71,7 +73,21 @@ export async function PATCH(
       total_price: number | string;
       status: string | null;
       payment_status: string | null;
-      tour: { title: string; start_date: string } | null;
+      departure_start_at?: string | null;
+      departure_end_at?: string | null;
+      schedule_superseded_at?: string | null;
+      tour_session?: { start_at?: string | null; end_at?: string | null } | null;
+      tour: {
+        title: string;
+        start_date: string;
+        end_date?: string | null;
+        status?: string | null;
+      } | null;
+    };
+
+    const unwrapRelation = <T,>(value: T | T[] | null | undefined): T | null => {
+      if (value == null) return null;
+      return Array.isArray(value) ? value[0] ?? null : value;
     };
 
     const { data: oldBookingRaw } = await serviceClient
@@ -84,11 +100,30 @@ export async function PATCH(
         total_price,
         status,
         payment_status,
-        tour:tours(title, start_date)
+        departure_start_at,
+        departure_end_at,
+        schedule_superseded_at,
+        tour_session:tour_sessions!bookings_session_id_fkey(start_at, end_at),
+        tour:tours(title, start_date, end_date, status)
       `)
       .eq('id', id)
       .single();
     const oldBooking = (oldBookingRaw ?? null) as OldBooking | null;
+
+    if (updateData.status === 'cancelled' && oldBooking) {
+      const bookingForCancel: BookingForReview = {
+        status: oldBooking.status ?? '',
+        departure_start_at: oldBooking.departure_start_at,
+        departure_end_at: oldBooking.departure_end_at,
+        schedule_superseded_at: oldBooking.schedule_superseded_at,
+        tour_session: unwrapRelation(oldBooking.tour_session),
+        tour: unwrapRelation(oldBooking.tour),
+      };
+      const cancelBlockReason = bookingCancellationBlockedReason(bookingForCancel);
+      if (cancelBlockReason && oldBooking.status !== 'cancelled') {
+        return NextResponse.json({ error: cancelBlockReason }, { status: 400 });
+      }
+    }
 
     if (
       oldBooking?.status === 'completed' &&

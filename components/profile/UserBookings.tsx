@@ -28,6 +28,7 @@ import {
   getEffectiveBookingStatus,
   isTourCompletedForReview,
 } from '@/lib/bookings/review-eligibility';
+import { canCancelBooking } from '@/lib/bookings/booking-cancellation';
 import { getTourPageHrefForBooking } from '@/lib/tours/booking-tour-link';
 import {
   getBookingDepartureEndForDisplay,
@@ -343,10 +344,8 @@ export default function UserBookings({ isViewMode = false, profileUserId = null 
           const effectiveStatus = getEffectiveBookingStatus(booking);
           const canLeaveReview = canLeaveReviewForBooking(booking);
 
-          const canCancelBooking =
-            !isViewMode &&
-            !completedByDate &&
-            (booking.status === 'confirmed' || booking.status === 'pending');
+          const canCancelBookingFlag =
+            !isViewMode && canCancelBooking(booking);
 
           return (
             <div
@@ -442,7 +441,7 @@ export default function UserBookings({ isViewMode = false, profileUserId = null 
                   >
                     Подробнее о туре
                   </Link>
-                  {canCancelBooking && (
+                  {canCancelBookingFlag && (
                     <button
                       type="button"
                       onClick={() => setCancelBooking(booking)}

@@ -2,27 +2,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { publishBookingsChanged } from '@/lib/pusher/data-sync';
+import {
+  bookingCancellationBlockedReason,
+} from '@/lib/bookings/booking-cancellation';
+import type { BookingForReview } from '@/lib/bookings/review-eligibility';
 
-function tourEffectivelyEnded(params: {
-  tourEnd?: string | null;
-  tourStart?: string | null;
-  sessionStart?: string | null;
-  sessionEnd?: string | null;
-}): boolean {
-  const now = Date.now();
-  if (params.sessionStart) {
-    const start = new Date(params.sessionStart).getTime();
-    if (!Number.isNaN(start) && start <= now) return true;
-    return false;
-  }
-  const completionDate =
-    params.sessionEnd ||
-    params.tourEnd ||
-    params.tourStart ||
-    null;
-  if (!completionDate) return false;
-  const end = new Date(completionDate).getTime();
-  return !Number.isNaN(end) && end <= now;
+function unwrapRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (value == null) return null;
+  return Array.isArray(value) ? value[0] ?? null : value;
 }
 
 export async function PATCH(
@@ -50,9 +37,21 @@ export async function PATCH(
 
     const { data: bookingRow, error: bookingErr } = await serviceClient
       .from('bookings')
-      .select(
-        'id, user_id, tour_id, session_id, num_people, status, payment_status, total_price'
-      )
+      .select(`
+        id,
+        user_id,
+        tour_id,
+        session_id,
+        num_people,
+        status,
+        payment_status,
+        total_price,
+        departure_start_at,
+        departure_end_at,
+        schedule_superseded_at,
+        tour_session:tour_sessions!bookings_session_id_fkey(start_at, end_at),
+        tour:tours(title, start_date, end_date, status)
+      `)
       .eq('id', id)
       .eq('user_id', user.id)
       .maybeSingle();
@@ -61,7 +60,7 @@ export async function PATCH(
       return NextResponse.json({ error: 'Бронирование не найдено' }, { status: 404 });
     }
 
-    const booking = bookingRow as {
+    const booking = bookingRow as unknown as {
       id: string;
       user_id: string;
       tour_id: string;
@@ -70,62 +69,39 @@ export async function PATCH(
       status: string;
       payment_status: string | null;
       total_price: number;
+      departure_start_at?: string | null;
+      departure_end_at?: string | null;
+      schedule_superseded_at?: string | null;
+      tour_session?: { start_at?: string | null; end_at?: string | null } | null;
+      tour?: {
+        title: string;
+        start_date: string;
+        end_date?: string | null;
+        status?: string | null;
+      } | null;
     };
 
-    if (booking.status === 'cancelled') {
-      return NextResponse.json({
-        success: true,
-        message: 'Бронирование уже было отменено',
-      });
+    const bookingForCancel: BookingForReview = {
+      status: booking.status,
+      departure_start_at: booking.departure_start_at,
+      departure_end_at: booking.departure_end_at,
+      schedule_superseded_at: booking.schedule_superseded_at,
+      tour_session: unwrapRelation(booking.tour_session),
+      tour: unwrapRelation(booking.tour),
+    };
+
+    const cancelBlockReason = bookingCancellationBlockedReason(bookingForCancel);
+    if (cancelBlockReason) {
+      if (booking.status === 'cancelled') {
+        return NextResponse.json({
+          success: true,
+          message: 'Бронирование уже было отменено',
+        });
+      }
+      return NextResponse.json({ error: cancelBlockReason }, { status: 400 });
     }
 
-    if (!['pending', 'confirmed'].includes(booking.status)) {
-      return NextResponse.json(
-        { error: 'Это бронирование нельзя отменить' },
-        { status: 400 }
-      );
-    }
-
-    const { data: tourRow } = await serviceClient
-      .from('tours')
-      .select('title, start_date, end_date, status')
-      .eq('id', booking.tour_id)
-      .maybeSingle();
-
-    const tour = tourRow as {
-      title: string;
-      start_date: string;
-      end_date?: string | null;
-      status?: string | null;
-    } | null;
-
-    let sessionStart: string | null = null;
-    let sessionEnd: string | null = null;
-    if (booking.session_id) {
-      const { data: srow } = await serviceClient
-        .from('tour_sessions')
-        .select('start_at, end_at')
-        .eq('id', booking.session_id)
-        .maybeSingle();
-      const s = srow as { start_at?: string; end_at?: string | null } | null;
-      sessionStart = s?.start_at ?? null;
-      sessionEnd = (s?.end_at as string | undefined) ?? null;
-    }
-
-    if (
-      tourEffectivelyEnded({
-        tourEnd: tour?.end_date ?? null,
-        tourStart: tour?.start_date ?? null,
-        sessionStart,
-        sessionEnd,
-      }) ||
-      tour?.status === 'completed'
-    ) {
-      return NextResponse.json(
-        { error: 'Нельзя отменить бронирование: тур уже начался или завершён' },
-        { status: 400 }
-      );
-    }
+    const tour = unwrapRelation(booking.tour);
 
     const { error: updateErr } = await serviceClient
       .from('bookings')

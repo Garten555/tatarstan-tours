@@ -23,6 +23,7 @@ import {
   getEffectiveBookingStatus,
   type BookingForReview,
 } from '@/lib/bookings/review-eligibility';
+import { canCancelBooking } from '@/lib/bookings/booking-cancellation';
 import { getTourPageHrefForBooking } from '@/lib/tours/booking-tour-link';
 
 interface Booking {
@@ -411,8 +412,7 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
                           <Eye className="w-5 h-5" />
                           Подробнее
                         </Link>
-                        {booking.status !== 'cancelled' &&
-                          !(booking.status === 'completed' && booking.payment_status === 'paid') && (
+                        {canCancelBooking(bookingForStatus(booking)) && (
                           <button
                             onClick={() => handleCancel(booking.id)}
                             disabled={cancellingId === booking.id}
