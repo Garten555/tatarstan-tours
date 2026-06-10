@@ -7,7 +7,7 @@ import toast from 'react-hot-toast';
 import { supabase } from '@/lib/supabase/client';
 import { getUserFromSession, resolveAuthUserForSupportChat } from '@/lib/supabase/auth-quick-client';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
-import { playNotificationSound } from '@/lib/sound/notifications';
+import { playNotificationSound, playSendSound } from '@/lib/sound/notifications';
 import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
 import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
 import { insertEmojiAtCursor } from '@/lib/chat/insert-emoji-at-cursor';
@@ -380,7 +380,7 @@ export default function SupportChat({ variant, onClose }: SupportChatProps) {
 
       const data = JSON.parse(text);
       if (data.success) {
-        playNotificationSound('message');
+        playSendSound();
         autoScrollNextRef.current = true;
         setInput('');
         if (textareaRef.current) {

@@ -23,7 +23,7 @@ import { escapeHtml } from '@/lib/utils/sanitize';
 import toast from 'react-hot-toast';
 import Image from 'next/image';
 import Link from 'next/link';
-import { playNotificationSound } from '@/lib/sound/notifications';
+import { playNotificationSound, playSendSound } from '@/lib/sound/notifications';
 import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
 import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
 import { insertEmojiAtCursor } from '@/lib/chat/insert-emoji-at-cursor';
@@ -350,7 +350,8 @@ export default function UserMessenger() {
           autoScrollNextRef.current = true;
         }
         if (!isMine) {
-          // Уже в этом диалоге — не дублируем звук «как извне»; синхронизируем прочитанное на сервере и бейдж в списке
+          playNotificationSound('message');
+          // Синхронизируем прочитанное на сервере и бейдж в списке
           if (markThreadReadDebounceRef.current) clearTimeout(markThreadReadDebounceRef.current);
           markThreadReadDebounceRef.current = setTimeout(() => {
             markThreadReadDebounceRef.current = null;
@@ -519,7 +520,7 @@ export default function UserMessenger() {
       if (contentType && contentType.includes('application/json')) {
         const data = await response.json();
         setMessages((prev) => appendDmMessageDeduped(prev, data.message));
-        playNotificationSound('message');
+        playSendSound();
         autoScrollNextRef.current = true;
         void loadConversations({ silent: true });
       }

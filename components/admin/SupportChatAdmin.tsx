@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { Send, Loader2, Search, MessageSquare, Menu, X, CheckCircle, Archive, AlertCircle, Trash2 } from 'lucide-react';
 import Pusher from 'pusher-js';
-import { playNotificationSound } from '@/lib/sound/notifications';
+import { playNotificationSound, playSendSound } from '@/lib/sound/notifications';
 import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
 import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
 import { insertEmojiAtCursor } from '@/lib/chat/insert-emoji-at-cursor';
@@ -281,7 +281,7 @@ export default function SupportChatAdmin() {
 
       const data = JSON.parse(text);
       if (data.success) {
-        playNotificationSound('message');
+        playSendSound();
         autoScrollNextRef.current = true;
         setInput('');
         // Сбрасываем высоту textarea

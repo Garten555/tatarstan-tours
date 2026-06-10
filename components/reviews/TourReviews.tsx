@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { Star } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { playCommentSound } from '@/lib/sound/notifications';
 import ImageViewerModal from '@/components/common/ImageViewerModal';
 import ReviewReactions from '@/components/reviews/ReviewReactions';
 import ReportReasonModal from '@/components/common/ReportReasonModal';
@@ -397,6 +398,7 @@ export default function TourReviews({
                             }));
                             setCommentInputs((prev) => ({ ...prev, [review.id]: '' }));
                             setCommentForms((prev) => ({ ...prev, [review.id]: false }));
+                            playCommentSound();
                           } catch (error: any) {
                             alert(error.message || 'Не удалось сохранить комментарий');
                           } finally {

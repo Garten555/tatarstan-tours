@@ -12,6 +12,7 @@ import ImageViewerModal from '@/components/common/ImageViewerModal';
 import UserAvatar from '@/components/common/UserAvatar';
 import { useDialog } from '@/hooks/useDialog';
 import toast from 'react-hot-toast';
+import { playCommentSound } from '@/lib/sound/notifications';
 import { bindPlyrRussianSpeedUi, type PlyrRussianUiHost } from '@/lib/video/plyr-ru-speed-ui';
 import { loadPlyr } from '@/lib/video/load-plyr';
 import { profileDisplayName } from '@/lib/profile/display';
@@ -303,6 +304,7 @@ export default function BlogPostFeedItem({
       }
       setCommentInput('');
       setCommentFormOpen(false);
+      playCommentSound();
     } catch (error: any) {
       await alert(error.message || 'Не удалось сохранить комментарий', 'Ошибка', 'error');
     } finally {

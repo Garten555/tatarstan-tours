@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client';
 import { resolveAuthUserForUi } from '@/lib/supabase/auth-quick-client';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import toast from 'react-hot-toast';
-import { playNotificationSound } from '@/lib/sound/notifications';
+import { playNotificationSound, playSendSound } from '@/lib/sound/notifications';
 import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
 import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
 import { insertEmojiAtCursor } from '@/lib/chat/insert-emoji-at-cursor';
@@ -263,8 +263,9 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
         if (imageUrl && selectedImage) {
           setSelectedImage({ file: selectedImage.file, preview: selectedImage.preview });
         }
+        return;
       }
-      playNotificationSound('message');
+      playSendSound();
     } catch (error) {
       console.error('Ошибка отправки сообщения:', error);
       toast.error('Ошибка отправки сообщения');

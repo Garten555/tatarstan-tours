@@ -2,7 +2,7 @@
 export const PUSHER_BRIDGE_EVENT = 'tt:pusher';
 
 export type PusherBridgeDetail =
-  | { channel: 'user'; event: 'new-message' }
+  | { channel: 'user'; event: 'new-message'; senderId?: string | null }
   | { channel: 'user'; event: 'bookings-changed' }
   | { channel: 'notifications'; event: 'new-notification' }
   | { channel: 'moderation'; event: 'reports-changed' }

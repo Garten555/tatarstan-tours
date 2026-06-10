@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 import FormattedDate from '@/components/common/FormattedDate';
 import toast from 'react-hot-toast';
+import { playCommentSound } from '@/lib/sound/notifications';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import UserAvatar from '@/components/common/UserAvatar';
 import { ChatEmojiPicker } from '@/components/chat/ChatEmojiPicker';
@@ -75,6 +76,7 @@ export default function BlogComments({ postId }: BlogCommentsProps) {
       if (data.success) {
         setNewComment('');
         await loadComments();
+        playCommentSound();
         toast.success('Комментарий добавлен');
       } else {
         throw new Error(data.error || 'Не удалось добавить комментарий');

@@ -23,6 +23,7 @@ import {
   USER_BOOKINGS_EVENT,
 } from '@/lib/pusher/channels';
 
+import { playNotificationSound } from '@/lib/sound/notifications';
 import { getAchievementBadgeIcon } from '@/lib/achievements/badge-icons';
 
 type AchievementPayload = {
@@ -31,23 +32,6 @@ type AchievementPayload = {
   badge_type?: string | null;
   badge_description?: string | null;
 };
-
-function playAchievementChime() {
-  try {
-    const audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    oscillator.type = 'sine';
-    oscillator.frequency.value = 880;
-    gainNode.gain.value = 0.06;
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    oscillator.start();
-    oscillator.stop(audioContext.currentTime + 0.12);
-  } catch {
-    /* ignore */
-  }
-}
 
 export default function PusherUserBridge() {
   const lastAchievementIdRef = useRef<string | null>(null);
@@ -95,8 +79,12 @@ export default function PusherUserBridge() {
 
       const chUser = pusher.subscribe(`user-${user.id}`);
       channelUserRef.current = chUser;
-      chUser.bind('new-message', () => {
-        dispatchPusherBridge({ channel: 'user', event: 'new-message' });
+      chUser.bind('new-message', (data: { message?: { sender_id?: string } }) => {
+        dispatchPusherBridge({
+          channel: 'user',
+          event: 'new-message',
+          senderId: data.message?.sender_id ?? null,
+        });
       });
       chUser.bind(USER_BOOKINGS_EVENT, () => {
         dispatchPusherBridge({ channel: 'user', event: 'bookings-changed' });
@@ -121,7 +109,7 @@ export default function PusherUserBridge() {
           const title = achievement.badge_name || 'Новое достижение';
           const icon = getAchievementBadgeIcon(achievement.badge_type);
           toast.success(`${icon} Вам присвоено достижение: ${title}`);
-          playAchievementChime();
+          playNotificationSound('achievement');
           window.dispatchEvent(new Event('notifications:update'));
         }
       );

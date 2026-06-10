@@ -11,7 +11,7 @@ import {
 import { User, LogOut, Settings, Calendar, Shield, Crown, MessageSquare, BookOpen, Compass, Search, Users, Home, Mail, DoorOpen, Volume2, VolumeX } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { useDialog } from '@/hooks/useDialog';
-import { isSoundEnabled, setSoundEnabled } from '@/lib/sound/notifications';
+import { isSoundEnabled, setSoundEnabled, playNotificationSound } from '@/lib/sound/notifications';
 
 export default function UserMenu() {
   const { alert, DialogComponents } = useDialog();
@@ -436,7 +436,18 @@ export default function UserMenu() {
     const onPusherBridge = (ev: Event) => {
       const d = (ev as CustomEvent<PusherBridgeDetail>).detail;
       if (!d) return;
-      if (d.channel === 'user' && d.event === 'new-message') handleRefresh();
+      if (d.channel === 'user' && d.event === 'new-message') {
+        handleRefresh();
+        const senderId = d.senderId ?? null;
+        if (
+          senderId &&
+          user?.id &&
+          senderId !== user.id &&
+          !window.location.pathname.startsWith('/messenger')
+        ) {
+          playNotificationSound('message');
+        }
+      }
       if (d.channel === 'notifications' && d.event === 'new-notification') handleRefresh();
       if (d.channel === 'admin-sync' && d.event === 'profile-role') {
         void refreshProfileRole();
