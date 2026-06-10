@@ -27,6 +27,12 @@ import {
   getEffectiveBookingStatus,
   type BookingForReview,
 } from '@/lib/bookings/review-eligibility';
+import { getTourPageHrefForBooking } from '@/lib/tours/booking-tour-link';
+import {
+  getBookingDepartureEndForDisplay,
+  getBookingDepartureStartForDisplay,
+  isBookingDepartureSnapshotStale,
+} from '@/lib/bookings/booking-display';
 
 interface BookingDetailsProps {
   booking: any;
@@ -46,10 +52,15 @@ export default function BookingDetails({ booking, attendees }: BookingDetailsPro
       status: booking.status,
       departure_start_at: booking.departure_start_at,
       departure_end_at: booking.departure_end_at,
+      schedule_superseded_at: booking.schedule_superseded_at,
       tour_session,
       tour,
     };
   };
+
+  const departureStart = getBookingDepartureStartForDisplay(booking);
+  const departureEnd = getBookingDepartureEndForDisplay(booking);
+  const departureStale = isBookingDepartureSnapshotStale(bookingForStatus());
 
   const initialStatus = getEffectiveBookingStatus(bookingForStatus());
   const [currentStatus, setCurrentStatus] = useState(initialStatus);
@@ -64,7 +75,7 @@ export default function BookingDetails({ booking, attendees }: BookingDetailsPro
     setCurrentPaymentStatus(
       booking.payment_status === 'unpaid' ? 'pending' : booking.payment_status
     );
-  }, [booking.status, booking.payment_status, booking.departure_start_at, booking.departure_end_at, booking.tour, booking.tour_session]);
+  }, [booking.status, booking.payment_status, booking.departure_start_at, booking.departure_end_at, booking.schedule_superseded_at, booking.tour, booking.tour_session]);
 
   // Форматирование даты (Europe/Moscow)
   const formatDate = formatDateTimeShortRu;
@@ -277,7 +288,12 @@ export default function BookingDetails({ booking, attendees }: BookingDetailsPro
                 <div className="flex-1">
                   <div className="text-sm text-gray-500">Тур</div>
                   <Link
-                    href={`/tours/${booking.tour?.slug}`}
+                    href={getTourPageHrefForBooking({
+                      ...bookingForStatus(),
+                      id: booking.id,
+                      schedule_superseded_at: booking.schedule_superseded_at,
+                      tour: Array.isArray(booking.tour) ? booking.tour[0] : booking.tour,
+                    })}
                     className="font-medium text-emerald-600 hover:text-emerald-700"
                   >
                     {booking.tour?.title}
@@ -293,10 +309,25 @@ export default function BookingDetails({ booking, attendees }: BookingDetailsPro
               <div className="flex items-start gap-4">
                 <Calendar className="w-5 h-5 text-gray-400 mt-0.5" />
                 <div className="flex-1">
-                  <div className="text-sm text-gray-500">Дата начала тура</div>
+                  <div className="text-sm text-gray-500">Дата выезда по брони</div>
                   <div className="font-medium text-gray-900">
-                    {formatDate(booking.tour?.start_date || '')}
+                    {departureStart ? formatDate(departureStart) : '—'}
+                    {departureEnd && departureEnd !== departureStart
+                      ? ` — ${formatDate(departureEnd)}`
+                      : ''}
                   </div>
+                  {departureStale && (
+                    <span className="mt-2 inline-flex items-center px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-xs font-semibold">
+                      прошлый выезд / дата отличается от текущего расписания
+                    </span>
+                  )}
+                  {booking.tour?.start_date &&
+                    departureStart &&
+                    formatDate(booking.tour.start_date) !== formatDate(departureStart) && (
+                      <div className="text-xs text-gray-500 mt-2">
+                        Актуальное расписание тура в каталоге: {formatDate(booking.tour.start_date)}
+                      </div>
+                    )}
                 </div>
               </div>
 

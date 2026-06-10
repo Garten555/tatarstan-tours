@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import TourRoomMessageReportsLive from '@/components/admin/TourRoomMessageReportsLive';
-import { type TourRoomReportRow } from '@/components/admin/TourRoomMessageReportsList';
+import { fetchTourRoomMessageReports } from '@/lib/tour-room-reports/fetch-reports';
 import { Flag } from 'lucide-react';
 
 export const metadata = {
@@ -10,20 +10,9 @@ export const metadata = {
   description: 'Сообщения комнат туров, на которые поступили жалобы',
 };
 
-function unwrapRelation<T>(x: T | T[] | null | undefined): T | null {
-  if (x == null) return null;
-  return Array.isArray(x) ? x[0] ?? null : x;
-}
-
-function profileLabel(p: { first_name?: string | null; last_name?: string | null; email?: string | null } | null, fallback: string) {
-  if (!p) return fallback;
-  const name = `${p.first_name ?? ''} ${p.last_name ?? ''}`.trim();
-  return name || p.email || fallback;
-}
-
 export default async function TourRoomReportsPage() {
   const supabase = await createClient();
-  const serviceClient = await createServiceClient();
+  const serviceClient = createServiceClient();
 
   const {
     data: { user },
@@ -40,111 +29,7 @@ export default async function TourRoomReportsPage() {
     redirect('/admin');
   }
 
-  const { data: rawMessages, error } = await serviceClient
-    .from('tour_room_messages')
-    .select(
-      `
-      id,
-      room_id,
-      user_id,
-      message,
-      image_url,
-      created_at,
-      reported_at,
-      report_reason,
-      reported_by,
-      author:profiles!tour_room_messages_user_id_fkey(id, first_name, last_name, email, role, is_banned),
-      room:tour_rooms(
-        id,
-        tour:tours(title)
-      )
-    `
-    )
-    .eq('is_reported', true)
-    .is('deleted_at', null)
-    .order('reported_at', { ascending: false })
-    .limit(200);
-
-  if (error) {
-    console.error('[tour-room-reports]', error);
-  }
-
-  type RawMsg = {
-    id: string;
-    room_id: string;
-    user_id: string | null;
-    message: string | null;
-    image_url: string | null;
-    created_at: string;
-    reported_at: string | null;
-    report_reason: string | null;
-    reported_by: string | null;
-    author?:
-      | {
-          id?: string;
-          first_name?: string | null;
-          last_name?: string | null;
-          email?: string | null;
-          role?: string | null;
-          is_banned?: boolean | null;
-        }
-      | unknown;
-    room?: { tour?: { title?: string | null } | { title?: string | null }[] } | { tour?: { title?: string | null } | { title?: string | null }[] }[] | null;
-  };
-
-  const list = (rawMessages || []) as RawMsg[];
-  const reporterIds = [...new Set(list.map((m) => m.reported_by).filter((id): id is string => Boolean(id)))];
-
-  const reporterMap = new Map<string, string>();
-  type ReporterRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; role?: string | null };
-  let reporterRows: ReporterRow[] = [];
-  if (reporterIds.length > 0) {
-    const { data: reporters } = await serviceClient
-      .from('profiles')
-      .select('id, first_name, last_name, email, role, is_banned')
-      .in('id', reporterIds);
-
-    reporterRows = (reporters || []) as ReporterRow[];
-    for (const r of reporterRows) {
-      reporterMap.set(r.id, profileLabel(r, 'Пользователь'));
-    }
-  }
-
-  const rows: TourRoomReportRow[] = list.map((m) => {
-    const author = unwrapRelation(m.author) as {
-      id?: string;
-      first_name?: string | null;
-      last_name?: string | null;
-      email?: string | null;
-      role?: string | null;
-      is_banned?: boolean | null;
-    } | null;
-    const room = unwrapRelation(m.room) as {
-      tour?: { title?: string | null } | { title?: string | null }[];
-    } | null;
-    const tour = unwrapRelation(room?.tour);
-    const tourTitle = tour && typeof tour === 'object' && 'title' in tour && typeof tour.title === 'string' ? tour.title : 'Тур';
-
-    const rep = m.reported_by ? reporterRows.find((x) => x.id === m.reported_by) : undefined;
-
-    return {
-      id: m.id,
-      room_id: m.room_id,
-      message: m.message,
-      image_url: m.image_url,
-      created_at: m.created_at,
-      reported_at: m.reported_at,
-      report_reason: m.report_reason,
-      author_user_id: author?.id || m.user_id || '',
-      author_role: author?.role ?? null,
-      author_is_banned: Boolean(author?.is_banned),
-      author_label: profileLabel(author, 'Участник'),
-      reporter_user_id: m.reported_by,
-      reporter_role: rep?.role ?? null,
-      reporter_label: m.reported_by ? reporterMap.get(m.reported_by) || 'Пользователь' : '—',
-      tour_title: tourTitle,
-    };
-  });
+  const { rows, error, setupHint } = await fetchTourRoomMessageReports(serviceClient);
 
   return (
     <div>
@@ -164,17 +49,26 @@ export default async function TourRoomReportsPage() {
         <p className="mt-3 text-sm font-semibold text-gray-500">
           Загружено с сервера: <span className="tabular-nums text-gray-800">{rows.length}</span>
           {error ? (
-            <span className="ml-2 text-rose-600">
-              (ошибка загрузки — показано пусто; см. лог сервера)
-            </span>
+            <span className="ml-2 text-rose-600">({error})</span>
           ) : null}
           {!error && rows.length >= 200 ? (
             <span className="ml-2 text-amber-700">(лимит 200 — самые свежие жалобы)</span>
           ) : null}
         </p>
+        {setupHint && rows.length === 0 ? (
+          <div className="mt-4 max-w-3xl rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-900">
+            Таблица жалоб в базе не создана. В Supabase → SQL Editor выполните файл{' '}
+            <code className="rounded bg-white px-1.5 py-0.5 text-xs">{setupHint}</code>, затем обновите эту страницу.
+          </div>
+        ) : null}
       </div>
 
-      <TourRoomMessageReportsLive initialRows={rows} viewerRole={role} />
+      <TourRoomMessageReportsLive
+        initialRows={rows}
+        viewerRole={role}
+        initialError={error}
+        initialSetupHint={setupHint}
+      />
 
       <div className="mt-8 text-center">
         <Link href="/admin/tour-rooms" className="text-sm font-bold text-emerald-600 underline hover:text-emerald-700">

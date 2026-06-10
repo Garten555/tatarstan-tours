@@ -23,6 +23,7 @@ import {
   getEffectiveBookingStatus,
   type BookingForReview,
 } from '@/lib/bookings/review-eligibility';
+import { getTourPageHrefForBooking } from '@/lib/tours/booking-tour-link';
 
 interface Booking {
   id: string;
@@ -65,6 +66,7 @@ function bookingForStatus(b: Booking): BookingForReview {
     status: b.status,
     departure_start_at: b.departure_start_at,
     departure_end_at: b.departure_end_at,
+    schedule_superseded_at: b.schedule_superseded_at,
     tour_session,
     tour,
   };
@@ -348,7 +350,12 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
                     </td>
                     <td className="px-6 py-4">
                       <Link
-                        href={`/tours/${booking.tour?.slug}`}
+                        href={getTourPageHrefForBooking({
+                          ...bookingForStatus(booking),
+                          id: booking.id,
+                          schedule_superseded_at: booking.schedule_superseded_at,
+                          tour: booking.tour,
+                        })}
                         className="text-base text-emerald-600 hover:text-emerald-700 font-bold transition-colors"
                       >
                         {booking.tour?.title}

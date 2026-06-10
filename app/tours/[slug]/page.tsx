@@ -1,5 +1,5 @@
 export const revalidate = 60
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -17,7 +17,7 @@ import TourReviewsSection from '@/components/tours/TourReviewsSection';
 import { ArrowLeft } from 'lucide-react';
 import { isInvalidTourSlug } from '@/lib/tours/isInvalidTourSlug';
 import TourBookingRedirectBanner from '@/components/tours/TourBookingRedirectBanner';
-import TourParticipantArchiveCard from '@/components/tours/TourParticipantArchiveCard';
+import TourBookingSidebarCard from '@/components/tours/TourBookingSidebarCard';
 import { parseBookingTourRedirectError } from '@/lib/tour/booking-tour-redirect';
 import {
   filterUpcomingSessions,
@@ -25,11 +25,19 @@ import {
 } from '@/lib/tours/tour-public-visibility';
 import { syncSessionCurrentParticipants } from '@/lib/tour/session-participants';
 import { formatDateTimeShortRu } from '@/lib/date/format-ru';
+import { isBookingDeparturePast } from '@/lib/bookings/booking-completion';
 
 interface TourPageProps {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ error?: string | string[] }>;
+  searchParams: Promise<{ error?: string | string[]; booking?: string | string[] }>;
 }
+
+type BookingSidebarView = {
+  startDate: string | null;
+  endDate: string | null;
+  variant: 'participant' | 'staff';
+  mode: 'archive' | 'upcoming';
+};
 
 export default async function TourPage({ params, searchParams }: TourPageProps) {
   const { slug } = await params;
@@ -56,6 +64,95 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
   }
 
   const t = tour as any;
+
+  const bookingIdRaw = sp.booking;
+  const bookingId = typeof bookingIdRaw === 'string' ? bookingIdRaw : undefined;
+  let bookingSidebarView: BookingSidebarView | null = null;
+
+  if (bookingId) {
+    if (!user) {
+      notFound();
+    }
+
+    const { data: bookingRow, error: bookingLoadError } = await supabase
+      .from('bookings')
+      .select(
+        `
+        id,
+        user_id,
+        tour_id,
+        status,
+        departure_start_at,
+        departure_end_at,
+        schedule_superseded_at,
+        tour_session:tour_sessions(start_at, end_at),
+        tour:tours!bookings_tour_id_fkey(id, slug, start_date, end_date, status)
+      `
+      )
+      .eq('id', bookingId)
+      .maybeSingle();
+
+    if (bookingLoadError || !bookingRow) {
+      notFound();
+    }
+
+    const tourSession = Array.isArray(bookingRow.tour_session)
+      ? bookingRow.tour_session[0] ?? null
+      : bookingRow.tour_session ?? null;
+    const bookingTour = Array.isArray(bookingRow.tour)
+      ? bookingRow.tour[0] ?? null
+      : bookingRow.tour ?? null;
+
+    let canViewBooking = bookingRow.user_id === user.id;
+    if (!canViewBooking) {
+      const { data: viewerProfile } = await supabaseAuth
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+      const role = (viewerProfile as { role?: string | null } | null)?.role;
+      canViewBooking = role === 'tour_admin' || role === 'super_admin';
+    }
+
+    if (!canViewBooking) {
+      notFound();
+    }
+
+    if (bookingTour?.slug && bookingTour.slug !== slug) {
+      redirect(`/tours/${bookingTour.slug}?booking=${bookingId}`);
+    }
+
+    if (bookingRow.tour_id !== t.id) {
+      notFound();
+    }
+
+    const departurePast =
+      isBookingDeparturePast({
+        status: bookingRow.status,
+        departure_start_at: bookingRow.departure_start_at,
+        departure_end_at: bookingRow.departure_end_at,
+        schedule_superseded_at: bookingRow.schedule_superseded_at,
+        tour_session: tourSession,
+        tour: bookingTour,
+      });
+
+    bookingSidebarView = {
+      startDate:
+        bookingRow.departure_start_at ??
+        tourSession?.start_at ??
+        bookingTour?.start_date ??
+        t.start_date ??
+        null,
+      endDate:
+        bookingRow.departure_end_at ??
+        tourSession?.end_at ??
+        bookingTour?.end_date ??
+        t.end_date ??
+        null,
+      variant: bookingRow.user_id === user.id ? 'participant' : 'staff',
+      mode: departurePast ? 'archive' : 'upcoming',
+    };
+  }
 
   // Получаем медиа галерею
   const { data: media, error: mediaError } = await supabase
@@ -318,7 +415,19 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
       : 0;
 
 
-  const fallbackDurationLabel = tourDurationLabel(t.start_date, t.end_date ?? null);
+  const showBookingSidebar = participantArchiveMode || bookingSidebarView !== null;
+  const sidebarStartDate =
+    bookingSidebarView?.startDate ?? t.start_date ?? null;
+  const sidebarEndDate =
+    bookingSidebarView?.endDate ?? t.end_date ?? null;
+  const sidebarVariant = bookingSidebarView?.variant ?? 'participant';
+  const sidebarMode = bookingSidebarView?.mode ?? 'archive';
+  const characteristicsStartLabel = showBookingSidebar && sidebarStartDate
+    ? formatDateTimeShortRu(sidebarStartDate)
+    : formatDateTimeShortRu(t.start_date);
+  const fallbackDurationLabel = showBookingSidebar && sidebarStartDate
+    ? tourDurationLabel(sidebarStartDate, sidebarEndDate)
+    : tourDurationLabel(t.start_date, t.end_date ?? null);
 
   return (
     <div className="min-h-screen bg-gray-50 relative w-full">
@@ -339,10 +448,12 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
         <TourSessionsProvider sessions={tourSessions}>
         <div className="mt-4 sm:mt-6 flex flex-col md:flex-col lg:flex-row gap-6 sm:gap-8 w-full items-start">
           <div className="w-full md:w-full lg:w-[320px] xl:w-[380px] 2xl:w-[400px] flex-shrink-0">
-            {participantArchiveMode ? (
-              <TourParticipantArchiveCard
-                startDate={t.start_date ?? null}
-                endDate={t.end_date ?? null}
+            {showBookingSidebar ? (
+              <TourBookingSidebarCard
+                startDate={sidebarStartDate}
+                endDate={sidebarEndDate}
+                variant={sidebarVariant}
+                mode={sidebarMode}
               />
             ) : (
               <TourScheduleBooking
@@ -364,7 +475,7 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
             />
 
             <TourCharacteristicsSectionConnected
-              fallbackStartDateLabel={formatDateTimeShortRu(t.start_date)}
+              fallbackStartDateLabel={characteristicsStartLabel}
               fallbackDurationLabel={fallbackDurationLabel}
               fallbackMaxParticipants={t.max_participants}
               priceLabel={`${t.price_per_person.toLocaleString('ru-RU')} ₽`}
@@ -397,7 +508,7 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
               reviews={reviewItems}
               reviewCount={reviewCount}
               averageRating={averageRating}
-              readOnly={participantArchiveMode}
+              readOnly={showBookingSidebar}
             />
           </div>
         </div>

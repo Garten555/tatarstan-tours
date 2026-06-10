@@ -232,6 +232,31 @@ export async function POST(
               newStart: start_at,
               newEnd: end_at,
             });
+
+            const supersededAt = new Date().toISOString();
+            const { data: sessionBookings } = await serviceClient
+              .from('bookings')
+              .select('id, departure_start_at, departure_end_at')
+              .eq('session_id', s.id)
+              .in('status', ['pending', 'confirmed', 'completed']);
+
+            for (const bookingRow of sessionBookings ?? []) {
+              const row = bookingRow as {
+                id: string;
+                departure_start_at?: string | null;
+                departure_end_at?: string | null;
+              };
+              const patch: Record<string, string> = {
+                schedule_superseded_at: supersededAt,
+              };
+              if (!row.departure_start_at) {
+                patch.departure_start_at = prev.start_at;
+              }
+              if (!row.departure_end_at && prev.end_at) {
+                patch.departure_end_at = prev.end_at;
+              }
+              await serviceClient.from('bookings').update(patch).eq('id', row.id);
+            }
           }
         }
       } else {

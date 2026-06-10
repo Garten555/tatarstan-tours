@@ -41,6 +41,7 @@ export async function GET(request: NextRequest) {
         created_at,
         departure_end_at,
         departure_start_at,
+        schedule_superseded_at,
         tour:tours!bookings_tour_id_fkey(
           id,
           title,

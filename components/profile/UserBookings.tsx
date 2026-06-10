@@ -28,6 +28,11 @@ import {
   getEffectiveBookingStatus,
   isTourCompletedForReview,
 } from '@/lib/bookings/review-eligibility';
+import { getTourPageHrefForBooking } from '@/lib/tours/booking-tour-link';
+import {
+  getBookingDepartureEndForDisplay,
+  getBookingDepartureStartForDisplay,
+} from '@/lib/bookings/booking-display';
 
 interface Booking {
   id: string;
@@ -35,6 +40,9 @@ interface Booking {
   /** Слот выезда; если null — бронь по старой схеме без слотов */
   session_id?: string | null;
   tour_session?: { start_at: string; end_at?: string | null } | null;
+  departure_start_at?: string | null;
+  departure_end_at?: string | null;
+  schedule_superseded_at?: string | null;
   num_people: number;
   total_price: number;
   status: string;
@@ -329,6 +337,8 @@ export default function UserBookings({ isViewMode = false, profileUserId = null 
             return null; // Пропускаем бронирования без тура
           }
 
+          const departureStart = getBookingDepartureStartForDisplay(booking);
+          const departureEnd = getBookingDepartureEndForDisplay(booking);
           const completedByDate = isTourCompleted(booking);
           const effectiveStatus = getEffectiveBookingStatus(booking);
           const canLeaveReview = canLeaveReviewForBooking(booking);
@@ -371,7 +381,7 @@ export default function UserBookings({ isViewMode = false, profileUserId = null 
                 <div className="flex-1 space-y-4">
                   <div>
                     <Link
-                      href={`/tours/${booking.tour.slug}`}
+                      href={getTourPageHrefForBooking(booking)}
                       className="text-xl font-semibold text-gray-900 hover:text-emerald-600 transition-colors"
                     >
                       {booking.tour.title}
@@ -388,8 +398,12 @@ export default function UserBookings({ isViewMode = false, profileUserId = null 
                   <div className="flex items-center gap-2 text-gray-600">
                     <Calendar className="w-4 h-4" />
                     <span>
-                      {formatDate(booking.tour.start_date)}
-                      {booking.tour.end_date ? ` — ${formatDate(booking.tour.end_date)}` : ''}
+                      {departureStart ? formatDate(departureStart) : formatDate(booking.tour.start_date)}
+                      {departureEnd
+                        ? ` — ${formatDate(departureEnd)}`
+                        : booking.tour.end_date && !departureEnd
+                          ? ` — ${formatDate(booking.tour.end_date)}`
+                          : ''}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 text-gray-600">
@@ -414,7 +428,7 @@ export default function UserBookings({ isViewMode = false, profileUserId = null 
                   <div className="text-sm font-medium text-gray-700">
                     Завершён:{' '}
                     <span className="font-semibold text-gray-900">
-                      {formatDate(booking.tour.end_date || booking.tour.start_date)}
+                      {formatDate(departureEnd || departureStart || booking.tour.end_date || booking.tour.start_date)}
                     </span>
                   </div>
                 )}
@@ -423,7 +437,7 @@ export default function UserBookings({ isViewMode = false, profileUserId = null 
                 {/* Действия */}
                 <div className="flex gap-3 pt-2 flex-wrap">
                   <Link
-                    href={`/tours/${booking.tour.slug}`}
+                    href={getTourPageHrefForBooking(booking)}
                     className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                   >
                     Подробнее о туре

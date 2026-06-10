@@ -8,6 +8,7 @@ export type BookingForReview = {
   session_id?: string | null;
   departure_start_at?: string | null;
   departure_end_at?: string | null;
+  schedule_superseded_at?: string | null;
   tour_session?: { start_at?: string | null; end_at?: string | null } | null;
   tour?: {
     status?: string | null;

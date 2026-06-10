@@ -49,6 +49,7 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
       *,
       departure_start_at,
       departure_end_at,
+      schedule_superseded_at,
       tour_session:tour_sessions!bookings_session_id_fkey(
         start_at,
         end_at
