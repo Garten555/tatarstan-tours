@@ -1,4 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { syncGuideRoomParticipant } from '@/lib/tour-rooms/sync-guide-participant';
 
 /**
  * Гарантирует строку tour_rooms для слота: одна комната на tour_session_id.
@@ -27,6 +28,12 @@ export async function ensureTourRoomForSession(
 
   const row = existing as { id?: string } | null;
   if (row?.id) {
+    const { data: currentRoom } = await serviceClient
+      .from('tour_rooms')
+      .select('guide_id')
+      .eq('id', row.id)
+      .single();
+
     const { error: upErr } = await serviceClient
       .from('tour_rooms')
       .update({ guide_id: guideId })
@@ -34,6 +41,14 @@ export async function ensureTourRoomForSession(
     if (upErr) {
       return { ok: false, error: upErr.message };
     }
+
+    await syncGuideRoomParticipant(
+      serviceClient,
+      row.id,
+      guideId,
+      (currentRoom as { guide_id?: string | null } | null)?.guide_id
+    );
+
     return { ok: true, roomId: row.id };
   }
 
@@ -52,5 +67,11 @@ export async function ensureTourRoomForSession(
     return { ok: false, error: insErr?.message ?? 'insert failed' };
   }
 
-  return { ok: true, roomId: (inserted as { id: string }).id };
+  const roomId = (inserted as { id: string }).id;
+
+  if (guideId) {
+    await syncGuideRoomParticipant(serviceClient, roomId, guideId, null);
+  }
+
+  return { ok: true, roomId };
 }

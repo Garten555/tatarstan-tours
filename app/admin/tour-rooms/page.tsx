@@ -241,7 +241,18 @@ export default function TourRoomsPage() {
       
       if (data.success && data.room) {
         setRooms((prev) =>
-          prev.map((r) => (r.id === roomId ? { ...r, ...(data.room as TourRoom) } : r))
+          prev.map((r) => {
+            if (r.id !== roomId) return r;
+            const updated = data.room as TourRoom;
+            return {
+              ...r,
+              ...updated,
+              tour: { ...r.tour, ...updated.tour },
+              session: updated.session ?? r.session,
+              participants_count:
+                updated.participants_count ?? r.participants_count,
+            };
+          })
         );
         setSelectedRoom(null);
         setShowUserSelect(false);

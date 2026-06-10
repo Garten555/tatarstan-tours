@@ -73,8 +73,10 @@ export default function TourRoomMessageReportsPanel({
       const blob = [
         row.tour_title,
         row.author_label,
+        row.author_email ?? '',
         row.author_role ?? '',
         row.reporter_label,
+        row.reporter_email ?? '',
         row.reporter_role ?? '',
         row.message ?? '',
         row.report_reason ?? '',

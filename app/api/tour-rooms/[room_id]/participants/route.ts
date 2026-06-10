@@ -1,6 +1,7 @@
 // API для работы с участниками комнат туров
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { syncGuideRoomParticipant } from '@/lib/tour-rooms/sync-guide-participant';
 
 // GET /api/tour-rooms/[room_id]/participants
 // Получить список участников
@@ -88,9 +89,45 @@ export async function GET(
       );
     }
 
+    let participantsList = participants || [];
+
+    if (room?.guide_id) {
+      const guideAlreadyListed = participantsList.some(
+        (p) => p.user_id === room.guide_id
+      );
+
+      if (!guideAlreadyListed) {
+        await syncGuideRoomParticipant(
+          serviceClient,
+          room_id,
+          room.guide_id,
+          null
+        );
+
+        const { data: refetched } = await serviceClient
+          .from('tour_room_participants')
+          .select(`
+            id,
+            room_id,
+            user_id,
+            booking_id,
+            joined_at,
+            user:profiles(id, first_name, last_name, avatar_url, email),
+            booking:bookings(id, num_people, status)
+          `)
+          .eq('room_id', room_id)
+          .order('joined_at', { ascending: true })
+          .limit(100);
+
+        if (refetched) {
+          participantsList = refetched;
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      participants: participants || [],
+      participants: participantsList,
       guide_id: room?.guide_id || null,
     });
   } catch (error) {

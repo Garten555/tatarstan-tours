@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { publishAdminSync, publishUserNotification } from '@/lib/pusher/user-notification';
+import { syncGuideRoomParticipant } from '@/lib/tour-rooms/sync-guide-participant';
 
 // GET /api/tour-rooms?tour_id={tour_id}&session_id={optional}
 // Комната тура: для нескольких выездов передавайте session_id слота брони.
@@ -212,9 +213,32 @@ export async function PATCH(request: NextRequest) {
       })
       .eq('id', finalRoomId)
       .select(`
-        *,
-        tour:tours(id, title, start_date, end_date),
-        guide:profiles!tour_rooms_guide_id_fkey(id, first_name, last_name, avatar_url)
+        id,
+        tour_id,
+        tour_session_id,
+        guide_id,
+        is_active,
+        created_at,
+        tour:tours(
+          id,
+          title,
+          start_date,
+          end_date,
+          cover_image,
+          city:cities(name)
+        ),
+        session:tour_sessions!tour_rooms_tour_session_id_fkey(
+          id,
+          start_at,
+          end_at
+        ),
+        guide:profiles!tour_rooms_guide_id_fkey(
+          id,
+          first_name,
+          last_name,
+          email,
+          avatar_url
+        )
       `)
       .single();
 
@@ -236,9 +260,29 @@ export async function PATCH(request: NextRequest) {
         .eq('id', typedCurrent.tour_session_id);
     }
 
+    if (guide_id !== undefined) {
+      await syncGuideRoomParticipant(
+        serviceClient,
+        finalRoomId,
+        guide_id,
+        typedCurrent?.guide_id
+      );
+    }
+
+    const rawTour = (room as { tour?: unknown })?.tour;
+    const normalizedTour = Array.isArray(rawTour) ? rawTour[0] ?? null : rawTour;
+    const rawSession = (room as { session?: unknown })?.session;
+    const normalizedSession = Array.isArray(rawSession)
+      ? rawSession[0] ?? null
+      : rawSession;
+    const rawGuide = (room as { guide?: unknown })?.guide;
+    const normalizedGuide = Array.isArray(rawGuide) ? rawGuide[0] ?? null : rawGuide;
+
     // Отправляем уведомления при изменении гида
     if (guide_id !== undefined && guide_id !== typedCurrent?.guide_id) {
-      const tour = room?.tour || typedCurrent?.tour;
+      const tour =
+        (normalizedTour as { title?: string; start_date?: string } | null) ||
+        typedCurrent?.tour;
       const tourTitle = tour?.title || 'тур';
       const tourDate = tour?.start_date 
         ? new Date(tour.start_date).toLocaleDateString('ru-RU', {
@@ -310,7 +354,21 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, room });
+    const { count: participantsCount } = await serviceClient
+      .from('tour_room_participants')
+      .select('*', { count: 'exact', head: true })
+      .eq('room_id', finalRoomId);
+
+    return NextResponse.json({
+      success: true,
+      room: {
+        ...(room as Record<string, unknown>),
+        tour: normalizedTour,
+        session: normalizedSession,
+        guide: normalizedGuide,
+        participants_count: participantsCount ?? 0,
+      },
+    });
   } catch (error) {
     console.error('Ошибка обновления комнаты:', error);
     return NextResponse.json(

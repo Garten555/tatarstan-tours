@@ -24,6 +24,7 @@ type ProfileRow = {
   first_name?: string | null;
   last_name?: string | null;
   email?: string | null;
+  avatar_url?: string | null;
   role?: string | null;
   is_banned?: boolean | null;
 };
@@ -37,7 +38,7 @@ async function loadProfiles(
 
   const { data: profiles } = await serviceClient
     .from('profiles')
-    .select('id, first_name, last_name, email, role, is_banned')
+    .select('id, first_name, last_name, email, avatar_url, role, is_banned')
     .in('id', ids);
 
   for (const p of (profiles || []) as ProfileRow[]) {
@@ -183,9 +184,13 @@ async function fetchFromReportsTable(
       author_role: author?.role ?? null,
       author_is_banned: Boolean(author?.is_banned),
       author_label: profileDisplayName(author, 'Участник'),
+      author_email: author?.email ?? null,
+      author_avatar_url: author?.avatar_url ?? null,
       reporter_user_id: r.reporter_id,
       reporter_role: rep?.role ?? null,
       reporter_label: profileDisplayName(rep, 'Пользователь'),
+      reporter_email: rep?.email ?? null,
+      reporter_avatar_url: rep?.avatar_url ?? null,
       tour_title: roomTourTitle.get(r.room_id) || 'Тур',
     });
   }
@@ -258,9 +263,13 @@ async function fetchFromMessageFlags(
       author_role: author?.role ?? null,
       author_is_banned: Boolean(author?.is_banned),
       author_label: profileDisplayName(author, 'Участник'),
+      author_email: author?.email ?? null,
+      author_avatar_url: author?.avatar_url ?? null,
       reporter_user_id: m.reported_by,
       reporter_role: rep?.role ?? null,
       reporter_label: m.reported_by ? profileDisplayName(rep, 'Пользователь') : '—',
+      reporter_email: rep?.email ?? null,
+      reporter_avatar_url: rep?.avatar_url ?? null,
       tour_title: roomTourTitle.get(m.room_id) || 'Тур',
     };
   });
