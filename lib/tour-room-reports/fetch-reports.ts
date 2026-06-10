@@ -15,13 +15,8 @@ function isMissingColumnError(error: { code?: string; message?: string } | null)
   if (!error) return false;
   return (
     error.code === '42703' ||
-    /is_reported|reported_at|deleted_at/i.test(error.message || '')
+    /is_reported|reported_at|deleted_at|reported_by|report_reason/i.test(error.message || '')
   );
-}
-
-function unwrap<T>(x: T | T[] | null | undefined): T | null {
-  if (x == null) return null;
-  return Array.isArray(x) ? x[0] ?? null : x;
 }
 
 type ProfileRow = {
@@ -93,36 +88,18 @@ async function loadTourTitlesByRoom(
 
 async function fetchFromReportsTable(
   serviceClient: SupabaseClient
-): Promise<{ rows: TourRoomReportRow[] | null; error: string | null; tableMissing: boolean }> {
+): Promise<{ rows: TourRoomReportRow[]; error: string | null; tableMissing: boolean }> {
   const { data: reportRows, error } = await serviceClient
     .from('tour_room_message_reports')
-    .select(
-      `
-      id,
-      message_id,
-      room_id,
-      reporter_id,
-      reason,
-      created_at,
-      message:tour_room_messages(
-        id,
-        room_id,
-        user_id,
-        message,
-        image_url,
-        created_at,
-        deleted_at
-      )
-    `
-    )
+    .select('id, message_id, room_id, reporter_id, reason, created_at')
     .order('created_at', { ascending: false })
     .limit(200);
 
   if (error) {
     if (isMissingTableError(error)) {
-      return { rows: null, error: null, tableMissing: true };
+      return { rows: [], error: null, tableMissing: true };
     }
-    return { rows: null, error: error.message, tableMissing: false };
+    return { rows: [], error: error.message, tableMissing: false };
   }
 
   type ReportRow = {
@@ -132,23 +109,53 @@ async function fetchFromReportsTable(
     reporter_id: string;
     reason: string | null;
     created_at: string;
-    message?: unknown;
   };
 
-  const list = ((reportRows || []) as ReportRow[]).filter((row) => {
-    const msg = unwrap(row.message) as { deleted_at?: string | null } | null;
-    return msg && !msg.deleted_at;
-  });
-
+  const list = (reportRows || []) as ReportRow[];
   if (list.length === 0) {
     return { rows: [], error: null, tableMissing: false };
   }
 
-  const authorIds = list
-    .map((r) => {
-      const msg = unwrap(r.message) as { user_id?: string | null } | null;
-      return msg?.user_id;
-    })
+  const messageIds = [...new Set(list.map((r) => r.message_id))];
+  const messagesResWithDeleted = await serviceClient
+    .from('tour_room_messages')
+    .select('id, room_id, user_id, message, image_url, created_at, deleted_at')
+    .in('id', messageIds);
+
+  const messagesRes =
+    messagesResWithDeleted.error && isMissingColumnError(messagesResWithDeleted.error)
+      ? await serviceClient
+          .from('tour_room_messages')
+          .select('id, room_id, user_id, message, image_url, created_at')
+          .in('id', messageIds)
+      : messagesResWithDeleted;
+
+  const messageMap = new Map<
+    string,
+    {
+      id: string;
+      user_id: string | null;
+      message: string | null;
+      image_url: string | null;
+      created_at: string;
+      deleted_at?: string | null;
+    }
+  >();
+
+  for (const msg of (messagesRes.data || []) as {
+    id: string;
+    user_id: string | null;
+    message: string | null;
+    image_url: string | null;
+    created_at: string;
+    deleted_at?: string | null;
+  }[]) {
+    if (msg.deleted_at) continue;
+    messageMap.set(msg.id, msg);
+  }
+
+  const authorIds = [...messageMap.values()]
+    .map((m) => m.user_id)
     .filter((id): id is string => Boolean(id));
   const reporterIds = list.map((r) => r.reporter_id);
   const roomIds = [...new Set(list.map((r) => r.room_id))];
@@ -156,27 +163,23 @@ async function fetchFromReportsTable(
   const profileMap = await loadProfiles(serviceClient, [...new Set([...authorIds, ...reporterIds])]);
   const roomTourTitle = await loadTourTitlesByRoom(serviceClient, roomIds);
 
-  const rows: TourRoomReportRow[] = list.map((r) => {
-    const msg = unwrap(r.message) as {
-      id: string;
-      user_id: string | null;
-      message: string | null;
-      image_url: string | null;
-      created_at: string;
-    } | null;
+  const rows: TourRoomReportRow[] = [];
+  for (const r of list) {
+    const msg = messageMap.get(r.message_id);
+    if (!msg) continue;
 
-    const author = msg?.user_id ? profileMap.get(msg.user_id) : undefined;
+    const author = msg.user_id ? profileMap.get(msg.user_id) : undefined;
     const rep = profileMap.get(r.reporter_id);
 
-    return {
+    rows.push({
       id: r.id,
       room_id: r.room_id,
-      message: msg?.message ?? null,
-      image_url: msg?.image_url ?? null,
-      created_at: msg?.created_at ?? r.created_at,
+      message: msg.message,
+      image_url: msg.image_url,
+      created_at: msg.created_at,
       reported_at: r.created_at,
       report_reason: r.reason,
-      author_user_id: author?.id || msg?.user_id || '',
+      author_user_id: author?.id || msg.user_id || '',
       author_role: author?.role ?? null,
       author_is_banned: Boolean(author?.is_banned),
       author_label: profileDisplayName(author, 'Участник'),
@@ -184,8 +187,8 @@ async function fetchFromReportsTable(
       reporter_role: rep?.role ?? null,
       reporter_label: profileDisplayName(rep, 'Пользователь'),
       tour_title: roomTourTitle.get(r.room_id) || 'Тур',
-    };
-  });
+    });
+  }
 
   return { rows, error: null, tableMissing: false };
 }
@@ -209,12 +212,10 @@ async function fetchFromMessageFlags(
   }
 
   if (error) {
-    return {
-      rows: [],
-      error: isMissingColumnError(error)
-        ? 'В базе нет таблицы/полей для жалоб. Выполните database/snippets/010_tour_room_message_reports_table.sql в Supabase SQL Editor.'
-        : error.message,
-    };
+    if (isMissingColumnError(error)) {
+      return { rows: [], error: null };
+    }
+    return { rows: [], error: error.message };
   }
 
   type RawMsg = {
@@ -267,6 +268,33 @@ async function fetchFromMessageFlags(
   return { rows, error: null };
 }
 
+function mergeReportRows(
+  tableRows: TourRoomReportRow[],
+  legacyRows: TourRoomReportRow[]
+): TourRoomReportRow[] {
+  const seen = new Map<string, TourRoomReportRow>();
+
+  for (const row of [...tableRows, ...legacyRows]) {
+    const key = `${row.room_id}:${row.reporter_user_id ?? ''}:${row.created_at}:${row.message ?? row.id}`;
+    const existing = seen.get(key);
+    const rowTs = new Date(row.reported_at || row.created_at).getTime();
+    const existingTs = existing
+      ? new Date(existing.reported_at || existing.created_at).getTime()
+      : 0;
+    if (!existing || rowTs >= existingTs) {
+      seen.set(key, row);
+    }
+  }
+
+  return [...seen.values()]
+    .sort(
+      (a, b) =>
+        new Date(b.reported_at || b.created_at).getTime() -
+        new Date(a.reported_at || a.created_at).getTime()
+    )
+    .slice(0, 200);
+}
+
 export type FetchTourRoomReportsResult = {
   rows: TourRoomReportRow[];
   error: string | null;
@@ -277,25 +305,19 @@ export async function fetchTourRoomMessageReports(
   serviceClient: SupabaseClient
 ): Promise<FetchTourRoomReportsResult> {
   const fromTable = await fetchFromReportsTable(serviceClient);
-
-  if (fromTable.error) {
-    return { rows: [], error: fromTable.error, setupHint: null };
-  }
-
-  if (fromTable.rows && fromTable.rows.length > 0) {
-    return { rows: fromTable.rows, error: null, setupHint: null };
-  }
-
-  if (!fromTable.tableMissing && fromTable.rows) {
-    return { rows: fromTable.rows, error: null, setupHint: null };
-  }
-
   const legacy = await fetchFromMessageFlags(serviceClient);
-  if (legacy.rows.length > 0) {
-    return { rows: legacy.rows, error: null, setupHint: null };
+
+  if (fromTable.error && legacy.error) {
+    return { rows: [], error: fromTable.error || legacy.error, setupHint: null };
   }
 
-  if (legacy.error) {
+  const rows = mergeReportRows(fromTable.rows, legacy.rows);
+
+  if (rows.length > 0) {
+    return { rows, error: null, setupHint: null };
+  }
+
+  if (fromTable.tableMissing && legacy.error) {
     return {
       rows: [],
       error: legacy.error,
@@ -311,5 +333,5 @@ export async function fetchTourRoomMessageReports(
     };
   }
 
-  return { rows: [], error: null, setupHint: null };
+  return { rows: [], error: legacy.error, setupHint: null };
 }

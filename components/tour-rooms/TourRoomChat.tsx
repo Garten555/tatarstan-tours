@@ -338,7 +338,9 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
       });
       const data = await response.json();
       if (!response.ok) {
-        throw new Error(data.error || 'Не удалось отправить жалобу');
+        const details =
+          typeof data.details === 'string' && data.details ? `: ${data.details}` : '';
+        throw new Error((data.error || 'Не удалось отправить жалобу') + details);
       }
       toast.success('Жалоба отправлена');
       setReportMessageId(null);

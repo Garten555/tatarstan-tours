@@ -6,16 +6,41 @@ function isMissingReportsTable(error: { code?: string; message?: string } | null
   if (!error) return false;
   return (
     error.code === '42P01' ||
-    /tour_room_message_reports|relation.*does not exist/i.test(error.message || '')
+    /tour_room_message_reports|relation.*does not exist|schema cache/i.test(error.message || '')
   );
 }
 
-function isMissingMessageReportColumns(error: { code?: string; message?: string } | null): boolean {
+function isMissingOptionalColumn(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
   return (
     error.code === '42703' ||
-    /is_reported|reported_at|reported_by|report_reason/i.test(error.message || '')
+    /is_reported|reported_at|reported_by|report_reason|deleted_at/i.test(error.message || '')
   );
+}
+
+async function loadMessageInRoom(
+  serviceClient: ReturnType<typeof createServiceClient>,
+  room_id: string,
+  message_id: string
+) {
+  let result = await serviceClient
+    .from('tour_room_messages')
+    .select('id, user_id')
+    .eq('id', message_id)
+    .eq('room_id', room_id)
+    .is('deleted_at', null)
+    .maybeSingle();
+
+  if (result.error && isMissingOptionalColumn(result.error)) {
+    result = await serviceClient
+      .from('tour_room_messages')
+      .select('id, user_id')
+      .eq('id', message_id)
+      .eq('room_id', room_id)
+      .maybeSingle();
+  }
+
+  return result;
 }
 
 export async function POST(
@@ -39,24 +64,7 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const reason = typeof body?.reason === 'string' ? body.reason.trim() : null;
 
-    let messageLookup = await serviceClient
-      .from('tour_room_messages')
-      .select('id')
-      .eq('id', message_id)
-      .eq('room_id', room_id)
-      .is('deleted_at', null)
-      .maybeSingle();
-
-    if (messageLookup.error && isMissingMessageReportColumns(messageLookup.error)) {
-      messageLookup = await serviceClient
-        .from('tour_room_messages')
-        .select('id')
-        .eq('id', message_id)
-        .eq('room_id', room_id)
-        .maybeSingle();
-    }
-
-    const [roomResult, participantResult, profileResult] = await Promise.all([
+    const [roomResult, participantResult, profileResult, messageLookup] = await Promise.all([
       serviceClient.from('tour_rooms').select('guide_id').eq('id', room_id).single(),
       serviceClient
         .from('tour_room_participants')
@@ -65,12 +73,21 @@ export async function POST(
         .eq('user_id', user.id)
         .maybeSingle(),
       supabase.from('profiles').select('role').eq('id', user.id).single(),
+      loadMessageInRoom(serviceClient, room_id, message_id),
     ]);
 
     const { data: room } = roomResult;
     const { data: participant } = participantResult;
     const { data: profile } = profileResult;
-    const { data: messageRow } = messageLookup;
+    const { data: messageRow, error: messageError } = messageLookup;
+
+    if (messageError) {
+      console.error('[tour-room-message-report] message lookup:', messageError);
+      return NextResponse.json(
+        { error: 'Не удалось найти сообщение', details: messageError.message },
+        { status: 500 }
+      );
+    }
 
     if (!messageRow) {
       return NextResponse.json({ error: 'Сообщение не найдено' }, { status: 404 });
@@ -87,23 +104,36 @@ export async function POST(
       return NextResponse.json({ error: 'У вас нет доступа к этой комнате' }, { status: 403 });
     }
 
-    let saved = false;
-
-    const { error: insertError } = await serviceClient.from('tour_room_message_reports').insert({
-      message_id,
-      room_id,
-      reporter_id: user.id,
-      reason,
-    });
-
-    if (!insertError) {
-      saved = true;
-    } else if (!isMissingReportsTable(insertError)) {
-      console.error('[tour-room-message-report] insert:', insertError);
-      return NextResponse.json({ error: 'Не удалось сохранить жалобу' }, { status: 500 });
+    if (messageRow.user_id === user.id) {
+      return NextResponse.json({ error: 'Нельзя пожаловаться на своё сообщение' }, { status: 400 });
     }
 
-    const { data: updated, error: flagError } = await serviceClient
+    const { data: insertedReport, error: insertError } = await serviceClient
+      .from('tour_room_message_reports')
+      .insert({
+        message_id,
+        room_id,
+        reporter_id: user.id,
+        reason: reason || null,
+      })
+      .select('id')
+      .single();
+
+    if (insertError) {
+      if (!isMissingReportsTable(insertError)) {
+        console.error('[tour-room-message-report] insert:', insertError);
+        return NextResponse.json(
+          {
+            error: 'Не удалось сохранить жалобу в базу',
+            details: insertError.message,
+            code: insertError.code,
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    const { error: flagError } = await serviceClient
       .from('tour_room_messages')
       .update({
         is_reported: true,
@@ -112,31 +142,30 @@ export async function POST(
         report_reason: reason,
       })
       .eq('id', message_id)
-      .eq('room_id', room_id)
-      .select('id')
-      .maybeSingle();
+      .eq('room_id', room_id);
 
-    if (!flagError && updated) {
-      saved = true;
-    } else if (flagError && !isMissingMessageReportColumns(flagError)) {
+    if (flagError && !isMissingOptionalColumn(flagError)) {
       console.error('[tour-room-message-report] flags:', flagError);
-      if (!saved) {
-        return NextResponse.json({ error: 'Не удалось отправить жалобу' }, { status: 500 });
+    }
+
+    if (insertError && isMissingReportsTable(insertError)) {
+      if (flagError && isMissingOptionalColumn(flagError)) {
+        return NextResponse.json(
+          {
+            error:
+              'Таблица tour_room_message_reports не найдена. Выполните SQL из database/snippets/010_tour_room_message_reports_table.sql в Supabase.',
+          },
+          { status: 503 }
+        );
       }
     }
 
-    if (!saved) {
-      return NextResponse.json(
-        {
-          error:
-            'В базе нет таблицы для жалоб. Администратор должен выполнить SQL из database/snippets/010_tour_room_message_reports_table.sql в Supabase.',
-        },
-        { status: 503 }
-      );
+    if (!insertedReport?.id && flagError && !isMissingOptionalColumn(flagError)) {
+      return NextResponse.json({ error: 'Не удалось отправить жалобу' }, { status: 500 });
     }
 
     void publishAdminModerationChanged();
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, report_id: insertedReport?.id ?? null });
   } catch (error) {
     console.error('Ошибка жалобы на сообщение:', error);
     return NextResponse.json({ error: 'Внутренняя ошибка сервера' }, { status: 500 });
