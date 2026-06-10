@@ -1,6 +1,8 @@
 import { redirect, notFound } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import BookingDetails from '@/components/admin/BookingDetails';
+import { syncPastBookingsToCompleted } from '@/lib/bookings/complete-past-bookings';
+import { completeFinishedActiveTours } from '@/lib/tours/tour-lifecycle-status';
 
 export const metadata = {
   title: 'Детали бронирования - Админ панель',
@@ -38,11 +40,19 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
     redirect('/admin');
   }
 
-  // Загружаем бронирование
+  await completeFinishedActiveTours(serviceClient);
+  await syncPastBookingsToCompleted(serviceClient);
+
   const { data: booking, error } = await serviceClient
     .from('bookings')
     .select(`
       *,
+      departure_start_at,
+      departure_end_at,
+      tour_session:tour_sessions!bookings_session_id_fkey(
+        start_at,
+        end_at
+      ),
       user:profiles!bookings_user_id_fkey(
         id,
         first_name,
@@ -56,6 +66,7 @@ export default async function BookingDetailPage({ params }: BookingDetailPagePro
         slug,
         start_date,
         end_date,
+        status,
         price_per_person,
         max_participants,
         current_participants,

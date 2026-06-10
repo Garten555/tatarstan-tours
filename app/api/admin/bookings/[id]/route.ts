@@ -1,6 +1,10 @@
 // API для управления конкретным бронированием
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import {
+  adminBookingPatchToRow,
+  sanitizeAdminBookingPatch,
+} from '@/lib/bookings/admin-booking-patch';
 import { publishBookingsChanged } from '@/lib/pusher/data-sync';
 import { syncTourParticipationAchievements } from '@/lib/achievements/auto-award';
 
@@ -43,9 +47,17 @@ export async function PATCH(
       );
     }
 
-    const updateData = await request.json();
-    if (updateData?.status === 'cancelled' && !updateData.payment_status) {
+    const rawBody = await request.json();
+    const updateData = sanitizeAdminBookingPatch(rawBody);
+    if (updateData.status === 'cancelled' && !updateData.payment_status) {
       updateData.payment_status = 'refunded';
+    }
+
+    if (!updateData.status && !updateData.payment_status) {
+      return NextResponse.json(
+        { error: 'Нет полей для обновления (status или payment_status)' },
+        { status: 400 }
+      );
     }
 
     console.log('📝 Обновление бронирования:', { id, updateData });
@@ -94,44 +106,30 @@ export async function PATCH(
       }
     }
 
-    // Валидация значений статусов
-    if (updateData.status) {
-      const validStatuses = ['pending', 'confirmed', 'cancelled', 'completed'];
-      if (!validStatuses.includes(updateData.status)) {
-        return NextResponse.json(
-          { error: `Недопустимый статус: ${updateData.status}` },
-          { status: 400 }
-        );
-      }
-    }
+    const row = adminBookingPatchToRow(updateData);
 
-    if (updateData.payment_status) {
-      const validPaymentStatuses = ['pending', 'paid', 'failed', 'refunded'];
-      if (!validPaymentStatuses.includes(updateData.payment_status)) {
-        return NextResponse.json(
-          { error: `Недопустимый статус оплаты: ${updateData.payment_status}` },
-          { status: 400 }
-        );
-      }
-    }
-
-    // Обновляем бронирование
     const { data: booking, error } = await serviceClient
       .from('bookings')
-      .update(updateData)
+      .update(row)
       .eq('id', id)
-      .select()
-      .single();
+      .select('*')
+      .maybeSingle();
 
     if (error) {
       console.error('❌ Ошибка обновления бронирования:', error);
-      console.error('❌ Детали ошибки:', JSON.stringify(error, null, 2));
       return NextResponse.json(
-        { 
+        {
           error: 'Не удалось обновить бронирование',
-          details: error.message || JSON.stringify(error)
+          details: error.message || error.code || JSON.stringify(error),
         },
         { status: 500 }
+      );
+    }
+
+    if (!booking) {
+      return NextResponse.json(
+        { error: 'Бронирование не найдено после обновления' },
+        { status: 404 }
       );
     }
 

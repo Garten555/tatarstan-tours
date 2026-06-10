@@ -1,7 +1,4 @@
-import {
-  getBookingDepartureEndIso,
-  getBookingDepartureStartIso,
-} from '@/lib/bookings/booking-departure';
+import { isBookingDeparturePast } from '@/lib/bookings/booking-completion';
 
 /**
  * Можно ли оставить отзыв по брони (логика совпадает с «Мои бронирования»).
@@ -19,34 +16,12 @@ export type BookingForReview = {
   } | null;
 };
 
-function parseMs(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const ms = new Date(value).getTime();
-  return Number.isNaN(ms) ? null : ms;
-}
-
 /** Тур по брони фактически завершён (дата выезда/окончания уже прошла). */
 export function isTourCompletedForReview(
   booking: BookingForReview,
   now: number = Date.now()
 ): boolean {
-  if (booking.tour?.status === 'completed') {
-    return true;
-  }
-
-  const endIso = getBookingDepartureEndIso(booking);
-  const endMs = parseMs(endIso);
-  if (endMs !== null && endMs <= now) {
-    return true;
-  }
-
-  const startIso = getBookingDepartureStartIso(booking);
-  const startMs = parseMs(startIso);
-  if (startMs !== null && startMs <= now && endMs === null) {
-    return true;
-  }
-
-  return false;
+  return isBookingDeparturePast(booking, now);
 }
 
 /** Статус для UI и отчётов: прошедший выезд → completed (кроме отменённых). */

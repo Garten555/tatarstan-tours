@@ -185,6 +185,7 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
   const getPaymentStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
       pending: 'Ожидает оплаты',
+      unpaid: 'Ожидает оплаты',
       paid: 'Оплачено',
       failed: 'Ошибка оплаты',
       refunded: 'Возврат',

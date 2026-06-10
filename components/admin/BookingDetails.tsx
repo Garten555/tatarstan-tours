@@ -23,6 +23,10 @@ import {
 } from 'lucide-react';
 
 import { formatDateTimeShortRu } from '@/lib/date/format-ru';
+import {
+  getEffectiveBookingStatus,
+  type BookingForReview,
+} from '@/lib/bookings/review-eligibility';
 
 interface BookingDetailsProps {
   booking: any;
@@ -33,15 +37,34 @@ export default function BookingDetails({ booking, attendees }: BookingDetailsPro
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [currentStatus, setCurrentStatus] = useState(booking.status);
-  const [currentPaymentStatus, setCurrentPaymentStatus] = useState(booking.payment_status);
-  const isLocked = booking.status === 'completed' && booking.payment_status === 'paid';
+  const bookingForStatus = (): BookingForReview => {
+    const tour_session = Array.isArray(booking.tour_session)
+      ? booking.tour_session[0] ?? null
+      : booking.tour_session ?? null;
+    const tour = Array.isArray(booking.tour) ? booking.tour[0] ?? null : booking.tour;
+    return {
+      status: booking.status,
+      departure_start_at: booking.departure_start_at,
+      departure_end_at: booking.departure_end_at,
+      tour_session,
+      tour,
+    };
+  };
+
+  const initialStatus = getEffectiveBookingStatus(bookingForStatus());
+  const [currentStatus, setCurrentStatus] = useState(initialStatus);
+  const [currentPaymentStatus, setCurrentPaymentStatus] = useState(
+    booking.payment_status === 'unpaid' ? 'pending' : booking.payment_status
+  );
+  const isLocked = currentStatus === 'completed' && currentPaymentStatus === 'paid';
 
   // Синхронизация состояний при обновлении booking
   useEffect(() => {
-    setCurrentStatus(booking.status);
-    setCurrentPaymentStatus(booking.payment_status);
-  }, [booking.status, booking.payment_status]);
+    setCurrentStatus(getEffectiveBookingStatus(bookingForStatus()));
+    setCurrentPaymentStatus(
+      booking.payment_status === 'unpaid' ? 'pending' : booking.payment_status
+    );
+  }, [booking.status, booking.payment_status, booking.departure_start_at, booking.departure_end_at, booking.tour, booking.tour_session]);
 
   // Форматирование даты (Europe/Moscow)
   const formatDate = formatDateTimeShortRu;
@@ -93,6 +116,7 @@ export default function BookingDetails({ booking, attendees }: BookingDetailsPro
   const getPaymentStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
       pending: 'Ожидает оплаты',
+      unpaid: 'Ожидает оплаты',
       paid: 'Оплачено',
       failed: 'Ошибка оплаты',
       refunded: 'Возврат',
@@ -136,7 +160,9 @@ export default function BookingDetails({ booking, attendees }: BookingDetailsPro
         console.error('❌ Ошибка ответа:', result);
         // Возвращаем старое значение при ошибке
         setCurrentStatus(booking.status);
-        throw new Error(result.error || result.details || 'Не удалось обновить статус');
+        throw new Error(
+          [result.error, result.details].filter(Boolean).join(': ') || 'Не удалось обновить статус'
+        );
       }
 
       console.log('✅ Статус обновлен успешно');
@@ -188,7 +214,10 @@ export default function BookingDetails({ booking, attendees }: BookingDetailsPro
         console.error('❌ Ошибка ответа:', result);
         // Возвращаем старое значение при ошибке
         setCurrentPaymentStatus(booking.payment_status);
-        throw new Error(result.error || result.details || 'Не удалось обновить статус оплаты');
+        throw new Error(
+          [result.error, result.details].filter(Boolean).join(': ') ||
+            'Не удалось обновить статус оплаты'
+        );
       }
 
       console.log('✅ Статус оплаты обновлен успешно');
