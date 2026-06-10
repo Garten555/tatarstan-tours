@@ -1,11 +1,11 @@
-/** Начальный статус оплаты при создании брони (не помечаем cash/qr как оплаченные). */
+/** Начальный статус оплаты: «ожидает оплаты» только для наличных. */
 export function initialPaymentStatus(paymentMethod: string): 'pending' | 'paid' {
-  if (paymentMethod === 'card') return 'paid';
-  return 'pending';
+  if (paymentMethod === 'cash') return 'pending';
+  return 'paid';
 }
 
-/** Статус брони при создании: подтверждён только после оплаты картой (демо-шлюз). */
+/** Статус брони: pending только для наличных (оплата при встрече). */
 export function initialBookingStatus(paymentMethod: string): 'pending' | 'confirmed' {
-  if (paymentMethod === 'card') return 'confirmed';
-  return 'pending';
+  if (paymentMethod === 'cash') return 'pending';
+  return 'confirmed';
 }

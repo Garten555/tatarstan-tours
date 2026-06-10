@@ -323,7 +323,6 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
         num_people: formData.num_people,
         total_price: totalPrice,
         payment_method: formData.payment_method,
-        payment_status: formData.payment_method === 'cash' ? 'pending' : 'pending',
         attendees: attendees.map((a) => ({
           full_name: a.full_name,
           email: a.email || null,
