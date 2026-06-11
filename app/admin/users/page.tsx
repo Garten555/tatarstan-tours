@@ -28,7 +28,7 @@ export default async function UsersPage() {
   const userRole = typedProfile?.role || 'user';
 
   if (userRole !== 'super_admin' && userRole !== 'support_admin') {
-    redirect('/admin');
+    redirect('/unauthorized');
   }
 
   // Получаем всех пользователей с username и данными о бане
