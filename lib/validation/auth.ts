@@ -26,8 +26,15 @@ export const ALLOWED_EMAIL_PROVIDERS = [
  * Проверяет, является ли email провайдер разрешённым
  */
 export function isAllowedEmailProvider(email: string): boolean {
-  const domain = email.split('@')[1]?.toLowerCase();
-  return ALLOWED_EMAIL_PROVIDERS.includes(domain);
+  const domain = email.split('@')[1]?.toLowerCase().trim();
+  if (!domain) return false;
+  if (ALLOWED_EMAIL_PROVIDERS.includes(domain)) return true;
+  // Proton: proton.me, protonmail.com, pm.me и поддомены
+  if (domain === 'proton.me' || domain.endsWith('.proton.me')) return true;
+  if (domain === 'protonmail.com' || domain.endsWith('.protonmail.com')) return true;
+  if (domain === 'protonmail.ch' || domain.endsWith('.protonmail.ch')) return true;
+  if (domain === 'pm.me' || domain.endsWith('.pm.me')) return true;
+  return false;
 }
 
 /**
