@@ -61,6 +61,7 @@ interface FormErrors {
   start_date?: string;
   end_date?: string;
   max_participants?: string;
+  city_id?: string;
   yandex_map_url?: string;
   short_desc?: string;
   full_desc?: string;
@@ -258,6 +259,8 @@ export default function TourForm({
     setCitySearch(city.name);
     setFormData(prev => ({ ...prev, city_id: city.id }));
     setShowCityDropdown(false);
+    setTouched(prev => ({ ...prev, city_id: true }));
+    setErrors(prev => ({ ...prev, city_id: undefined }));
   };
 
   // Очистка выбранного города
@@ -363,9 +366,18 @@ export default function TourForm({
         }
         break;
 
+      case 'city_id':
+        if (!value) {
+          return 'Выберите город из списка';
+        }
+        break;
+
       case 'yandex_map_url':
-        if (value && value.trim().length > 0) {
-          const parsedUrl = parseYandexMapIframe(value);
+        if (!value || !String(value).trim()) {
+          return 'Укажите ссылку или код вставки Яндекс Карты';
+        }
+        {
+          const parsedUrl = parseYandexMapIframe(String(value));
           if (!parsedUrl.includes('yandex.ru')) {
             return 'Ссылка должна быть с yandex.ru';
           }
@@ -1219,7 +1231,7 @@ export default function TourForm({
         {/* City */}
         <div className="city-search-container">
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Город <span className="text-gray-400 text-xs">(необязательно)</span>
+            Город <span className="text-red-500">*</span>
           </label>
           <div className="relative">
             <div className="relative">
@@ -1246,7 +1258,16 @@ export default function TourForm({
                     setShowCityDropdown(true);
                   }
                 }}
-                className="w-full pl-10 pr-10 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-500 transition-all"
+                onBlur={() => {
+                  setTouched((prev) => ({ ...prev, city_id: true }));
+                  const error = validateField('city_id', formData.city_id);
+                  setErrors((prev) => ({ ...prev, city_id: error }));
+                }}
+                className={`w-full pl-10 pr-10 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all ${
+                  errors.city_id && touched.city_id
+                    ? 'border-red-300 focus:ring-red-200 bg-red-50'
+                    : 'border-gray-300 focus:ring-emerald-200 focus:border-emerald-500'
+                }`}
                 placeholder="Начните вводить название города..."
               />
               {selectedCity && (
@@ -1284,7 +1305,8 @@ export default function TourForm({
               </div>
             )}
           </div>
-          {selectedCity && (
+          <ErrorMessage message={errors.city_id && touched.city_id ? errors.city_id : undefined} />
+          {selectedCity && !errors.city_id && (
             <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" />
               Выбран: {selectedCity.name}
@@ -1788,7 +1810,7 @@ export default function TourForm({
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
             <MapPin className="w-4 h-4" />
-            Яндекс Карта <span className="text-gray-400 text-xs">(необязательно)</span>
+            Яндекс Карта <span className="text-red-500">*</span>
           </label>
           <AutoResizeTextarea
             value={formData.yandex_map_url}
