@@ -55,7 +55,7 @@ export function normalizeTourAutoScheduleConfig(
   }
 
   const duration = Number(o.duration_minutes);
-  if (Number.isFinite(duration) && duration >= 30 && duration <= 24 * 60) {
+  if (Number.isFinite(duration) && duration >= 60 && duration <= 30 * 24 * 60) {
     base.duration_minutes = Math.round(duration);
   }
 
@@ -74,4 +74,25 @@ export function normalizeTourAutoScheduleConfig(
   }
 
   return base;
+}
+
+/** Для UI: длительность выезда (дни + часы), в БД хранится duration_minutes. */
+export function durationMinutesToParts(totalMinutes: number): {
+  days: number;
+  hours: number;
+} {
+  const m = Math.max(0, Math.round(totalMinutes));
+  return {
+    days: Math.floor(m / 1440),
+    hours: Math.floor((m % 1440) / 60),
+  };
+}
+
+export function durationPartsToMinutes(days: number, hours: number): number {
+  const d = Math.max(0, Math.min(30, Math.round(Number(days) || 0)));
+  const h = Math.max(0, Math.min(23, Math.round(Number(hours) || 0)));
+  const total = d * 1440 + h * 60;
+  if (total < 60) return 60;
+  if (total > 30 * 24 * 60) return 30 * 24 * 60;
+  return total;
 }

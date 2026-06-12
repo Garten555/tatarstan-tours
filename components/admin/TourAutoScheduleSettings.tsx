@@ -1,9 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { CalendarClock, Loader2, Play, Save } from 'lucide-react';
+import { Loader2, Play, Plus, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { TourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
+import {
+  durationMinutesToParts,
+  durationPartsToMinutes,
+} from '@/lib/tour/auto-schedule-config';
 
 const WEEKDAY_OPTIONS = [
   { value: 1, label: 'Пн' },
@@ -24,7 +28,6 @@ type BulkResult = {
 
 export default function TourAutoScheduleSettings() {
   const [config, setConfig] = useState<TourAutoScheduleConfig | null>(null);
-  const [timesText, setTimesText] = useState('10:00');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [bulkRunning, setBulkRunning] = useState(false);
@@ -37,7 +40,6 @@ export default function TourAutoScheduleSettings() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Ошибка загрузки');
       setConfig(data.config);
-      setTimesText((data.config.start_times as string[]).join(', '));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Не удалось загрузить настройки');
     } finally {
@@ -57,14 +59,44 @@ export default function TourAutoScheduleSettings() {
     setConfig({ ...config, weekdays: [...set].sort((a, b) => a - b) });
   };
 
+  const updateStartTime = (index: number, value: string) => {
+    if (!config) return;
+    const start_times = [...config.start_times];
+    start_times[index] = value;
+    setConfig({ ...config, start_times });
+  };
+
+  const addStartTime = () => {
+    if (!config) return;
+    const last = config.start_times[config.start_times.length - 1] || '10:00';
+    setConfig({ ...config, start_times: [...config.start_times, last] });
+  };
+
+  const removeStartTime = (index: number) => {
+    if (!config || config.start_times.length <= 1) return;
+    setConfig({
+      ...config,
+      start_times: config.start_times.filter((_, i) => i !== index),
+    });
+  };
+
+  const durationParts = config
+    ? durationMinutesToParts(config.duration_minutes)
+    : { days: 0, hours: 3 };
+
+  const setDurationParts = (days: number, hours: number) => {
+    if (!config) return;
+    setConfig({
+      ...config,
+      duration_minutes: durationPartsToMinutes(days, hours),
+    });
+  };
+
   const handleSave = async () => {
     if (!config) return;
-    const start_times = timesText
-      .split(/[,;\s]+/)
-      .map((t) => t.trim())
-      .filter(Boolean);
+    const start_times = [...new Set(config.start_times.map((t) => t.trim()).filter(Boolean))].sort();
     if (start_times.length === 0) {
-      toast.error('Укажите хотя бы одно время (например 10:00)');
+      toast.error('Добавьте хотя бы одно время начала');
       return;
     }
     setSaving(true);
@@ -77,7 +109,6 @@ export default function TourAutoScheduleSettings() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Ошибка сохранения');
       setConfig(data.config);
-      setTimesText(data.config.start_times.join(', '));
       toast.success('Шаблон расписания сохранён');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Не удалось сохранить');
@@ -152,33 +183,82 @@ export default function TourAutoScheduleSettings() {
         </div>
 
         <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Время начала (Москва)
-            </label>
-            <input
-              type="text"
-              value={timesText}
-              onChange={(e) => setTimesText(e.target.value)}
-              placeholder="10:00, 14:00"
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl"
-            />
-            <p className="text-xs text-gray-500 mt-1">Несколько времён через запятую</p>
+          <div className="md:col-span-2">
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Время начала (местное, UTC+3)
+              </label>
+              <button
+                type="button"
+                onClick={addStartTime}
+                className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-700 hover:text-emerald-800"
+              >
+                <Plus className="w-4 h-4" />
+                Добавить время
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              {config.start_times.map((time, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    type="time"
+                    value={time}
+                    onChange={(e) => updateStartTime(index, e.target.value)}
+                    className="px-4 py-3 border border-gray-300 rounded-xl bg-white"
+                  />
+                  {config.start_times.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeStartTime(index)}
+                      className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50"
+                      title="Убрать"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-gray-500 mt-2">
+              Если на первое время все гиды заняты — скрипт попробует следующее в списке, затем
+              другие дни по шаблону.
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Длительность (мин)
+              Длительность выезда
             </label>
-            <input
-              type="number"
-              min={30}
-              max={720}
-              value={config.duration_minutes}
-              onChange={(e) =>
-                setConfig({ ...config, duration_minutes: Number(e.target.value) || 180 })
-              }
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl"
-            />
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={30}
+                  value={durationParts.days}
+                  onChange={(e) =>
+                    setDurationParts(Number(e.target.value) || 0, durationParts.hours)
+                  }
+                  className="w-20 px-3 py-3 border border-gray-300 rounded-xl text-center"
+                />
+                <span className="text-sm text-gray-600">дн.</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  max={23}
+                  value={durationParts.hours}
+                  onChange={(e) =>
+                    setDurationParts(durationParts.days, Number(e.target.value) || 0)
+                  }
+                  className="w-20 px-3 py-3 border border-gray-300 rounded-xl text-center"
+                />
+                <span className="text-sm text-gray-600">ч.</span>
+              </div>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Например: 0 дн. 3 ч. — обычная экскурсия; 2 дн. 0 ч. — двухдневный тур.
+            </p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
