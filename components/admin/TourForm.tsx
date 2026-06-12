@@ -300,9 +300,12 @@ export default function TourForm({
     return input;
   };
 
-  /** Черновик или создание с авторасписанием — даты вручную не обязательны */
-  const datesOptional =
-    formData.status === 'draft' || (mode === 'create' && autoScheduleAfterSave);
+  /** Только черновик — даты необязательны без предупреждения */
+  const datesOptional = formData.status === 'draft';
+
+  /** Создание с авторасписанием: даты можно не вводить, но для «Активен» — с подтверждением */
+  const canSkipDatesViaAutoSchedule =
+    mode === 'create' && autoScheduleAfterSave;
 
   const hasPrimaryDates = Boolean(formData.start_date?.trim() && formData.end_date?.trim());
 
@@ -337,13 +340,13 @@ export default function TourForm({
         break;
 
       case 'start_date':
-        if (!datesOptional && !value) {
+        if (!datesOptional && !canSkipDatesViaAutoSchedule && !value) {
           return 'Укажите дату начала тура';
         }
         break;
 
       case 'end_date':
-        if (!datesOptional && !value) {
+        if (!datesOptional && !canSkipDatesViaAutoSchedule && !value) {
           return 'Укажите дату окончания тура';
         }
         if (value && formData.start_date && new Date(value) <= new Date(formData.start_date)) {
@@ -716,9 +719,26 @@ export default function TourForm({
       return;
     }
 
-    if (!datesOptional && !hasPrimaryDates) {
-      alert('Укажите дату начала и окончания тура или сохраните как черновик / включите авторасписание');
+    if (!hasPrimaryDates && !datesOptional && !canSkipDatesViaAutoSchedule) {
+      alert(
+        'Укажите дату начала и окончания тура, сохраните как черновик или включите авторасписание'
+      );
       return;
+    }
+
+    if (
+      !hasPrimaryDates &&
+      formData.status === 'active' &&
+      canSkipDatesViaAutoSchedule
+    ) {
+      const proceed = await confirm(
+        'Вы не указали дату и время выезда. Слоты будут созданы только по шаблону авторасписания. Точно хотите сохранить активный тур без ручных дат?',
+        'Активный тур без дат',
+        'warning',
+        'Да, авторасписание',
+        'Назад'
+      );
+      if (!proceed) return;
     }
 
     const initialPrimaryStart =
@@ -1356,7 +1376,10 @@ export default function TourForm({
           {/* Start Date */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Дата начала {!datesOptional && <span className="text-red-500">*</span>}
+              Дата начала{' '}
+              {!datesOptional && !canSkipDatesViaAutoSchedule && (
+                <span className="text-red-500">*</span>
+              )}
             </label>
             <input
               type="datetime-local"
@@ -1370,9 +1393,11 @@ export default function TourForm({
               }`}
             />
             <ErrorMessage message={errors.start_date && touched.start_date ? errors.start_date : undefined} />
-            {datesOptional && (
+            {(datesOptional || canSkipDatesViaAutoSchedule) && (
               <p className="text-xs text-gray-500 mt-1">
-                Необязательно: даты подставит авторасписание или можно указать позже в черновике.
+                {datesOptional
+                  ? 'Для черновика даты можно указать позже.'
+                  : 'Даты можно не вводить — при сохранении активного тура появится подтверждение авторасписания.'}
               </p>
             )}
           </div>
@@ -1381,7 +1406,10 @@ export default function TourForm({
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-gray-700">
-                Дата окончания {!datesOptional && <span className="text-red-500">*</span>}
+                Дата окончания{' '}
+                {!datesOptional && !canSkipDatesViaAutoSchedule && (
+                  <span className="text-red-500">*</span>
+                )}
               </label>
               <button
                 type="button"
