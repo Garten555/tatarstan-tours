@@ -7,6 +7,7 @@ import {
   Map, 
   Calendar,
   CalendarClock,
+  CalendarRange,
   MessageSquare, 
   Users, 
   Star,
@@ -67,6 +68,12 @@ export default function AdminSidebar({ userRole, userName, avatarUrl }: AdminSid
       href: '/admin/my-tours',
       icon: Crown,
       roles: ['guide'],
+    },
+    {
+      name: 'Расписание',
+      href: '/admin/schedule',
+      icon: CalendarRange,
+      roles: ['guide', 'tour_admin', 'super_admin'],
     },
     {
       name: 'Выдача достижений',

@@ -61,6 +61,17 @@ export function formatDayMonthRu(value: string | Date | null | undefined): strin
   }).format(d);
 }
 
+/** 21:51 */
+export function formatTimeRu(value: string | Date | null | undefined): string {
+  const d = toDate(value);
+  if (!d) return '';
+  return new Intl.DateTimeFormat(LOCALE, {
+    timeZone: TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(d);
+}
+
 /** 22 мая 2026 (короткий месяц) */
 export function formatDayMonthYearRu(value: string | Date | null | undefined): string {
   const d = toDate(value);
