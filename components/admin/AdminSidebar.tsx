@@ -5,7 +5,8 @@ import { usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, 
   Map, 
-  Calendar, 
+  Calendar,
+  CalendarClock,
   MessageSquare, 
   Users, 
   Star,
@@ -83,6 +84,12 @@ export default function AdminSidebar({ userRole, userName, avatarUrl }: AdminSid
       name: 'Бронирования',
       href: '/admin/bookings',
       icon: Calendar,
+      roles: ['super_admin', 'tour_admin'],
+    },
+    {
+      name: 'Авторасписание',
+      href: '/admin/tour-schedule',
+      icon: CalendarClock,
       roles: ['super_admin', 'tour_admin'],
     },
     {

@@ -77,6 +77,7 @@ export async function middleware(request: NextRequest) {
     const roleRequirements: Record<string, string[]> = {
       '/admin/super': ['super_admin'],
       '/admin/tours': ['tour_admin', 'super_admin'],
+      '/admin/tour-schedule': ['tour_admin', 'super_admin'],
       '/admin/support': ['support_admin', 'super_admin'],
       '/admin/chat': ['support_admin', 'super_admin'],
       '/admin/users': ['support_admin', 'super_admin'],

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { requireTourManager } from '@/lib/admin/require-tour-manager';
-import { syncTourSessions, type IncomingSession } from '@/lib/tour/sync-tour-sessions';
+import { normalizeTourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
+import { runAutoScheduleForTour } from '@/lib/tour/run-auto-schedule-for-tour';
 
 /**
- * Синхронизация выездов тура с таблицей tour_sessions (один тур — несколько дат).
- * POST /api/admin/tours/[id]/sessions
+ * POST /api/admin/tours/[id]/auto-schedule
+ * body: { apply?: boolean, config?: partial override }
  */
 export async function POST(
   request: NextRequest,
@@ -21,13 +22,17 @@ export async function POST(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const body = await request.json();
-    const sessions = (body?.sessions ?? []) as IncomingSession[];
+    const body = await request.json().catch(() => ({}));
+    const apply = Boolean(body?.apply);
+    const configOverride = body?.config
+      ? normalizeTourAutoScheduleConfig(body.config)
+      : undefined;
 
-    const result = await syncTourSessions(serviceClient, {
+    const result = await runAutoScheduleForTour(serviceClient, {
       tourId,
-      sessions,
       actor: auth.user,
+      apply,
+      configOverride,
     });
 
     if (!result.ok) {
@@ -37,9 +42,14 @@ export async function POST(
       );
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      applied: result.applied,
+      tourTitle: result.tourTitle,
+      ...result.generated,
+    });
   } catch (e) {
-    console.error('POST /api/admin/tours/[id]/sessions', e);
+    console.error('POST auto-schedule', e);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

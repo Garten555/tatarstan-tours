@@ -15,6 +15,7 @@ import {
   type UploadFormProgressOptions,
 } from '@/lib/http/upload-form-progress';
 import { isDepartureStillInFuture } from '@/lib/tour/session-bookable';
+import TourAutoScheduleButton from '@/components/admin/TourAutoScheduleButton';
 
 /** Согласовано с подписью в форме и лимитом в app/api/upload/route.ts */
 const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
@@ -1335,6 +1336,15 @@ export default function TourForm({
               <option value="cancelled">❌ Отменён</option>
             </select>
           </div>
+
+          {mode === 'edit' && formData.id && (
+            <div className="md:col-span-2">
+              <TourAutoScheduleButton
+                tourId={String(formData.id)}
+                onApplied={() => router.refresh()}
+              />
+            </div>
+          )}
         </div>
 
         {extraDateRanges.length > 0 && (
