@@ -4,7 +4,6 @@ import { sendEmail, getBanNotificationEmail } from '@/lib/email/send-email';
 import { publishAdminSync } from '@/lib/pusher/user-notification';
 import { publishAdminModerationChanged } from '@/lib/pusher/data-sync';
 import { reassignGuideWorkOnBan } from '@/lib/tour/reassign-guide-on-ban';
-import { releaseGuideAssignmentsOnBan } from '@/lib/tour/release-guide-on-ban';
 
 const ADMIN_ROLES = ['super_admin', 'support_admin', 'tour_admin'];
 
