@@ -107,6 +107,7 @@ export default function TourForm({
   const [guideOptions, setGuideOptions] = useState<
     Array<{ id: string; first_name: string; last_name: string; email?: string }>
   >([]);
+  const [autoScheduleAfterSave, setAutoScheduleAfterSave] = useState(mode === 'create');
 
   useEffect(() => {
     let cancelled = false;
@@ -969,17 +970,64 @@ export default function TourForm({
       const syncResult = await syncResponse.json().catch(() => ({}));
 
       if (!syncResponse.ok) {
-        throw new Error(
+        const syncErr =
           (syncResult as { error?: string; details?: string }).error ||
-            (syncResult as { details?: string }).details ||
-            'Не удалось сохранить даты выездов (tour_sessions)'
-        );
+          (syncResult as { details?: string }).details ||
+          'Не удалось сохранить даты выездов (tour_sessions)';
+
+        const guideBusy =
+          typeof syncErr === 'string' &&
+          /гид уже занят|guide/i.test(syncErr) &&
+          mode === 'create' &&
+          autoScheduleAfterSave;
+
+        if (guideBusy) {
+          const retryPayload = sessionsPayload.map((s) => ({ ...s, guide_id: null }));
+          const retryRes = await fetch(`/api/admin/tours/${tourId}/sessions`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessions: retryPayload }),
+          });
+          const retryResult = await retryRes.json().catch(() => ({}));
+          if (!retryRes.ok) {
+            throw new Error(
+              (retryResult as { error?: string }).error ||
+                syncErr ||
+                'Не удалось сохранить выезды'
+            );
+          }
+          toast('Гид был занят — слоты сохранены без гида, подбираем по шаблону…', { icon: 'ℹ️' });
+        } else {
+          throw new Error(syncErr);
+        }
+      }
+
+      if (mode === 'create' && autoScheduleAfterSave) {
+        setLoadingStatus('Авторасписание…');
+        const autoRes = await fetch(`/api/admin/tours/${tourId}/auto-schedule`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apply: true }),
+        });
+        const autoData = await autoRes.json().catch(() => ({}));
+        if (autoRes.ok) {
+          const added = (autoData as { newSlots?: unknown[] }).newSlots?.length ?? 0;
+          if (added > 0) {
+            toast.success(`Авторасписание: добавлено слотов — ${added}`);
+          } else {
+            toast.success('Авторасписание: новых слотов не требуется');
+          }
+        } else {
+          toast.error(
+            (autoData as { error?: string }).error ||
+              'Тур сохранён, но авторасписание не выполнено — нажмите «Заполнить по шаблону» на странице редактирования'
+          );
+        }
       }
 
       setLoadingStatus('Завершение...');
-      // Используем prefetch для быстрого перехода
-      router.prefetch('/admin/tours');
-      router.push('/admin/tours');
+      router.prefetch(`/admin/tours/${tourId}/edit`);
+      router.push(`/admin/tours/${tourId}/edit`);
       router.refresh();
     } catch (error: any) {
       console.error('Error saving tour:', error);
@@ -1317,6 +1365,7 @@ export default function TourForm({
             </select>
             <p className="text-xs text-gray-500 mt-1.5">
               Только пользователи с ролью «Гид» (Админка → Пользователи). На каждый выезд — свой гид и чат группы.
+              Если гид занят — оставьте поле пустым и используйте авторасписание ниже.
             </p>
           </div>
 
@@ -1337,14 +1386,44 @@ export default function TourForm({
             </select>
           </div>
 
-          {mode === 'edit' && formData.id && (
-            <div className="md:col-span-2">
+          <div className="md:col-span-2">
+            {mode === 'create' ? (
+              <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-5 space-y-3">
+                <div className="flex items-start gap-3">
+                  <Calendar className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+                  <div>
+                    <h3 className="font-bold text-gray-900">Авторасписание</h3>
+                    <p className="text-sm text-gray-600 mt-1">
+                      После сохранения тура слоты и гиды подберутся по шаблону из раздела{' '}
+                      <a href="/admin/tour-schedule" className="text-blue-600 hover:underline">
+                        Авторасписание
+                      </a>
+                      . Учитывается занятость — не нужно вручную подбирать время.
+                    </p>
+                  </div>
+                </div>
+                <label className="flex items-start gap-2 cursor-pointer text-sm text-gray-800">
+                  <input
+                    type="checkbox"
+                    className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    checked={autoScheduleAfterSave}
+                    onChange={(e) => setAutoScheduleAfterSave(e.target.checked)}
+                  />
+                  <span>
+                    <span className="font-semibold">Заполнить по шаблону сразу после сохранения</span>
+                    <span className="block text-gray-600 mt-0.5">
+                      Если выбранный гид занят, слоты сохранятся без гида и распределятся автоматически.
+                    </span>
+                  </span>
+                </label>
+              </div>
+            ) : formData.id ? (
               <TourAutoScheduleButton
                 tourId={String(formData.id)}
                 onApplied={() => router.refresh()}
               />
-            </div>
-          )}
+            ) : null}
+          </div>
         </div>
 
         {extraDateRanges.length > 0 && (

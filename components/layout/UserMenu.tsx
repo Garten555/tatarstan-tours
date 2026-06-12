@@ -16,10 +16,29 @@ import { isSoundEnabled, setSoundEnabled, playNotificationSound } from '@/lib/so
 export default function UserMenu() {
   const { alert, DialogComponents } = useDialog();
   
+  const PROFILE_CACHE_KEY = 'tt_profile';
+
+  const readCachedProfile = (forUserId?: string | null): any | null => {
+    try {
+      const raw = localStorage.getItem(PROFILE_CACHE_KEY) || sessionStorage.getItem(PROFILE_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as Record<string, unknown> & { _uid?: string };
+      if (forUserId && parsed._uid && parsed._uid !== forUserId) return null;
+      const { _uid: _drop, ...rest } = parsed;
+      if (!rest.role && !rest.first_name && !rest.last_name && !rest.avatar_url) return null;
+      return rest;
+    } catch {
+      return null;
+    }
+  };
+
   const [user, setUser] = useState<SupabaseUser | null>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(() =>
+    typeof window !== 'undefined' ? readCachedProfile() : null
+  );
   const [isOpen, setIsOpen] = useState(false);
-  const [authResolved, setAuthResolved] = useState(false); // чтобы не мигала кнопка "Вход"
+  const [authResolved, setAuthResolved] = useState(() => typeof window !== 'undefined');
+  const hadSessionRef = useRef(false);
   const [isGuide, setIsGuide] = useState(false); // Является ли пользователь гидом
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0);
   const [unreadTourRoomsCount, setUnreadTourRoomsCount] = useState(0);
@@ -83,20 +102,6 @@ export default function UserMenu() {
     }
   };
 
-  /** Кэш профиля только для указанного user id — иначе после смены аккаунта тянулся чужой avatar_url. */
-  const PROFILE_CACHE_KEY = 'tt_profile';
-  const readCachedProfile = (forUserId?: string | null): any | null => {
-    try {
-      const raw = localStorage.getItem(PROFILE_CACHE_KEY) || sessionStorage.getItem(PROFILE_CACHE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw) as Record<string, unknown> & { _uid?: string };
-      if (forUserId && parsed._uid && parsed._uid !== forUserId) return null;
-      const { _uid: _drop, ...rest } = parsed;
-      return rest;
-    } catch {
-      return null;
-    }
-  };
   const writeCachedProfile = (data: any, userId: string) => {
     try {
       const s = JSON.stringify({ ...data, _uid: userId });
@@ -199,6 +204,7 @@ export default function UserMenu() {
     // getSession() — локально/из cookie, без лишнего round-trip к Auth API
     void supabase.auth.getSession().then(({ data: { session } }) => {
       const initialUser = session?.user ?? null;
+      if (initialUser) hadSessionRef.current = true;
       setUser(initialUser);
       setAuthResolved(true);
       if (initialUser) {
@@ -229,16 +235,27 @@ export default function UserMenu() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       const sUser = session?.user ?? null;
-      setUser(sUser);
       setAuthResolved(true);
-      if (!sUser) {
+      if (sUser) {
+        hadSessionRef.current = true;
+        setUser(sUser);
+      } else if (event === 'SIGNED_OUT') {
+        hadSessionRef.current = false;
+        setUser(null);
         setProfile(null);
         try {
           localStorage.removeItem(PROFILE_CACHE_KEY);
           sessionStorage.removeItem(PROFILE_CACHE_KEY);
         } catch {}
+        return;
+      } else if (!hadSessionRef.current) {
+        setUser(null);
+        return;
+      }
+
+      if (!sUser) {
         return;
       }
       const cachedProfile = readCachedProfile(sUser.id);
@@ -523,9 +540,15 @@ export default function UserMenu() {
     setSoundEnabled(next);
   };
 
-  // Пока не знаем состояние (и нет кэша) — ничего не показываем, чтобы не мигал "Вход"
-  if (!authResolved && !profile) {
-    return <div className="w-24 h-10" />;
+  if (!authResolved && !profile && !user) {
+    return (
+      <div className="header-user-button pointer-events-none opacity-70" aria-hidden>
+        <div className="header-user-avatar header-user-avatar-placeholder animate-pulse bg-gray-200 text-transparent">
+          ·
+        </div>
+        <span className="header-user-name inline-block w-14 h-4 rounded bg-gray-200 animate-pulse" />
+      </div>
+    );
   }
 
   const isAuthorizedByCache = !!profile?.role;
