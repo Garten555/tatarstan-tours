@@ -3,6 +3,8 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { sendEmail, getBanNotificationEmail } from '@/lib/email/send-email';
 import { publishAdminSync } from '@/lib/pusher/user-notification';
 import { publishAdminModerationChanged } from '@/lib/pusher/data-sync';
+import { reassignGuideWorkOnBan } from '@/lib/tour/reassign-guide-on-ban';
+import { releaseGuideAssignmentsOnBan } from '@/lib/tour/release-guide-on-ban';
 
 const ADMIN_ROLES = ['super_admin', 'support_admin', 'tour_admin'];
 
@@ -129,6 +131,11 @@ export async function PATCH(
       return NextResponse.json({ error: 'Не удалось обновить статус' }, { status: 500 });
     }
 
+    let guideReassign: Awaited<ReturnType<typeof reassignGuideWorkOnBan>> | null = null;
+    if (action === 'ban') {
+      guideReassign = await reassignGuideWorkOnBan(serviceClient, id, user.id);
+    }
+
     // Отправляем email уведомление при бане
     if (action === 'ban' && userEmail) {
       const userName = targetUser?.first_name && targetUser?.last_name 
@@ -157,7 +164,11 @@ export async function PATCH(
     });
     void publishAdminModerationChanged();
 
-    return NextResponse.json({ success: true, profile: updated });
+    return NextResponse.json({
+      success: true,
+      profile: updated,
+      guide_reassign: guideReassign,
+    });
   } catch (error) {
     console.error('Ошибка API бана:', error);
     return NextResponse.json({ error: 'Внутренняя ошибка сервера' }, { status: 500 });
