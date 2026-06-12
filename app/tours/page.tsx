@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import TourCard from '@/components/tours/TourCard';
 import CatalogCityCombobox, { type CatalogCity } from '@/components/tours/CatalogCityCombobox';
@@ -67,17 +67,12 @@ const SORT_OPTIONS = [
   { value: 'title-asc', label: 'Название: А-Я' },
 ];
 
-const CATALOG_SELECT_CLASS =
-  'w-full appearance-none rounded-xl border-2 border-gray-300 bg-white py-3 pl-3 pr-10 text-sm font-bold text-gray-900 color-scheme-light transition-colors focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/25';
-
 function ToursPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
   const [tours, setTours] = useState<Tour[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const hasLoadedToursRef = useRef(false);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -102,12 +97,7 @@ function ToursPageContent() {
 
   // Загрузка туров
   const loadTours = useCallback(async () => {
-    const isInitialLoad = !hasLoadedToursRef.current;
-    if (isInitialLoad) {
-      setLoading(true);
-    } else {
-      setIsRefreshing(true);
-    }
+    setLoading(true);
     try {
       const params = new URLSearchParams();
       
@@ -150,8 +140,6 @@ function ToursPageContent() {
       console.error('Ошибка загрузки туров:', error);
     } finally {
       setLoading(false);
-      setIsRefreshing(false);
-      hasLoadedToursRef.current = true;
     }
   }, [search, tourType, category, cityId, minPrice, maxPrice, sortBy, page, router]);
 
@@ -423,7 +411,7 @@ function ToursPageContent() {
                       setSortBy(e.target.value);
                       setPage(1);
                     }}
-                    className={CATALOG_SELECT_CLASS}
+                    className="w-full appearance-none rounded-xl border-2 border-gray-300 bg-white py-3 pl-3 pr-10 text-sm font-bold text-gray-900 transition-colors focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/25"
                   >
                     {SORT_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -537,10 +525,6 @@ function ToursPageContent() {
                 <p className="text-sm font-semibold text-gray-600">
                   {loading ? (
                     'Загрузка…'
-                  ) : isRefreshing ? (
-                    <>
-                      Обновление… · <span className="font-black text-emerald-700">{total}</span>
-                    </>
                   ) : (
                     <>
                       Найдено: <span className="font-black text-emerald-700">{total}</span>
@@ -554,7 +538,7 @@ function ToursPageContent() {
                       setSortBy(e.target.value);
                       setPage(1);
                     }}
-                    className={`${CATALOG_SELECT_CLASS} py-2.5`}
+                    className="w-full appearance-none rounded-xl border-2 border-gray-300 bg-white py-2.5 pl-3 pr-10 text-sm font-bold text-gray-900 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/25"
                   >
                     {SORT_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
@@ -595,22 +579,13 @@ function ToursPageContent() {
                 </div>
               ) : (
                 <>
-                  <div
-                    className={`relative transition-opacity duration-200 ${
-                      isRefreshing ? 'pointer-events-none opacity-70' : 'opacity-100'
-                    }`}
-                  >
-                    {isRefreshing ? (
+                  <div className="grid gap-6 [grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),1fr))] sm:[grid-template-columns:repeat(auto-fill,minmax(min(100%,18.5rem),1fr))]">
+                    {tours.map((tour, index) => (
                       <div
-                        className="pointer-events-none absolute inset-x-0 top-6 z-10 flex justify-center"
-                        aria-hidden
+                        key={tour.id}
+                        className="min-w-0 animate-in fade-in slide-in-from-bottom-4"
+                        style={{ animationDelay: `${index * 50}ms` }}
                       >
-                        <Loader2 className="h-8 w-8 animate-spin text-emerald-600" />
-                      </div>
-                    ) : null}
-                    <div className="grid gap-6 [grid-template-columns:repeat(auto-fill,minmax(min(100%,17rem),1fr))] sm:[grid-template-columns:repeat(auto-fill,minmax(min(100%,18.5rem),1fr))]">
-                      {tours.map((tour) => (
-                        <div key={tour.id} className="min-w-0">
                         <TourCard
                           id={tour.id}
                           title={sanitizeText(tour.title)}
@@ -625,9 +600,8 @@ function ToursPageContent() {
                           tour_type={tour.tour_type}
                           category={tour.category}
                         />
-                        </div>
-                      ))}
-                    </div>
+                      </div>
+                    ))}
                   </div>
 
                   {totalPages > 1 ? (
@@ -690,13 +664,13 @@ function ToursPageContent() {
           <button
             type="button"
             aria-label="Закрыть фильтры"
-            className="fixed inset-0 z-[140] bg-gray-900/25 backdrop-blur-[2px] lg:hidden animate-in fade-in duration-200"
+            className="fixed inset-0 z-[140] bg-black/45 backdrop-blur-[1px] lg:hidden"
             onClick={() => setFiltersSheetOpen(false)}
           />
           <div
             role="dialog"
             aria-modal="true"
-            className="fixed inset-x-0 bottom-0 z-[150] flex max-h-[90vh] flex-col rounded-t-3xl border border-gray-200 bg-white shadow-2xl lg:hidden animate-in slide-in-from-bottom-4 duration-300"
+            className="fixed inset-x-0 bottom-0 z-[150] flex max-h-[90vh] flex-col rounded-t-3xl border border-gray-200 bg-white shadow-2xl lg:hidden"
           >
             <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
               <span className="text-lg font-black text-gray-900">Фильтры</span>
@@ -801,7 +775,7 @@ function ToursPageContent() {
                     setSortBy(e.target.value);
                     setPage(1);
                   }}
-                  className={`${CATALOG_SELECT_CLASS} py-3`}
+                  className="w-full appearance-none rounded-xl border-2 border-gray-300 py-3 pl-3 pr-10 text-sm font-bold"
                 >
                   {SORT_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
