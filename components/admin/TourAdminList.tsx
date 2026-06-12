@@ -8,6 +8,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useDialog } from '@/hooks/useDialog';
 import { parseClientSortParam } from '@/lib/tours/catalog-sort';
 import { formatDateTimeShortRu } from '@/lib/date/format-ru';
+import { formatSessionRange } from '@/lib/tour/session-display';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 
 interface Tour {
   id: string;
@@ -25,6 +27,19 @@ interface Tour {
   cover_image: string | null;
   created_at: string;
 }
+
+type CancelSessionOption = {
+  id: string;
+  start_at: string;
+  end_at: string | null;
+  status: string;
+};
+
+type CancelPickerState = {
+  tourId: string;
+  tourTitle: string;
+  sessions: CancelSessionOption[];
+};
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Все статусы' },
@@ -69,7 +84,11 @@ export default function TourAdminList() {
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancelPicker, setCancelPicker] = useState<CancelPickerState | null>(null);
+  const [cancelTarget, setCancelTarget] = useState<'all' | string>('');
   const { confirm, alert, prompt, DialogComponents } = useDialog();
+
+  useBodyScrollLock(Boolean(cancelPicker));
   
   // Фильтры и пагинация
   const [search, setSearch] = useState('');
@@ -118,16 +137,123 @@ export default function TourAdminList() {
 
   const hasActiveFilters = search || status || tourType || category;
 
+  const runCancelTour = async (
+    tourId: string,
+    opts: { sessionId?: string; cancelAll?: boolean; reason?: string }
+  ) => {
+    setCancellingId(tourId);
+    try {
+      const response = await fetch(`/api/admin/tours/${tourId}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          reason: opts.reason,
+          session_id: opts.sessionId,
+          cancel_all: opts.cancelAll ?? false,
+        }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error((data as { error?: string }).error || 'Не удалось отменить тур');
+      }
+      await loadTours();
+      const scope =
+        opts.cancelAll || !opts.sessionId
+          ? 'Тур отменён'
+          : 'Выезд отменён';
+      await alert(
+        `${scope}, участники уведомлены по почте (если настроен SMTP).`,
+        'Готово',
+        'success'
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Не удалось отменить тур';
+      await alert(message, 'Ошибка', 'error');
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
   const handleCancelTour = async (tourId: string, e?: React.MouseEvent) => {
     e?.stopPropagation?.();
     const tour = tours.find((t) => t.id === tourId);
     if (!tour || tour.status === 'cancelled') return;
 
+    try {
+      const res = await fetch(`/api/admin/tours/${tourId}/sessions`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error || 'Не удалось загрузить выезды');
+      }
+
+      const sessions = ((data as { sessions?: CancelSessionOption[] }).sessions ?? []).filter(
+        (s) => s.status !== 'cancelled'
+      );
+
+      if (sessions.length <= 1) {
+        const only = sessions[0];
+        const scopeLabel = only
+          ? formatSessionRange(only.start_at, only.end_at)
+          : formatSessionRange(tour.start_date, tour.end_date || null);
+
+        const confirmed = await confirm(
+          only
+            ? `Будет отменён выезд ${scopeLabel}. Активные бронирования на этот слот аннулированы, участникам придёт письмо.`
+            : 'Тур будет отмечен как отменённый, активные бронирования аннулированы. Участникам придёт письмо на почту.',
+          'Отменить тур?',
+          'warning',
+          'Отменить',
+          'Закрыть',
+          'cancel'
+        );
+        if (!confirmed) return;
+
+        const reason = await prompt(
+          'Комментарий для участников (необязательно)',
+          'Причина отмены',
+          'Например: форс-мажор, погода…',
+          ''
+        );
+        if (reason === null) return;
+
+        await runCancelTour(tourId, {
+          sessionId: only?.id,
+          cancelAll: !only,
+          reason: reason.trim() || undefined,
+        });
+        return;
+      }
+
+      setCancelTarget(sessions[0]?.id ?? 'all');
+      setCancelPicker({
+        tourId,
+        tourTitle: tour.title,
+        sessions,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Не удалось подготовить отмену';
+      await alert(message, 'Ошибка', 'error');
+    }
+  };
+
+  const handleCancelPickerConfirm = async () => {
+    if (!cancelPicker) return;
+    const { tourId, tourTitle, sessions } = cancelPicker;
+    const cancelAll = cancelTarget === 'all';
+    const session = sessions.find((s) => s.id === cancelTarget);
+    if (!cancelAll && !session) return;
+
+    const scopeLabel = cancelAll
+      ? `все выезды тура «${tourTitle}»`
+      : `выезд ${formatSessionRange(session!.start_at, session!.end_at)}`;
+
+    setCancelPicker(null);
+
     const confirmed = await confirm(
-      'Тур будет отмечен как отменённый, активные бронирования аннулированы. Участникам придёт письмо на почту.',
-      'Отменить тур?',
+      `Будет отменён: ${scopeLabel}. Активные бронирования аннулированы, участникам придёт письмо.`,
+      'Подтвердить отмену',
       'warning',
-      'Отменить тур',
+      'Отменить',
       'Закрыть',
       'cancel'
     );
@@ -141,25 +267,11 @@ export default function TourAdminList() {
     );
     if (reason === null) return;
 
-    setCancellingId(tourId);
-    try {
-      const response = await fetch(`/api/admin/tours/${tourId}/cancel`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason: reason.trim() || undefined }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error((data as { error?: string }).error || 'Не удалось отменить тур');
-      }
-      await loadTours();
-      await alert('Тур отменён, участники уведомлены по почте (если настроен SMTP).', 'Готово', 'success');
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Не удалось отменить тур';
-      await alert(message, 'Ошибка', 'error');
-    } finally {
-      setCancellingId(null);
-    }
+    await runCancelTour(tourId, {
+      sessionId: cancelAll ? undefined : session!.id,
+      cancelAll,
+      reason: reason.trim() || undefined,
+    });
   };
 
   const handleDelete = async (tourId: string) => {
@@ -596,6 +708,82 @@ export default function TourAdminList() {
           )}
         </>
       )}
+      {cancelPicker ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50">
+          <div
+            className="bg-white rounded-2xl border-2 border-gray-200 shadow-2xl w-full max-w-lg max-h-[85vh] overflow-hidden flex flex-col"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="cancel-picker-title"
+          >
+            <div className="p-6 border-b border-gray-100">
+              <h2 id="cancel-picker-title" className="text-xl font-black text-gray-900">
+                Какой выезд отменить?
+              </h2>
+              <p className="mt-2 text-sm text-gray-600 leading-relaxed">
+                Тур «{cancelPicker.tourTitle}». Выберите конкретный экземпляр или все выезды сразу.
+              </p>
+            </div>
+            <div className="p-4 overflow-y-auto space-y-2 flex-1">
+              <label className="flex items-start gap-3 p-4 rounded-xl border-2 border-gray-200 cursor-pointer hover:border-amber-400 transition-colors">
+                <input
+                  type="radio"
+                  name="cancel-target"
+                  className="mt-1"
+                  checked={cancelTarget === 'all'}
+                  onChange={() => setCancelTarget('all')}
+                />
+                <span>
+                  <span className="block font-bold text-gray-900">Все выезды (весь тур)</span>
+                  <span className="block text-sm text-gray-600 mt-0.5">
+                    Отменить тур целиком и все будущие слоты
+                  </span>
+                </span>
+              </label>
+              {cancelPicker.sessions.map((session) => (
+                <label
+                  key={session.id}
+                  className="flex items-start gap-3 p-4 rounded-xl border-2 border-gray-200 cursor-pointer hover:border-amber-400 transition-colors"
+                >
+                  <input
+                    type="radio"
+                    name="cancel-target"
+                    className="mt-1"
+                    checked={cancelTarget === session.id}
+                    onChange={() => setCancelTarget(session.id)}
+                  />
+                  <span>
+                    <span className="block font-bold text-gray-900">
+                      {formatSessionRange(session.start_at, session.end_at)}
+                    </span>
+                    <span className="block text-sm text-gray-500 mt-0.5 capitalize">
+                      Статус: {session.status}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="p-4 border-t border-gray-100 flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={() => setCancelPicker(null)}
+                className="flex-1 px-5 py-3 border-2 border-gray-300 rounded-xl font-bold hover:bg-gray-50"
+              >
+                Закрыть
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleCancelPickerConfirm()}
+                disabled={!cancelTarget}
+                className="flex-1 px-5 py-3 bg-amber-600 text-white rounded-xl font-black hover:bg-amber-700 disabled:opacity-50"
+              >
+                Продолжить
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {DialogComponents}
     </div>
   );

@@ -53,8 +53,13 @@ export async function sendTourCancelledEmail(opts: {
   to: string;
   tourTitle: string;
   reason?: string;
+  /** Конкретный выезд (если отменён один слот, а не весь тур). */
+  departureLabel?: string;
 }): Promise<boolean> {
   const title = escapeHtml(opts.tourTitle);
+  const departureBlock = opts.departureLabel
+    ? `<p><strong>Выезд:</strong> ${escapeHtml(opts.departureLabel)}</p>`
+    : '';
   const reasonBlock =
     opts.reason && opts.reason.trim()
       ? `<p><strong>Причина:</strong> ${escapeHtml(opts.reason.trim())}</p>`
@@ -64,6 +69,7 @@ export async function sendTourCancelledEmail(opts: {
       <h2 style="color:#b91c1c;">Тур отменён</h2>
       <p>Здравствуйте!</p>
       <p>Тур <strong>${title}</strong> был отменён организатором.</p>
+      ${departureBlock}
       ${reasonBlock}
       <p style="color:#6b7280; font-size:14px;">Бронирование аннулировано. По возврату средств или замене тура мы свяжемся с вами при необходимости.</p>
     </div>

@@ -4,6 +4,41 @@ import { requireTourManager } from '@/lib/admin/require-tour-manager';
 import { syncTourSessions, type IncomingSession } from '@/lib/tour/sync-tour-sessions';
 
 /**
+ * GET /api/admin/tours/[id]/sessions — список выездов тура (для отмены и админки).
+ */
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: tourId } = await params;
+    const supabase = await createClient();
+    const serviceClient = await createServiceClient();
+
+    const auth = await requireTourManager(supabase);
+    if (!auth) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { data: sessions, error } = await serviceClient
+      .from('tour_sessions')
+      .select('id, start_at, end_at, status, guide_id')
+      .eq('tour_id', tourId)
+      .order('start_at', { ascending: true });
+
+    if (error) {
+      console.error('GET /api/admin/tours/[id]/sessions', error);
+      return NextResponse.json({ error: 'Не удалось загрузить выезды' }, { status: 500 });
+    }
+
+    return NextResponse.json({ sessions: sessions ?? [] });
+  } catch (e) {
+    console.error('GET /api/admin/tours/[id]/sessions', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
+/**
  * Синхронизация выездов тура с таблицей tour_sessions (один тур — несколько дат).
  * POST /api/admin/tours/[id]/sessions
  */

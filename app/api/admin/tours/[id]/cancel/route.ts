@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
-import { sendTourCancelledEmail } from '@/lib/email/tour-notifications';
-import { publishCatalogChanged } from '@/lib/pusher/data-sync';
+import { cancelTourDepartures } from '@/lib/tour/cancel-tour-departure';
 
 /**
- * POST /api/admin/tours/[id]/cancel — отменить тур (не удалять): статус cancelled + отмена активных бронирований + письма участникам.
+ * POST /api/admin/tours/[id]/cancel — отмена всего тура или одного выезда (session_id).
  */
 export async function POST(
   request: NextRequest,
@@ -29,69 +28,30 @@ export async function POST(
     }
 
     let reason: string | undefined;
+    let sessionId: string | undefined;
+    let cancelAll = false;
+
     try {
       const body = await request.json();
       if (body && typeof body.reason === 'string') reason = body.reason.trim() || undefined;
+      if (body && typeof body.session_id === 'string' && body.session_id.trim()) {
+        sessionId = body.session_id.trim();
+      }
+      if (body && body.cancel_all === true) cancelAll = true;
     } catch {
       /* empty body */
     }
 
-    const { data: tour, error: tourErr } = await serviceClient
-      .from('tours')
-      .select('id, title, status')
-      .eq('id', tourId)
-      .single();
+    const result = await cancelTourDepartures(serviceClient, {
+      tourId,
+      sessionId,
+      cancelAll,
+      reason,
+    });
 
-    if (tourErr || !tour) {
-      return NextResponse.json({ error: 'Тур не найден' }, { status: 404 });
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: result.status });
     }
-
-    if ((tour as { status?: string }).status === 'cancelled') {
-      return NextResponse.json({ error: 'Тур уже отменён' }, { status: 400 });
-    }
-
-    const tourTitle = String((tour as { title?: string }).title || 'Тур');
-
-    const { data: bookings } = await serviceClient
-      .from('bookings')
-      .select('id, user_id, status')
-      .eq('tour_id', tourId)
-      .in('status', ['pending', 'confirmed']);
-
-    const userIds = [...new Set((bookings || []).map((b: { user_id: string }) => b.user_id))];
-
-    const { data: profiles } =
-      userIds.length > 0
-        ? await serviceClient.from('profiles').select('email').in('id', userIds)
-        : { data: [] as { email: string }[] };
-
-    const emails = [...new Set((profiles || []).map((p) => p.email).filter(Boolean))];
-
-    const { error: upBook } = await serviceClient
-      .from('bookings')
-      .update({ status: 'cancelled' })
-      .eq('tour_id', tourId)
-      .in('status', ['pending', 'confirmed']);
-
-    if (upBook) {
-      console.error('[tour/cancel] bookings', upBook);
-      return NextResponse.json({ error: 'Не удалось обновить бронирования', details: upBook.message }, { status: 500 });
-    }
-
-    await serviceClient.from('tour_sessions').update({ status: 'cancelled' }).eq('tour_id', tourId);
-
-    const { error: upTour } = await serviceClient.from('tours').update({ status: 'cancelled' }).eq('id', tourId);
-
-    if (upTour) {
-      console.error('[tour/cancel] tour', upTour);
-      return NextResponse.json({ error: 'Не удалось отменить тур', details: upTour.message }, { status: 500 });
-    }
-
-    void Promise.allSettled(
-      emails.map((to) => sendTourCancelledEmail({ to, tourTitle, reason }))
-    ).catch(() => {});
-
-    void publishCatalogChanged();
 
     return NextResponse.json({ success: true });
   } catch (e) {
