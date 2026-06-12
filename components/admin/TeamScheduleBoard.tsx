@@ -16,6 +16,7 @@ import { formatDayMonthYearRu, formatTimeRu } from '@/lib/date/format-ru';
 import { moscowNowParts } from '@/lib/tour/moscow-wall-clock';
 import { currentMoscowDay, moscowDayKey, shiftMoscowMonth } from '@/lib/tour/team-schedule-range';
 import { sessionEndMs } from '@/lib/tour/schedule-slot';
+import ShiftSessionTimeModal from '@/components/admin/ShiftSessionTimeModal';
 
 type ScheduleSession = {
   id: string;
@@ -200,6 +201,7 @@ export default function TeamScheduleBoard({
   const [data, setData] = useState<ScheduleResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [shiftSession, setShiftSession] = useState<ScheduleSession | null>(null);
 
   const isAdmin = viewerRole === 'tour_admin' || viewerRole === 'super_admin';
   const bufferMinutes = data?.buffer_minutes ?? 60;
@@ -581,13 +583,23 @@ export default function TeamScheduleBoard({
 
                         <div className="flex flex-wrap gap-2">
                           {isAdmin && (
-                            <Link
-                              href={`/admin/tours/${session.tour.id}/edit`}
-                              className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100"
-                            >
-                              <MapIcon className="h-3.5 w-3.5" />
-                              Сдвинуть время
-                            </Link>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setShiftSession(session)}
+                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100"
+                              >
+                                <Clock className="h-3.5 w-3.5" />
+                                Сдвинуть время
+                              </button>
+                              <Link
+                                href={`/admin/tours/${session.tour.id}/edit`}
+                                className="inline-flex items-center gap-1 rounded-lg bg-gray-50 px-2.5 py-1.5 text-xs font-bold text-gray-700 ring-1 ring-gray-200 hover:bg-gray-100"
+                              >
+                                <MapIcon className="h-3.5 w-3.5" />
+                                Тур
+                              </Link>
+                            </>
                           )}
                           {session.room_id && (
                             <Link
@@ -608,6 +620,13 @@ export default function TeamScheduleBoard({
           )}
         </div>
       </div>
+
+      <ShiftSessionTimeModal
+        session={shiftSession}
+        bufferMinutes={bufferMinutes}
+        onClose={() => setShiftSession(null)}
+        onSaved={loadSchedule}
+      />
     </div>
   );
 }
