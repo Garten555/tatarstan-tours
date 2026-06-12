@@ -25,6 +25,7 @@ import {
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, Fragment } from 'react';
+import { resetDocumentScroll } from '@/lib/dom/reset-document-scroll';
 
 interface AdminSidebarProps {
   userRole: string;
@@ -321,6 +322,7 @@ export default function AdminSidebar({ userRole, userName, avatarUrl }: AdminSid
         <Link
           href="/"
           prefetch
+          onClick={() => resetDocumentScroll()}
           className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl bg-gradient-to-r from-blue-600/90 to-blue-700/90 hover:from-blue-600 hover:to-blue-700 text-white transition-[background-color,transform,box-shadow] duration-150 relative group hover:scale-[1.02] no-underline border-2 border-blue-500/50 hover:border-blue-400 shadow-lg hover:shadow-xl font-bold outline-none focus-visible:ring-2 focus-visible:ring-blue-300 focus-visible:ring-offset-2 focus-visible:ring-offset-gray-900 ${
             isCollapsed ? 'justify-center w-full' : ''
           }`}

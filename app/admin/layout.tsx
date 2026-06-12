@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import AdminPusherSync from '@/components/admin/AdminPusherSync';
+import AdminBodyScrollLock from '@/components/admin/AdminBodyScrollLock';
 
 // Роли с доступом к админке (guide — панель гида и связанные пункты сайдбара)
 const ADMIN_ROLES = ['super_admin', 'tour_admin', 'support_admin', 'guide'];
@@ -40,6 +41,7 @@ export default async function AdminLayout({
 
   return (
     <div className="admin-shell flex h-dvh min-h-0 overflow-hidden bg-gray-50">
+      <AdminBodyScrollLock />
       <AdminPusherSync userId={user.id} />
       {/* Sidebar */}
       <AdminSidebar 

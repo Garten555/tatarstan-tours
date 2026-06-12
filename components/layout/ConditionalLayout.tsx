@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { Header } from './Header';
 import { Footer } from './Footer';
+import DocumentScrollReset from './DocumentScrollReset';
 
 export default function ConditionalLayout({
   children,
@@ -25,6 +26,7 @@ export default function ConditionalLayout({
   // Для обычных страниц - с Header и Footer
   return (
     <>
+      <DocumentScrollReset />
       <Header />
       <main className={isTourRoomRoute ? 'main-tour-room-shell' : 'main-with-sidebar'}>
         {children}
