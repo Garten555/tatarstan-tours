@@ -10,9 +10,30 @@ interface EmailOptions {
   text?: string;
 }
 
+const PROTON_MAIL_DOMAINS = ['proton.me', 'protonmail.com', 'protonmail.ch', 'pm.me'];
+
+function isProtonMailbox(email: string | undefined): boolean {
+  if (!email) return false;
+  const domain = email.split('@')[1]?.toLowerCase();
+  return !!domain && PROTON_MAIL_DOMAINS.includes(domain);
+}
+
+function isProtonSmtpProvider(): boolean {
+  const provider = (process.env.SMTP_PROVIDER || process.env.EMAIL_PROVIDER || '').toLowerCase();
+  const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+  return provider === 'proton' || provider === 'protonmail' || isProtonMailbox(smtpUser);
+}
+
+function getSmtpHostDefault(): string {
+  if (isProtonSmtpProvider()) {
+    return 'smtp.protonmail.ch';
+  }
+  return 'smtp.gmail.com';
+}
+
 // Создаем transporter для отправки email
 function createTransporter(hostOverride?: string, tlsServerName?: string) {
-  const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com';
+  const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST || getSmtpHostDefault();
   const smtpPort = parseInt(process.env.SMTP_PORT || process.env.EMAIL_PORT || '587');
   const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
   const smtpPassword =
@@ -26,7 +47,7 @@ function createTransporter(hostOverride?: string, tlsServerName?: string) {
     console.error('Required environment variables:');
     console.error('  - SMTP_USER or EMAIL_USER');
     console.error('  - SMTP_PASSWORD or EMAIL_PASSWORD');
-    console.error('Optional: SMTP_HOST, SMTP_PORT, SMTP_FROM');
+    console.error('Optional: SMTP_HOST, SMTP_PORT, SMTP_FROM, SMTP_PROVIDER=proton');
     return null;
   }
 
@@ -53,7 +74,7 @@ function createTransporter(hostOverride?: string, tlsServerName?: string) {
 }
 
 async function resolveSmtpHost(): Promise<{ host: string; tlsServerName?: string }> {
-  const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST || 'smtp.gmail.com';
+  const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST || getSmtpHostDefault();
   if (isIP(smtpHost)) {
     return { host: smtpHost };
   }

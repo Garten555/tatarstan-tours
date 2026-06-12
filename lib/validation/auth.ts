@@ -1,9 +1,9 @@
 // Утилиты для валидации авторизации
 
 /**
- * Список разрешённых email провайдеров
+ * Список разрешённых email провайдеров (регистрация / вход)
  */
-const ALLOWED_EMAIL_PROVIDERS = [
+export const ALLOWED_EMAIL_PROVIDERS = [
   'gmail.com',
   'yandex.ru',
   'yandex.com',
@@ -16,6 +16,10 @@ const ALLOWED_EMAIL_PROVIDERS = [
   'hotmail.com',
   'icloud.com',
   'rambler.ru',
+  'proton.me',
+  'protonmail.com',
+  'protonmail.ch',
+  'pm.me',
 ];
 
 /**
@@ -45,7 +49,8 @@ export function validateEmail(email: string): { valid: boolean; error?: string }
     const domain = email.split('@')[1];
     return {
       valid: false,
-      error: `Используйте email от: ${ALLOWED_EMAIL_PROVIDERS.slice(0, 5).join(', ')} и др.`,
+      error:
+        'Используйте email от известных сервисов: Gmail, Яндекс, Mail.ru, Outlook, iCloud, Proton (proton.me, pm.me) и др.',
     };
   }
 
