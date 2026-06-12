@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { publishCatalogChanged } from '@/lib/pusher/data-sync';
 import { normalizeTourTimestampForStorage } from '@/lib/date/tour-timestamp';
+import { DEFAULT_TOUR_AUTO_SCHEDULE_CONFIG } from '@/lib/tour/auto-schedule-config';
 
 function normalizeTourDateFields(data: Record<string, unknown>): Record<string, unknown> {
   const out = { ...data };
@@ -11,6 +12,21 @@ function normalizeTourDateFields(data: Record<string, unknown>): Record<string, 
   if ('end_date' in out && out.end_date != null) {
     out.end_date = normalizeTourTimestampForStorage(String(out.end_date));
   }
+  return out;
+}
+
+/** В БД end_date NOT NULL — подставляем длительность из шаблона авторасписания. */
+function ensureTourEndDate(data: Record<string, unknown>): Record<string, unknown> {
+  const out = { ...data };
+  if (out.end_date != null && out.end_date !== '') return out;
+  const startRaw = out.start_date;
+  if (!startRaw) return out;
+  const start = new Date(String(startRaw));
+  if (Number.isNaN(start.getTime())) return out;
+  const end = new Date(
+    start.getTime() + DEFAULT_TOUR_AUTO_SCHEDULE_CONFIG.duration_minutes * 60_000
+  );
+  out.end_date = normalizeTourTimestampForStorage(end.toISOString());
   return out;
 }
 
@@ -46,7 +62,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Получаем данные из запроса
-    const tourData = normalizeTourDateFields((await request.json()) as Record<string, unknown>);
+    const tourData = ensureTourEndDate(
+      normalizeTourDateFields((await request.json()) as Record<string, unknown>)
+    );
     
     console.log('📝 Received tour data:', JSON.stringify(tourData, null, 2));
 
@@ -121,7 +139,9 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const tourData = normalizeTourDateFields((await request.json()) as Record<string, unknown>);
+    const tourData = ensureTourEndDate(
+      normalizeTourDateFields((await request.json()) as Record<string, unknown>)
+    );
 
     // Удаляем поля, которые не нужно обновлять
     interface TourData {

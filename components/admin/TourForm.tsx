@@ -16,6 +16,7 @@ import {
 } from '@/lib/http/upload-form-progress';
 import { isDepartureStillInFuture } from '@/lib/tour/session-bookable';
 import TourAutoScheduleButton from '@/components/admin/TourAutoScheduleButton';
+import { DEFAULT_TOUR_AUTO_SCHEDULE_CONFIG } from '@/lib/tour/auto-schedule-config';
 
 import {
   formatMaxMb,
@@ -879,11 +880,14 @@ export default function TourForm({
         }
       }
 
-      const placeholderStart = (() => {
-        const d = new Date();
-        d.setDate(d.getDate() + 7);
-        d.setHours(10, 0, 0, 0);
-        return d.toISOString();
+      const placeholderTourDates = (() => {
+        const start = new Date();
+        start.setDate(start.getDate() + 7);
+        start.setHours(10, 0, 0, 0);
+        const end = new Date(
+          start.getTime() + DEFAULT_TOUR_AUTO_SCHEDULE_CONFIG.duration_minutes * 60_000
+        );
+        return { start: start.toISOString(), end: end.toISOString() };
       })();
 
       const tourData = {
@@ -897,12 +901,17 @@ export default function TourForm({
           ? datetimeLocalInputToIso(formData.start_date) ?? formData.start_date
           : mode === 'edit' && initialData?.start_date
             ? initialData.start_date
-            : placeholderStart,
+            : placeholderTourDates.start,
         end_date: hasPrimaryDates
           ? datetimeLocalInputToIso(formData.end_date) ?? formData.end_date
-          : mode === 'edit'
-            ? initialData?.end_date ?? null
-            : null,
+          : mode === 'edit' && initialData?.end_date
+            ? initialData.end_date
+            : mode === 'edit' && initialData?.start_date
+              ? new Date(
+                  new Date(initialData.start_date).getTime() +
+                    DEFAULT_TOUR_AUTO_SCHEDULE_CONFIG.duration_minutes * 60_000
+                ).toISOString()
+              : placeholderTourDates.end,
         ...(mode === 'create' ? { id: undefined } : {}),
       };
       
