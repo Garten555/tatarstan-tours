@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadFileToS3, generateUniqueFileName, deleteFileFromS3 } from '@/lib/s3/upload';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { validateCoverImageBuffer } from '@/lib/images/profile-cover';
 
 const MAX_COVER_SIZE = 8 * 1024 * 1024;
 const ALLOWED_COVER_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
@@ -41,6 +42,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Файл слишком большой. Максимум 8MB' }, { status: 400 });
     }
 
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const dimensionError = await validateCoverImageBuffer(buffer, file.type);
+    if (dimensionError) {
+      return NextResponse.json({ error: dimensionError }, { status: 400 });
+    }
+
     const settingKey = `profile_cover:${user.id}`;
     const { data: currentSetting } = await serviceClient
       .from('site_settings')
@@ -50,7 +57,8 @@ export async function POST(request: NextRequest) {
 
     const uniqueFileName = generateUniqueFileName(file.name);
     const s3Path = `users/covers/${user.id}/${uniqueFileName}`;
-    const fileUrl = await uploadFileToS3(file, s3Path);
+    const uploadFile = new File([buffer], file.name, { type: file.type });
+    const fileUrl = await uploadFileToS3(uploadFile, s3Path);
 
     const { error: updateError } = await serviceClient
       .from('site_settings')

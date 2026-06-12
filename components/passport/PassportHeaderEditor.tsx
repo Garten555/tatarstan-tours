@@ -5,6 +5,8 @@ import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import Image from 'next/image';
 import { Upload, X, Loader2 } from 'lucide-react';
 import { LevelProgressBar } from '@/components/reputation/LevelProgressBar';
+import { PROFILE_COVER_SIZE_HINT } from '@/lib/images/profile-cover';
+import { validateCoverImageFile } from '@/lib/images/profile-cover-client';
 
 interface PassportHeaderEditorProps {
   fullName: string;
@@ -63,7 +65,7 @@ export default function PassportHeaderEditor({
     setError(null);
   };
 
-  const onSelectImage = (
+  const onSelectImage = async (
     event: ChangeEvent<HTMLInputElement>,
     type: 'avatar' | 'cover'
   ) => {
@@ -74,13 +76,24 @@ export default function PassportHeaderEditor({
     const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!allowed.includes(file.type)) {
       setError('Разрешены только JPG, PNG и WEBP');
+      event.target.value = '';
       return;
     }
 
     const maxSize = type === 'avatar' ? 5 * 1024 * 1024 : 8 * 1024 * 1024;
     if (file.size > maxSize) {
       setError(type === 'avatar' ? 'Аватар: максимум 5MB' : 'Шапка: максимум 8MB');
+      event.target.value = '';
       return;
+    }
+
+    if (type === 'cover') {
+      const dimensionError = await validateCoverImageFile(file);
+      if (dimensionError) {
+        setError(dimensionError);
+        event.target.value = '';
+        return;
+      }
     }
 
     const previewUrl = URL.createObjectURL(file);
@@ -259,6 +272,7 @@ export default function PassportHeaderEditor({
                     <Upload className="w-4 h-4" />
                     Выбрать шапку
                   </button>
+                  <p className="mt-2 text-xs text-gray-500">{PROFILE_COVER_SIZE_HINT}</p>
                 </div>
               </div>
 

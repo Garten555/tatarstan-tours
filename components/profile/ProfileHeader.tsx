@@ -23,6 +23,8 @@ import UploadProgressBar from '@/components/common/UploadProgressBar';
 import { uploadFormDataWithProgress } from '@/lib/http/upload-form-progress';
 import { LevelProgressBar } from '@/components/reputation/LevelProgressBar';
 import { profileDisplayName, profileInitials } from '@/lib/profile/display';
+import { PROFILE_COVER_SIZE_HINT } from '@/lib/images/profile-cover';
+import { validateCoverImageFile } from '@/lib/images/profile-cover-client';
 
 interface ProfileHeaderProps {
   profileData: {
@@ -153,6 +155,13 @@ export default function ProfileHeader({
       return;
     }
 
+    const dimensionError = await validateCoverImageFile(file);
+    if (dimensionError) {
+      setCoverError(dimensionError);
+      if (coverInputRef.current) coverInputRef.current.value = '';
+      return;
+    }
+
     try {
       setIsUploadingCover(true);
       setProfileMediaUploadKind('cover');
@@ -237,18 +246,28 @@ export default function ProfileHeader({
     setEditorError(null);
   };
 
-  const onSelectFile = (event: ChangeEvent<HTMLInputElement>, type: 'avatar' | 'cover') => {
+  const onSelectFile = async (event: ChangeEvent<HTMLInputElement>, type: 'avatar' | 'cover') => {
     const file = event.target.files?.[0];
     if (!file) return;
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
       setEditorError('Разрешены только JPG, PNG и WEBP');
+      event.target.value = '';
       return;
     }
     const maxSize = type === 'avatar' ? 5 * 1024 * 1024 : 8 * 1024 * 1024;
     if (file.size > maxSize) {
       setEditorError(type === 'avatar' ? 'Аватар: максимум 5MB' : 'Шапка: максимум 8MB');
+      event.target.value = '';
       return;
+    }
+    if (type === 'cover') {
+      const dimensionError = await validateCoverImageFile(file);
+      if (dimensionError) {
+        setEditorError(dimensionError);
+        event.target.value = '';
+        return;
+      }
     }
     setEditorError(null);
     const preview = URL.createObjectURL(file);
@@ -693,6 +712,7 @@ export default function ProfileHeader({
                     <Upload className="w-4 h-4" />
                     Выбрать шапку
                   </button>
+                  <p className="mt-2 text-xs text-gray-500">{PROFILE_COVER_SIZE_HINT}</p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
