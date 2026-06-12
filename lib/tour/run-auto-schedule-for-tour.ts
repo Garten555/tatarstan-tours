@@ -41,13 +41,6 @@ export async function runAutoScheduleForTour(
   }
 
   const status = (tour as { status?: string }).status;
-  if (status === 'cancelled') {
-    return {
-      ok: false,
-      status: 400,
-      error: 'Нельзя автозаполнить расписание для отменённого тура',
-    };
-  }
 
   const baseConfig = await loadTourAutoScheduleConfig(serviceClient);
   const config: TourAutoScheduleConfig = {
@@ -149,7 +142,7 @@ export async function runAutoScheduleForTour(
     };
   }
 
-  if (status === 'completed') {
+  if (status === 'completed' || status === 'cancelled') {
     await serviceClient.from('tours').update({ status: 'active' }).eq('id', tourId);
   }
 

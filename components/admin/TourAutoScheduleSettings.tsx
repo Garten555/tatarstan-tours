@@ -327,7 +327,7 @@ export default function TourAutoScheduleSettings() {
             className="inline-flex items-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-60"
           >
             {bulkRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            Заполнить все туры (кроме отменённых)
+            Заполнить все туры
           </button>
         </div>
       </div>
