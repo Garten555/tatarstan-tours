@@ -5,7 +5,7 @@ import { runAutoScheduleForTour } from '@/lib/tour/run-auto-schedule-for-tour';
 
 /**
  * POST /api/admin/tours/auto-schedule/bulk
- * Заполняет расписание для активных туров (draft/active/published).
+ * Заполняет расписание для черновиков, активных и завершённых туров (не отменённых).
  */
 export async function POST(request: NextRequest) {
   try {
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const { data: tours, error } = await serviceClient
       .from('tours')
       .select('id, title, status')
-      .in('status', ['draft', 'active'])
+      .in('status', ['draft', 'active', 'completed'])
       .order('title', { ascending: true });
 
     if (error) {

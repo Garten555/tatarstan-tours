@@ -154,8 +154,9 @@ export default function TourAutoScheduleSettings() {
         <div>
           <h2 className="text-lg font-bold text-gray-900">Общий шаблон</h2>
           <p className="text-sm text-gray-600 mt-1">
-            Один раз настроили — для каждого тура нажимаете «Заполнить» или кнопку ниже для всех
-            активных туров. Гиды выбираются автоматически (все гиды, без привязки к городу).
+            Один раз настроили — для каждого тура «Заполнить по шаблону» или кнопка ниже для всех
+            туров сразу (черновики, активные и завершённые). Завершённый тур снова станет активным,
+            если добавятся новые слоты. Гиды подбираются автоматически.
           </p>
         </div>
 
@@ -326,7 +327,7 @@ export default function TourAutoScheduleSettings() {
             className="inline-flex items-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-60"
           >
             {bulkRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-            Заполнить все активные туры
+            Заполнить все туры (кроме отменённых)
           </button>
         </div>
       </div>

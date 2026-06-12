@@ -41,11 +41,11 @@ export async function runAutoScheduleForTour(
   }
 
   const status = (tour as { status?: string }).status;
-  if (status === 'cancelled' || status === 'completed') {
+  if (status === 'cancelled') {
     return {
       ok: false,
       status: 400,
-      error: 'Нельзя автозаполнить расписание для завершённого или отменённого тура',
+      error: 'Нельзя автозаполнить расписание для отменённого тура',
     };
   }
 
@@ -147,6 +147,10 @@ export async function runAutoScheduleForTour(
       error: sync.error,
       details: sync.details,
     };
+  }
+
+  if (status === 'completed') {
+    await serviceClient.from('tours').update({ status: 'active' }).eq('id', tourId);
   }
 
   return {
