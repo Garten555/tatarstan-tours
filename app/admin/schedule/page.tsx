@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import TeamScheduleBoard from '@/components/admin/TeamScheduleBoard';
 import { canViewTeamSchedule } from '@/lib/admin/require-schedule-viewer';
-import { currentMoscowWeekStart } from '@/lib/tour/team-schedule-range';
+import { currentMoscowDay } from '@/lib/tour/team-schedule-range';
 
 export const metadata = {
   title: 'Расписание - Админ панель',
@@ -31,11 +31,16 @@ export default async function TeamSchedulePage() {
     redirect('/unauthorized');
   }
 
-  const weekStart = currentMoscowWeekStart().key;
+  const today = currentMoscowDay();
+  const initialMonth = `${today.year}-${String(today.month).padStart(2, '0')}`;
 
   return (
     <div className="p-4 sm:p-6 md:p-8">
-      <TeamScheduleBoard initialWeekStart={weekStart} viewerRole={role} />
+      <TeamScheduleBoard
+        initialMonth={initialMonth}
+        initialSelectedDay={today.key}
+        viewerRole={role}
+      />
     </div>
   );
 }

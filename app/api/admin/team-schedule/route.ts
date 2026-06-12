@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { requireScheduleViewer } from '@/lib/admin/require-schedule-viewer';
 import {
-  currentMoscowWeekStart,
+  currentMoscowDay,
+  moscowMonthCalendarCells,
+  moscowMonthRangeIso,
   moscowWeekDays,
   moscowWeekRangeIso,
   parseMoscowDayKey,
+  parseMoscowMonthKey,
+  currentMoscowWeekStart,
 } from '@/lib/tour/team-schedule-range';
 import { guideHasConflict, type BusyGuideSession } from '@/lib/tour/guide-schedule-conflict';
 import { sessionEndMs } from '@/lib/tour/schedule-slot';
@@ -17,7 +21,10 @@ type SessionRow = {
   status: string;
   guide_id: string | null;
   tour_id: string;
-  tour: { id: string; title: string; slug: string } | { id: string; title: string; slug: string }[] | null;
+  tour:
+    | { id: string; title: string; slug: string; cover_image: string | null }
+    | { id: string; title: string; slug: string; cover_image: string | null }[]
+    | null;
   guide:
     | { id: string; first_name: string | null; last_name: string | null }
     | { id: string; first_name: string | null; last_name: string | null }[]
@@ -37,9 +44,18 @@ function guideName(
   return name || 'Гид';
 }
 
+function sessionMoscowDayKey(startAt: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date(startAt));
+}
+
 /**
- * GET /api/admin/team-schedule?week=2026-06-02&guide_id=...
- * Недельное расписание выездов для гидов и админов туров.
+ * GET /api/admin/team-schedule?month=2026-06&guide_id=...
+ * GET /api/admin/team-schedule?week=2026-06-02 (устаревший режим недели)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -51,12 +67,33 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 });
     }
 
+    const monthParam = request.nextUrl.searchParams.get('month');
     const weekParam = request.nextUrl.searchParams.get('week');
     const guideFilter = request.nextUrl.searchParams.get('guide_id');
 
-    const weekStart = parseMoscowDayKey(weekParam) ?? currentMoscowWeekStart();
-    const { from, to } = moscowWeekRangeIso(weekStart);
-    const days = moscowWeekDays(weekStart);
+    const parsedMonth = parseMoscowMonthKey(monthParam);
+    const useMonth = Boolean(parsedMonth);
+    const today = currentMoscowDay();
+
+    let from: string;
+    let to: string;
+    let monthKey: string;
+    let calendarCells: ReturnType<typeof moscowMonthCalendarCells>;
+
+    if (useMonth && parsedMonth) {
+      monthKey = parsedMonth.key;
+      const range = moscowMonthRangeIso(parsedMonth.year, parsedMonth.month);
+      from = range.from;
+      to = range.to;
+      calendarCells = moscowMonthCalendarCells(parsedMonth.year, parsedMonth.month);
+    } else {
+      const weekStart = parseMoscowDayKey(weekParam) ?? currentMoscowWeekStart();
+      const range = moscowWeekRangeIso(weekStart);
+      from = range.from;
+      to = range.to;
+      monthKey = `${weekStart.year}-${String(weekStart.month).padStart(2, '0')}`;
+      calendarCells = moscowMonthCalendarCells(weekStart.year, weekStart.month);
+    }
 
     let query = serviceClient
       .from('tour_sessions')
@@ -68,7 +105,7 @@ export async function GET(request: NextRequest) {
         status,
         guide_id,
         tour_id,
-        tour:tours(id, title, slug),
+        tour:tours(id, title, slug, cover_image),
         guide:profiles(id, first_name, last_name)
       `
       )
@@ -124,6 +161,9 @@ export async function GET(request: NextRequest) {
         tour_id: (row as { tour_id: string }).tour_id,
       }));
 
+    const dayMarkers: Record<string, { count: number; covers: string[]; has_conflict: boolean }> =
+      {};
+
     const sessions = (sessionsRaw ?? []).map((row) => {
       const typed = row as SessionRow;
       const tour = unwrap(typed.tour);
@@ -135,6 +175,17 @@ export async function GET(request: NextRequest) {
         typed.guide_id != null &&
         guideHasConflict(busyForConflict, typed.guide_id, startMs, endMs, typed.id);
 
+      const dayKey = sessionMoscowDayKey(typed.start_at);
+      const cover = tour?.cover_image ?? null;
+      if (!dayMarkers[dayKey]) {
+        dayMarkers[dayKey] = { count: 0, covers: [], has_conflict: false };
+      }
+      dayMarkers[dayKey].count += 1;
+      if (cover && dayMarkers[dayKey].covers.length < 3 && !dayMarkers[dayKey].covers.includes(cover)) {
+        dayMarkers[dayKey].covers.push(cover);
+      }
+      if (hasConflict) dayMarkers[dayKey].has_conflict = true;
+
       return {
         id: typed.id,
         start_at: typed.start_at,
@@ -143,8 +194,13 @@ export async function GET(request: NextRequest) {
         guide_id: typed.guide_id,
         guide_name: guideName(guide),
         tour: tour
-          ? { id: tour.id, title: tour.title, slug: tour.slug }
-          : { id: typed.tour_id, title: 'Тур', slug: '' },
+          ? {
+              id: tour.id,
+              title: tour.title,
+              slug: tour.slug,
+              cover_image: tour.cover_image,
+            }
+          : { id: typed.tour_id, title: 'Тур', slug: '', cover_image: null },
         room_id: roomByTour.get(typed.tour_id) ?? null,
         has_conflict: Boolean(hasConflict),
       };
@@ -166,9 +222,21 @@ export async function GET(request: NextRequest) {
       }));
     }
 
+    const legacyWeekStart = parseMoscowDayKey(weekParam) ?? currentMoscowWeekStart();
+
     return NextResponse.json({
-      week_start: weekStart.key,
-      days: days.map((d) => ({ key: d.key, weekday: d.weekday })),
+      mode: useMonth ? 'month' : 'week',
+      month: monthKey,
+      today: today.key,
+      calendar_cells: calendarCells.map((c) => ({
+        key: c.key,
+        day: c.day,
+        weekday: c.weekday,
+        in_month: c.in_month,
+      })),
+      day_markers: dayMarkers,
+      week_start: legacyWeekStart.key,
+      days: moscowWeekDays(legacyWeekStart).map((d) => ({ key: d.key, weekday: d.weekday })),
       sessions,
       guides,
       viewer: { role: auth.role, user_id: auth.user.id },
