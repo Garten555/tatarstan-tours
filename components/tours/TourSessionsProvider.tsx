@@ -28,11 +28,14 @@ export function useTourSessions(): TourSessionsContextValue | null {
 
 type TourSessionsProviderProps = {
   sessions: TourSessionOption[];
+  /** Из URL ?session= — предвыбранный выезд */
+  initialSessionId?: string;
   children: ReactNode;
 };
 
 export function TourSessionsProvider({
   sessions,
+  initialSessionId,
   children,
 }: TourSessionsProviderProps) {
   const valid = useMemo(
@@ -48,7 +51,9 @@ export function TourSessionsProvider({
   const defaultId = useMemo(() => pickDefaultSessionId(valid), [valid]);
 
   /** Выбор пользователя; если слот пропал из списка — снова берём defaultId без эффекта */
-  const [userPickedId, setUserPickedId] = useState<string | null>(null);
+  const [userPickedId, setUserPickedId] = useState<string | null>(
+    () => initialSessionId ?? null
+  );
 
   const selectedId = useMemo(() => {
     if (!valid.length) return '';

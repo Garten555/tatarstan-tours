@@ -29,7 +29,11 @@ import { isBookingDeparturePast } from '@/lib/bookings/booking-completion';
 
 interface TourPageProps {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ error?: string | string[]; booking?: string | string[] }>;
+  searchParams: Promise<{
+    error?: string | string[];
+    booking?: string | string[];
+    session?: string | string[];
+  }>;
 }
 
 type BookingSidebarView = {
@@ -67,7 +71,26 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
 
   const bookingIdRaw = sp.booking;
   const bookingId = typeof bookingIdRaw === 'string' ? bookingIdRaw : undefined;
+  const sessionIdRaw = sp.session;
+  const initialSessionId =
+    typeof sessionIdRaw === 'string' && sessionIdRaw.length > 0
+      ? sessionIdRaw
+      : undefined;
   let bookingSidebarView: BookingSidebarView | null = null;
+
+  let viewerRole: string | null = null;
+  if (user) {
+    const { data: viewerProfile } = await supabaseAuth
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+    viewerRole = (viewerProfile as { role?: string | null } | null)?.role ?? null;
+  }
+  const isStaffViewer =
+    viewerRole === 'tour_admin' ||
+    viewerRole === 'super_admin' ||
+    viewerRole === 'support_admin';
 
   if (bookingId) {
     if (!user) {
@@ -105,13 +128,8 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
 
     let canViewBooking = bookingRow.user_id === user.id;
     if (!canViewBooking) {
-      const { data: viewerProfile } = await supabaseAuth
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .maybeSingle();
-      const role = (viewerProfile as { role?: string | null } | null)?.role;
-      canViewBooking = role === 'tour_admin' || role === 'super_admin';
+      canViewBooking =
+        viewerRole === 'tour_admin' || viewerRole === 'super_admin';
     }
 
     if (!canViewBooking) {
@@ -245,22 +263,36 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
       notFound();
     }
 
-    const { count: participantBookingCount, error: participantError } = await supabase
-      .from('bookings')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
-      .eq('tour_id', t.id)
-      .in('status', ['confirmed', 'completed']);
+    if (!isStaffViewer) {
+      const { count: participantBookingCount, error: participantError } =
+        await supabase
+          .from('bookings')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .eq('tour_id', t.id)
+          .in('status', ['confirmed', 'completed']);
 
-    if (participantError || !participantBookingCount) {
-      notFound();
+      if (participantError || !participantBookingCount) {
+        notFound();
+      }
+
+      participantArchiveMode = true;
     }
-
-    participantArchiveMode = true;
   }
 
   if (!participantArchiveMode) {
+    const sessionsBeforeFilter = tourSessions;
     tourSessions = filterUpcomingSessions(tourSessions);
+
+    if (
+      initialSessionId &&
+      !tourSessions.some((s) => s.id === initialSessionId)
+    ) {
+      const pinned = sessionsBeforeFilter.find((s) => s.id === initialSessionId);
+      if (pinned) {
+        tourSessions = [pinned, ...tourSessions];
+      }
+    }
 
     if (tourSessions.length === 0 && t.start_date) {
       const start = new Date(t.start_date);
@@ -445,7 +477,10 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
           <TourBookingRedirectBanner code={bookingRedirectError} />
         )}
 
-        <TourSessionsProvider sessions={tourSessions}>
+        <TourSessionsProvider
+          sessions={tourSessions}
+          initialSessionId={initialSessionId}
+        >
         <div className="mt-4 sm:mt-6 flex flex-col md:flex-col lg:flex-row gap-6 sm:gap-8 w-full items-start">
           <div className="w-full md:w-full lg:w-[320px] xl:w-[380px] 2xl:w-[400px] flex-shrink-0">
             {showBookingSidebar ? (

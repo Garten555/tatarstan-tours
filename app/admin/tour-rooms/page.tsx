@@ -41,6 +41,7 @@ interface TourRoom {
   created_at: string;
   tour: {
     id: string;
+    slug?: string | null;
     title: string;
     start_date: string;
     end_date: string | null;
@@ -63,6 +64,19 @@ interface TourRoom {
 }
 
 const AUTO_CLEANUP_STORAGE_KEY = 'admin-tour-rooms-auto-cleanup-ts';
+
+function tourPublicViewHref(room: TourRoom): string {
+  const slug = room.tour.slug?.trim();
+  if (!slug) {
+    return `/admin/tours/${room.tour_id}/edit`;
+  }
+  const params = new URLSearchParams();
+  if (room.tour_session_id) {
+    params.set('session', room.tour_session_id);
+  }
+  const query = params.toString();
+  return query ? `/tours/${slug}?${query}` : `/tours/${slug}`;
+}
 
 export default function TourRoomsPage() {
   const [rooms, setRooms] = useState<TourRoom[]>([]);
@@ -590,7 +604,7 @@ export default function TourRoomsPage() {
                     <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-3 mb-3 flex-wrap">
                       <Link
-                        href={`/tours/${room.tour.id}`}
+                        href={tourPublicViewHref(room)}
                         className="tour-room-title-link text-xl md:text-2xl font-black text-gray-900 hover:text-emerald-600 transition-colors"
                       >
                         {escapeHtml(room.tour.title)}

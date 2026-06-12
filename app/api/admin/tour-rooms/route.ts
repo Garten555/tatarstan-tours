@@ -56,6 +56,7 @@ export async function GET(request: NextRequest) {
         created_at,
         tour:tours(
           id,
+          slug,
           title,
           start_date,
           end_date,
@@ -249,6 +250,7 @@ export async function POST(request: NextRequest) {
         *,
         tour:tours(
           id,
+          slug,
           title,
           start_date,
           end_date,
