@@ -56,7 +56,7 @@ export default function CatalogCityCombobox({
           }}
           onFocus={() => onShowDropdown(true)}
           placeholder={placeholder}
-          className={`w-full rounded-xl border-2 border-gray-300 bg-gray-50 py-3 pl-10 pr-9 text-sm font-medium shadow-sm transition-all hover:bg-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${inputClassName}`}
+          className={`w-full rounded-xl border-2 border-gray-300 bg-gray-50 py-3 pl-10 pr-9 text-sm font-medium text-gray-900 color-scheme-light shadow-sm transition-all hover:bg-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${inputClassName}`}
         />
         {selectedCity ? (
           <button
@@ -75,7 +75,7 @@ export default function CatalogCityCombobox({
 
       {showDropdown ? (
         <div
-          className={`absolute ${dropdownClassName} mt-2 max-h-56 w-full overflow-y-auto rounded-xl border-2 border-gray-200 bg-white shadow-xl`}
+          className={`absolute ${dropdownClassName} mt-2 max-h-56 w-full overflow-y-auto rounded-xl border-2 border-gray-200 bg-white text-gray-900 color-scheme-light shadow-xl`}
         >
           {loading ? (
             <div className="flex items-center justify-center gap-2 px-3 py-4 text-sm text-gray-500">
