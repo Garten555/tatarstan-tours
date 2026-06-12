@@ -30,9 +30,9 @@ export type TourAutoScheduleConfig = {
 export const TOUR_AUTO_SCHEDULE_SETTINGS_KEY = 'tour_auto_schedule';
 
 export const DEFAULT_TOUR_AUTO_SCHEDULE_CONFIG: TourAutoScheduleConfig = {
-  weekdays: [6, 0],
+  weekdays: [1, 2, 3, 4, 5, 6],
   guide_rest_auto: true,
-  guide_rest_weekdays: [1, 2, 3, 4, 5],
+  guide_rest_weekdays: [0],
   guide_rotate_rest_on_tour_days: true,
   start_times: ['10:00'],
   duration_minutes: 180,

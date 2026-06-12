@@ -1,7 +1,7 @@
 import type { TourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
 import { complementTourWeekdays } from '@/lib/tour/auto-schedule-config';
 import { moscowWallClockToIso } from '@/lib/tour/moscow-wall-clock';
-import { sessionMoscowWeekday } from '@/lib/tour/session-moscow-day';
+import { moscowWeekStart, parseMoscowDayKey } from '@/lib/tour/team-schedule-range';
 
 export function resolveGuideRestWeekdays(config: TourAutoScheduleConfig): number[] {
   if (config.guide_rest_auto) {
@@ -17,25 +17,45 @@ export function syncGuideRestFromTourWeekdays(
   return complementTourWeekdays(config.weekdays);
 }
 
-/** N-й такой день недели в месяце (1 = первая суббота и т.д.). */
-export function tourWeekdayOccurrenceInMonth(dayKey: string): number {
-  const [y, m, d] = dayKey.split('-').map(Number);
-  const targetWeekday = sessionMoscowWeekday(moscowWallClockToIso(y, m, d, 12, 0));
-  let count = 0;
-  const daysInMonth = new Date(y, m, 0).getDate();
-  for (let day = 1; day <= daysInMonth; day++) {
-    const iso = moscowWallClockToIso(y, m, day, 12, 0);
-    if (sessionMoscowWeekday(iso) === targetWeekday) {
-      count += 1;
-      if (day === d) return count;
-    }
-  }
-  return 1;
+/** Индекс московской недели (понедельник) — для стабильного чередования. */
+export function moscowIsoWeekIndex(dayKey: string): number {
+  const parsed = parseMoscowDayKey(dayKey);
+  if (!parsed) return 0;
+  const weekStart = moscowWeekStart(parsed.year, parsed.month, parsed.day);
+  const mondayMs = new Date(
+    moscowWallClockToIso(weekStart.year, weekStart.month, weekStart.day, 12, 0)
+  ).getTime();
+  return Math.floor(mondayMs / (7 * 86_400_000));
 }
 
 /**
- * На туровых днях чередуем отдых: не все гиды работают каждую субботу.
- * При 2 гидах: 1-я суббота — отдых у одного, 2-я — у другого.
+ * Туровый день недели, когда гид отдыхает в эту календарную неделю.
+ * При 6 рабочих днях (пн–сб) и 2 гидах: у каждого свой день без выезда + общий воскресенье.
+ */
+export function guideTourDayRestWeekdayThisWeek(params: {
+  guideId: string;
+  slotDayKey: string;
+  guideIds: string[];
+  config: TourAutoScheduleConfig;
+}): number | null {
+  if (!params.config.guide_rotate_rest_on_tour_days || params.guideIds.length === 0) {
+    return null;
+  }
+
+  const tourDays = [...params.config.weekdays].sort((a, b) => a - b);
+  if (tourDays.length === 0) return null;
+
+  const sorted = [...params.guideIds].sort((a, b) => a.localeCompare(b));
+  const guideIndex = sorted.indexOf(params.guideId);
+  if (guideIndex < 0) return null;
+
+  const weekIdx = moscowIsoWeekIndex(params.slotDayKey);
+  const restOffset = (guideIndex + weekIdx) % tourDays.length;
+  return tourDays[restOffset] ?? null;
+}
+
+/**
+ * На туровых днях — по одному выходному в неделю на гида (чередование по пн–сб и т.д.).
  */
 export function isGuideRotatingRestOnTourDay(params: {
   guideId: string;
@@ -46,16 +66,16 @@ export function isGuideRotatingRestOnTourDay(params: {
 }): boolean {
   const { guideId, slotWeekday, slotDayKey, guideIds, config } = params;
 
-  if (!config.guide_rotate_rest_on_tour_days || guideIds.length <= 1) return false;
+  if (!config.guide_rotate_rest_on_tour_days || guideIds.length === 0) return false;
   if (!config.weekdays.includes(slotWeekday)) return false;
 
-  const sorted = [...guideIds].sort((a, b) => a.localeCompare(b));
-  const guideIndex = sorted.indexOf(guideId);
-  if (guideIndex < 0) return false;
-
-  const occurrence = tourWeekdayOccurrenceInMonth(slotDayKey);
-  const restGuideIndex = (occurrence - 1) % sorted.length;
-  return guideIndex === restGuideIndex;
+  const restWeekday = guideTourDayRestWeekdayThisWeek({
+    guideId,
+    slotDayKey,
+    guideIds,
+    config,
+  });
+  return restWeekday != null && slotWeekday === restWeekday;
 }
 
 export function isGuideAvailableForSlot(params: {
