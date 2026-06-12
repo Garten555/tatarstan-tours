@@ -11,7 +11,12 @@ import {
   parseMoscowMonthKey,
   currentMoscowWeekStart,
 } from '@/lib/tour/team-schedule-range';
-import { guideHasConflict, type BusyGuideSession } from '@/lib/tour/guide-schedule-conflict';
+import {
+  findGuideScheduleConflict,
+  GUIDE_BETWEEN_TOURS_BUFFER_MINUTES,
+  scheduleIssueMessage,
+  type BusyGuideSession,
+} from '@/lib/tour/guide-schedule-conflict';
 import { sessionEndMs } from '@/lib/tour/schedule-slot';
 
 type SessionRow = {
@@ -161,8 +166,10 @@ export async function GET(request: NextRequest) {
         tour_id: (row as { tour_id: string }).tour_id,
       }));
 
-    const dayMarkers: Record<string, { count: number; covers: string[]; has_conflict: boolean }> =
-      {};
+    const dayMarkers: Record<
+      string,
+      { count: number; has_overlap: boolean; has_buffer: boolean }
+    > = {};
 
     const sessions = (sessionsRaw ?? []).map((row) => {
       const typed = row as SessionRow;
@@ -171,20 +178,24 @@ export async function GET(request: NextRequest) {
       const startMs = new Date(typed.start_at).getTime();
       const endMs = sessionEndMs(startMs, typed.end_at, 180);
 
-      const hasConflict =
-        typed.guide_id != null &&
-        guideHasConflict(busyForConflict, typed.guide_id, startMs, endMs, typed.id);
+      const conflictDetail =
+        typed.guide_id != null
+          ? findGuideScheduleConflict(
+              busyForConflict,
+              typed.guide_id,
+              startMs,
+              endMs,
+              typed.id
+            )
+          : null;
 
       const dayKey = sessionMoscowDayKey(typed.start_at);
-      const cover = tour?.cover_image ?? null;
       if (!dayMarkers[dayKey]) {
-        dayMarkers[dayKey] = { count: 0, covers: [], has_conflict: false };
+        dayMarkers[dayKey] = { count: 0, has_overlap: false, has_buffer: false };
       }
       dayMarkers[dayKey].count += 1;
-      if (cover && dayMarkers[dayKey].covers.length < 3 && !dayMarkers[dayKey].covers.includes(cover)) {
-        dayMarkers[dayKey].covers.push(cover);
-      }
-      if (hasConflict) dayMarkers[dayKey].has_conflict = true;
+      if (conflictDetail?.issue === 'overlap') dayMarkers[dayKey].has_overlap = true;
+      if (conflictDetail?.issue === 'buffer') dayMarkers[dayKey].has_buffer = true;
 
       return {
         id: typed.id,
@@ -202,7 +213,11 @@ export async function GET(request: NextRequest) {
             }
           : { id: typed.tour_id, title: 'Тур', slug: '', cover_image: null },
         room_id: roomByTour.get(typed.tour_id) ?? null,
-        has_conflict: Boolean(hasConflict),
+        schedule_issue: conflictDetail?.issue ?? null,
+        gap_minutes: conflictDetail?.gap_minutes ?? null,
+        issue_message: conflictDetail
+          ? scheduleIssueMessage(conflictDetail.issue, conflictDetail.gap_minutes)
+          : null,
       };
     });
 
@@ -239,6 +254,7 @@ export async function GET(request: NextRequest) {
       days: moscowWeekDays(legacyWeekStart).map((d) => ({ key: d.key, weekday: d.weekday })),
       sessions,
       guides,
+      buffer_minutes: GUIDE_BETWEEN_TOURS_BUFFER_MINUTES,
       viewer: { role: auth.role, user_id: auth.user.id },
     });
   } catch (e) {
