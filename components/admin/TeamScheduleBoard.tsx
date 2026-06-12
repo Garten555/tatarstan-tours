@@ -16,6 +16,11 @@ import { formatDayMonthYearRu, formatTimeRu } from '@/lib/date/format-ru';
 import { moscowNowParts } from '@/lib/tour/moscow-wall-clock';
 import { currentMoscowDay, moscowDayKey, shiftMoscowMonth } from '@/lib/tour/team-schedule-range';
 import { sessionEndMs } from '@/lib/tour/schedule-slot';
+import {
+  getSessionTimePhase,
+  SESSION_TIME_PHASE_LABEL,
+  type SessionTimePhase,
+} from '@/lib/tour/session-time-phase';
 import ShiftSessionTimeModal from '@/components/admin/ShiftSessionTimeModal';
 
 type ScheduleSession = {
@@ -48,7 +53,14 @@ type DayMarker = {
   count: number;
   has_overlap: boolean;
   has_buffer: boolean;
+  has_ended: boolean;
+  has_ongoing: boolean;
+  has_upcoming: boolean;
 };
+
+type EnrichedScheduleSession = ScheduleSession & { time_phase: SessionTimePhase };
+
+type TimeFilter = 'all' | SessionTimePhase;
 
 type ScheduleResponse = {
   month: string;
@@ -121,6 +133,52 @@ function tourCountLabel(count: number): string {
   return `${count} туров`;
 }
 
+function dayMarkerAccent(marker: DayMarker | undefined): 'overlap' | 'buffer' | 'ongoing' | 'upcoming' | 'ended' | 'none' {
+  if (!marker || marker.count === 0) return 'none';
+  if (marker.has_overlap) return 'overlap';
+  if (marker.has_buffer) return 'buffer';
+  if (marker.has_ongoing) return 'ongoing';
+  if (marker.has_upcoming) return 'upcoming';
+  if (marker.has_ended) return 'ended';
+  return 'none';
+}
+
+function buildScheduleMaps(sessions: EnrichedScheduleSession[]) {
+  const sessionsByDay = new Map<string, EnrichedScheduleSession[]>();
+  const dayMarkers: Record<string, DayMarker> = {};
+
+  for (const session of sessions) {
+    const key = sessionMoscowDayKey(session.start_at);
+    const list = sessionsByDay.get(key) ?? [];
+    list.push(session);
+    sessionsByDay.set(key, list);
+
+    if (!dayMarkers[key]) {
+      dayMarkers[key] = {
+        count: 0,
+        has_overlap: false,
+        has_buffer: false,
+        has_ended: false,
+        has_ongoing: false,
+        has_upcoming: false,
+      };
+    }
+    const marker = dayMarkers[key];
+    marker.count += 1;
+    if (session.schedule_issue === 'overlap') marker.has_overlap = true;
+    if (session.schedule_issue === 'buffer') marker.has_buffer = true;
+    if (session.time_phase === 'ended') marker.has_ended = true;
+    if (session.time_phase === 'ongoing') marker.has_ongoing = true;
+    if (session.time_phase === 'upcoming') marker.has_upcoming = true;
+  }
+
+  for (const [, list] of sessionsByDay) {
+    list.sort((a, b) => a.start_at.localeCompare(b.start_at));
+  }
+
+  return { sessionsByDay, dayMarkers };
+}
+
 function weekdayLabelForDayKey(dayKey: string): string {
   const weekday = new Intl.DateTimeFormat('ru-RU', {
     timeZone: 'Europe/Moscow',
@@ -145,7 +203,7 @@ function sessionTimelineStyle(session: ScheduleSession): { left: string; width: 
   };
 }
 
-function DayTimeline({ sessions }: { sessions: ScheduleSession[] }) {
+function DayTimeline({ sessions }: { sessions: EnrichedScheduleSession[] }) {
   if (sessions.length === 0) return null;
 
   const hours = [6, 9, 12, 15, 18, 21];
@@ -163,7 +221,11 @@ function DayTimeline({ sessions }: { sessions: ScheduleSession[] }) {
               ? 'bg-red-500'
               : session.schedule_issue === 'buffer'
                 ? 'bg-amber-500'
-                : 'bg-emerald-500';
+                : session.time_phase === 'ended'
+                  ? 'bg-slate-400'
+                  : session.time_phase === 'ongoing'
+                    ? 'bg-blue-500'
+                    : 'bg-emerald-500';
 
           return (
             <div
@@ -198,6 +260,7 @@ export default function TeamScheduleBoard({
   const [viewMonth, setViewMonth] = useState(initialMonth);
   const [selectedDay, setSelectedDay] = useState(initialSelectedDay);
   const [guideFilter, setGuideFilter] = useState('all');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
   const [data, setData] = useState<ScheduleResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -237,24 +300,29 @@ export default function TeamScheduleBoard({
     loadSchedule();
   }, [loadSchedule]);
 
-  const sessionsByDay = useMemo(() => {
-    const map = new Map<string, ScheduleSession[]>();
-    for (const session of data?.sessions ?? []) {
-      const key = sessionMoscowDayKey(session.start_at);
-      const list = map.get(key) ?? [];
-      list.push(session);
-      map.set(key, list);
-    }
-    for (const [, list] of map) {
-      list.sort((a, b) => a.start_at.localeCompare(b.start_at));
-    }
-    return map;
+  const enrichedSessions = useMemo((): EnrichedScheduleSession[] => {
+    const nowMs = Date.now();
+    return (data?.sessions ?? []).map((session) => ({
+      ...session,
+      time_phase: getSessionTimePhase(session.start_at, session.end_at, nowMs),
+    }));
   }, [data?.sessions]);
 
+  const filteredSessions = useMemo(() => {
+    if (timeFilter === 'all') return enrichedSessions;
+    return enrichedSessions.filter((session) => session.time_phase === timeFilter);
+  }, [enrichedSessions, timeFilter]);
+
+  const { sessionsByDay, dayMarkers } = useMemo(
+    () => buildScheduleMaps(filteredSessions),
+    [filteredSessions]
+  );
+
   const selectedSessions = sessionsByDay.get(selectedDay) ?? [];
-  const selectedMarker = data?.day_markers[selectedDay];
-  const issueCount = (data?.sessions ?? []).filter((s) => s.schedule_issue).length;
-  const totalSessions = data?.sessions.length ?? 0;
+  const selectedMarker = dayMarkers[selectedDay];
+  const issueCount = filteredSessions.filter((s) => s.schedule_issue).length;
+  const totalSessions = filteredSessions.length;
+  const endedCount = enrichedSessions.filter((s) => s.time_phase === 'ended').length;
 
   const goMonth = (delta: number) => {
     const [y, m] = viewMonth.split('-').map(Number);
@@ -336,30 +404,49 @@ export default function TeamScheduleBoard({
           <p className="text-lg font-black text-gray-900">{monthTitle(viewMonth)}</p>
           <p className="mt-1 text-sm text-gray-600">
             Выездов в месяце: <span className="font-bold text-gray-900">{totalSessions}</span>
+            {timeFilter === 'all' && endedCount > 0 && (
+              <span className="ml-2 font-bold text-slate-600">· завершено: {endedCount}</span>
+            )}
             {issueCount > 0 && (
               <span className="ml-2 font-bold text-amber-700">· проблем: {issueCount}</span>
             )}
           </p>
         </div>
 
-        {isAdmin && (
-          <label className="flex w-full flex-col gap-1 lg:max-w-xs">
-            <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Гид</span>
+        <div className="flex w-full flex-col gap-3 lg:max-w-md">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Статус по времени</span>
             <select
-              value={guideFilter}
-              onChange={(e) => setGuideFilter(e.target.value)}
+              value={timeFilter}
+              onChange={(e) => setTimeFilter(e.target.value as TimeFilter)}
               className="rounded-xl border-2 border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-semibold text-gray-900 focus:border-emerald-400 focus:outline-none"
             >
-              <option value="all">Все гиды</option>
-              <option value="unassigned">Без гида</option>
-              {(data?.guides ?? []).map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
+              <option value="all">Все выезды</option>
+              <option value="upcoming">Предстоят</option>
+              <option value="ongoing">Идут сейчас</option>
+              <option value="ended">Завершены</option>
             </select>
           </label>
-        )}
+
+          {isAdmin && (
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Гид</span>
+              <select
+                value={guideFilter}
+                onChange={(e) => setGuideFilter(e.target.value)}
+                className="rounded-xl border-2 border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-semibold text-gray-900 focus:border-emerald-400 focus:outline-none"
+              >
+                <option value="all">Все гиды</option>
+                <option value="unassigned">Без гида</option>
+                {(data?.guides ?? []).map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -390,11 +477,51 @@ export default function TeamScheduleBoard({
           ) : (
             <div className="grid grid-cols-7 gap-1">
               {(data?.calendar_cells ?? []).map((cell) => {
-                const marker = data?.day_markers[cell.key];
+                const marker = dayMarkers[cell.key];
                 const isSelected = cell.key === selectedDay;
                 const isToday = cell.key === todayKey;
                 const hasTours = (marker?.count ?? 0) > 0;
                 const hasIssue = marker?.has_overlap || marker?.has_buffer;
+                const accent = dayMarkerAccent(marker);
+
+                const cellClass =
+                  isSelected
+                    ? 'border-emerald-500 bg-emerald-50 shadow-md ring-2 ring-emerald-200'
+                    : accent === 'overlap'
+                      ? 'border-red-300 bg-red-50/50 hover:border-red-400'
+                      : accent === 'buffer'
+                        ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400'
+                        : accent === 'ongoing'
+                          ? 'border-blue-300 bg-blue-50/40 hover:border-blue-400'
+                          : accent === 'ended'
+                            ? 'border-slate-300 bg-slate-100/70 hover:border-slate-400'
+                            : accent === 'upcoming'
+                              ? 'border-emerald-200 bg-emerald-50/40 hover:border-emerald-300'
+                              : 'border-transparent bg-gray-50/80 hover:border-gray-200 hover:bg-white';
+
+                const dotClass =
+                  accent === 'overlap'
+                    ? 'bg-red-500'
+                    : accent === 'buffer'
+                      ? 'bg-amber-500'
+                      : accent === 'ongoing'
+                        ? 'bg-blue-500'
+                        : accent === 'ended'
+                          ? 'bg-slate-500'
+                          : accent === 'upcoming'
+                            ? 'bg-emerald-500'
+                            : 'bg-emerald-500';
+
+                const countClass =
+                  accent === 'overlap'
+                    ? 'text-red-700'
+                    : accent === 'buffer'
+                      ? 'text-amber-800'
+                      : accent === 'ongoing'
+                        ? 'text-blue-800'
+                        : accent === 'ended'
+                          ? 'text-slate-700'
+                          : 'text-emerald-700';
 
                 return (
                   <button
@@ -407,17 +534,7 @@ export default function TeamScheduleBoard({
                         setViewMonth(`${y}-${m}`);
                       }
                     }}
-                    className={`relative flex min-h-[4.25rem] flex-col rounded-xl border-2 p-1.5 text-left transition-all sm:min-h-[4.75rem] ${
-                      isSelected
-                        ? 'border-emerald-500 bg-emerald-50 shadow-md ring-2 ring-emerald-200'
-                        : marker?.has_overlap
-                          ? 'border-red-300 bg-red-50/50 hover:border-red-400'
-                          : marker?.has_buffer
-                            ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400'
-                            : hasTours
-                              ? 'border-emerald-200 bg-emerald-50/40 hover:border-emerald-300'
-                              : 'border-transparent bg-gray-50/80 hover:border-gray-200 hover:bg-white'
-                    } ${!cell.in_month ? 'opacity-45' : ''}`}
+                    className={`relative flex min-h-[4.25rem] flex-col rounded-xl border-2 p-1.5 text-left transition-all sm:min-h-[4.75rem] ${cellClass} ${!cell.in_month ? 'opacity-45' : ''}`}
                   >
                     <span
                       className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-black ${
@@ -434,32 +551,24 @@ export default function TeamScheduleBoard({
                     {hasTours && (
                       <div className="mt-auto flex flex-col gap-0.5 pt-1">
                         <div className="flex items-center gap-1">
-                          <span
-                            className={`h-2 w-2 rounded-full ${
-                              marker?.has_overlap
-                                ? 'bg-red-500'
-                                : marker?.has_buffer
-                                  ? 'bg-amber-500'
-                                  : 'bg-emerald-500'
-                            }`}
-                          />
-                          <span
-                            className={`text-[10px] font-bold leading-none ${
-                              marker?.has_overlap
-                                ? 'text-red-700'
-                                : marker?.has_buffer
-                                  ? 'text-amber-800'
-                                  : 'text-emerald-700'
-                            }`}
-                          >
+                          <span className={`h-2 w-2 rounded-full ${dotClass}`} />
+                          <span className={`text-[10px] font-bold leading-none ${countClass}`}>
                             {tourCountLabel(marker?.count ?? 0)}
                           </span>
                         </div>
-                        {hasIssue && (
+                        {hasIssue ? (
                           <span className="text-[9px] font-bold leading-tight text-amber-800">
                             {marker?.has_overlap ? 'пересечение' : 'мало времени'}
                           </span>
-                        )}
+                        ) : accent === 'ended' ? (
+                          <span className="text-[9px] font-bold leading-tight text-slate-600">
+                            завершено
+                          </span>
+                        ) : accent === 'ongoing' ? (
+                          <span className="text-[9px] font-bold leading-tight text-blue-700">
+                            идёт сейчас
+                          </span>
+                        ) : null}
                       </div>
                     )}
                   </button>
@@ -471,7 +580,15 @@ export default function TeamScheduleBoard({
           <div className="mt-4 flex flex-wrap gap-3 text-[11px] font-semibold text-gray-500">
             <span className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Норма
+              Предстоит
+            </span>
+            <span className="flex items-center gap-1.5 text-blue-700">
+              <span className="h-2 w-2 rounded-full bg-blue-500" />
+              Идёт сейчас
+            </span>
+            <span className="flex items-center gap-1.5 text-slate-600">
+              <span className="h-2 w-2 rounded-full bg-slate-500" />
+              Завершён
             </span>
             <span className="flex items-center gap-1.5 text-amber-700">
               <span className="h-2 w-2 rounded-full bg-amber-500" />
@@ -493,7 +610,9 @@ export default function TeamScheduleBoard({
             <p className="text-sm font-medium text-gray-600">{weekdayLabelForDayKey(selectedDay)}</p>
             <p className="mt-1 text-sm text-gray-600">
               {selectedSessions.length === 0
-                ? 'Нет выездов'
+                ? timeFilter === 'all'
+                  ? 'Нет выездов'
+                  : 'Нет выездов с выбранным фильтром'
                 : selectedMarker?.has_overlap
                   ? `${tourCountLabel(selectedSessions.length)} · есть пересечения`
                   : selectedMarker?.has_buffer
@@ -507,8 +626,14 @@ export default function TeamScheduleBoard({
           ) : selectedSessions.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 py-12 text-center">
               <CalendarDays className="mx-auto mb-3 h-10 w-10 text-gray-300" />
-              <p className="text-sm font-semibold text-gray-500">В этот день туров нет</p>
-              <p className="mt-1 text-xs text-gray-400">Выберите день с зелёной или жёлтой меткой</p>
+              <p className="text-sm font-semibold text-gray-500">
+                {timeFilter === 'all' ? 'В этот день туров нет' : 'Нет туров с выбранным фильтром'}
+              </p>
+              <p className="mt-1 text-xs text-gray-400">
+                {timeFilter === 'all'
+                  ? 'Выберите день с меткой или фильтр «Завершены» для прошедших выездов'
+                  : 'Попробуйте «Все выезды» или другой статус'}
+              </p>
             </div>
           ) : (
             <>
@@ -523,7 +648,11 @@ export default function TeamScheduleBoard({
                         ? 'border-red-300 bg-red-50/50'
                         : session.schedule_issue === 'buffer'
                           ? 'border-amber-300 bg-amber-50/40'
-                          : 'border-gray-200 bg-white'
+                          : session.time_phase === 'ended'
+                            ? 'border-slate-300 bg-slate-50/80'
+                            : session.time_phase === 'ongoing'
+                              ? 'border-blue-200 bg-blue-50/40'
+                              : 'border-gray-200 bg-white'
                     }`}
                   >
                     <div className="flex">
@@ -553,6 +682,23 @@ export default function TeamScheduleBoard({
                           )}
                         </div>
 
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <span
+                            className={`inline-flex rounded-lg px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${
+                              session.time_phase === 'ended'
+                                ? 'bg-slate-200 text-slate-700'
+                                : session.time_phase === 'ongoing'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-emerald-100 text-emerald-800'
+                            }`}
+                          >
+                            {SESSION_TIME_PHASE_LABEL[session.time_phase]}
+                          </span>
+                          <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">
+                            {STATUS_LABEL[session.status] ?? session.status}
+                          </span>
+                        </div>
+
                         <h3 className="mb-1 line-clamp-2 text-base font-black leading-snug text-gray-900">
                           {session.tour.title}
                         </h3>
@@ -563,10 +709,6 @@ export default function TeamScheduleBoard({
                             {session.guide_name}
                           </p>
                         )}
-
-                        <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-gray-500">
-                          {STATUS_LABEL[session.status] ?? session.status}
-                        </p>
 
                         {session.issue_message && (
                           <p
@@ -584,14 +726,16 @@ export default function TeamScheduleBoard({
                         <div className="flex flex-wrap gap-2">
                           {isAdmin && (
                             <>
-                              <button
-                                type="button"
-                                onClick={() => setShiftSession(session)}
-                                className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100"
-                              >
-                                <Clock className="h-3.5 w-3.5" />
-                                Сдвинуть время
-                              </button>
+                              {session.time_phase !== 'ended' && (
+                                <button
+                                  type="button"
+                                  onClick={() => setShiftSession(session)}
+                                  className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-800 ring-1 ring-emerald-200 hover:bg-emerald-100"
+                                >
+                                  <Clock className="h-3.5 w-3.5" />
+                                  Сдвинуть время
+                                </button>
+                              )}
                               <Link
                                 href={`/admin/tours/${session.tour.id}/edit`}
                                 className="inline-flex items-center gap-1 rounded-lg bg-gray-50 px-2.5 py-1.5 text-xs font-bold text-gray-700 ring-1 ring-gray-200 hover:bg-gray-100"
