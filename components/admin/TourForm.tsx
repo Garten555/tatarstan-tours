@@ -299,6 +299,12 @@ export default function TourForm({
     return input;
   };
 
+  /** Черновик или создание с авторасписанием — даты вручную не обязательны */
+  const datesOptional =
+    formData.status === 'draft' || (mode === 'create' && autoScheduleAfterSave);
+
+  const hasPrimaryDates = Boolean(formData.start_date?.trim() && formData.end_date?.trim());
+
   // Валидация
   const validateField = (name: string, value: any): string | undefined => {
     switch (name) {
@@ -330,16 +336,16 @@ export default function TourForm({
         break;
 
       case 'start_date':
-        if (!value) {
+        if (!datesOptional && !value) {
           return 'Укажите дату начала тура';
         }
         break;
 
       case 'end_date':
-        if (!value) {
+        if (!datesOptional && !value) {
           return 'Укажите дату окончания тура';
         }
-        if (formData.start_date && new Date(value) <= new Date(formData.start_date)) {
+        if (value && formData.start_date && new Date(value) <= new Date(formData.start_date)) {
           return 'Дата окончания должна быть позже даты начала';
         }
         break;
@@ -698,12 +704,19 @@ export default function TourForm({
     }
 
     const invalidExtraRange = extraDateRanges.some((range) => {
+      const hasAny = Boolean(range.start_date?.trim() || range.end_date?.trim());
+      if (!hasAny) return false;
       if (!range.start_date || !range.end_date) return true;
       return new Date(range.end_date) <= new Date(range.start_date);
     });
 
     if (invalidExtraRange) {
       alert('Проверьте дополнительные даты: обе даты обязательны, окончание должно быть позже начала');
+      return;
+    }
+
+    if (!datesOptional && !hasPrimaryDates) {
+      alert('Укажите дату начала и окончания тура или сохраните как черновик / включите авторасписание');
       return;
     }
 
@@ -866,6 +879,13 @@ export default function TourForm({
         }
       }
 
+      const placeholderStart = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 7);
+        d.setHours(10, 0, 0, 0);
+        return d.toISOString();
+      })();
+
       const tourData = {
         ...formData,
         status: effectiveStatus,
@@ -873,8 +893,16 @@ export default function TourForm({
         price_per_person: parseFloat(formData.price_per_person),
         yandex_map_url: formData.yandex_map_url.trim() || null,
         description: formData.short_desc || formData.full_desc || '',
-        start_date: datetimeLocalInputToIso(formData.start_date) ?? formData.start_date,
-        end_date: datetimeLocalInputToIso(formData.end_date) ?? formData.end_date,
+        start_date: hasPrimaryDates
+          ? datetimeLocalInputToIso(formData.start_date) ?? formData.start_date
+          : mode === 'edit' && initialData?.start_date
+            ? initialData.start_date
+            : placeholderStart,
+        end_date: hasPrimaryDates
+          ? datetimeLocalInputToIso(formData.end_date) ?? formData.end_date
+          : mode === 'edit'
+            ? initialData?.end_date ?? null
+            : null,
         ...(mode === 'create' ? { id: undefined } : {}),
       };
       
@@ -964,60 +992,64 @@ export default function TourForm({
         }
       }
       
-      setLoadingStatus('Сохранение выездов (слотов)...');
-      const sessionsPayload = [
-        {
-          id: primarySessionId,
-          start_at: new Date(formData.start_date).toISOString(),
-          end_at: new Date(formData.end_date).toISOString(),
-          guide_id: primaryGuideId.trim() ? primaryGuideId.trim() : null,
-        },
-        ...extraDateRanges.map((range) => ({
-          id: range.id,
-          start_at: new Date(range.start_date).toISOString(),
-          end_at: new Date(range.end_date).toISOString(),
-          guide_id: range.guide_id?.trim() ? range.guide_id.trim() : null,
-        })),
-      ];
+      if (hasPrimaryDates) {
+        setLoadingStatus('Сохранение выездов (слотов)...');
+        const sessionsPayload = [
+          {
+            id: primarySessionId,
+            start_at: new Date(formData.start_date).toISOString(),
+            end_at: new Date(formData.end_date).toISOString(),
+            guide_id: primaryGuideId.trim() ? primaryGuideId.trim() : null,
+          },
+          ...extraDateRanges
+            .filter((range) => range.start_date?.trim() && range.end_date?.trim())
+            .map((range) => ({
+              id: range.id,
+              start_at: new Date(range.start_date).toISOString(),
+              end_at: new Date(range.end_date).toISOString(),
+              guide_id: range.guide_id?.trim() ? range.guide_id.trim() : null,
+            })),
+        ];
 
-      const syncResponse = await fetch(`/api/admin/tours/${tourId}/sessions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessions: sessionsPayload }),
-      });
+        const syncResponse = await fetch(`/api/admin/tours/${tourId}/sessions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessions: sessionsPayload }),
+        });
 
-      const syncResult = await syncResponse.json().catch(() => ({}));
+        const syncResult = await syncResponse.json().catch(() => ({}));
 
-      if (!syncResponse.ok) {
-        const syncErr =
-          (syncResult as { error?: string; details?: string }).error ||
-          (syncResult as { details?: string }).details ||
-          'Не удалось сохранить даты выездов (tour_sessions)';
+        if (!syncResponse.ok) {
+          const syncErr =
+            (syncResult as { error?: string; details?: string }).error ||
+            (syncResult as { details?: string }).details ||
+            'Не удалось сохранить даты выездов (tour_sessions)';
 
-        const guideBusy =
-          typeof syncErr === 'string' &&
-          /гид уже занят|guide/i.test(syncErr) &&
-          mode === 'create' &&
-          autoScheduleAfterSave;
+          const guideBusy =
+            typeof syncErr === 'string' &&
+            /гид уже занят|guide/i.test(syncErr) &&
+            mode === 'create' &&
+            autoScheduleAfterSave;
 
-        if (guideBusy) {
-          const retryPayload = sessionsPayload.map((s) => ({ ...s, guide_id: null }));
-          const retryRes = await fetch(`/api/admin/tours/${tourId}/sessions`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessions: retryPayload }),
-          });
-          const retryResult = await retryRes.json().catch(() => ({}));
-          if (!retryRes.ok) {
-            throw new Error(
-              (retryResult as { error?: string }).error ||
-                syncErr ||
-                'Не удалось сохранить выезды'
-            );
+          if (guideBusy) {
+            const retryPayload = sessionsPayload.map((s) => ({ ...s, guide_id: null }));
+            const retryRes = await fetch(`/api/admin/tours/${tourId}/sessions`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sessions: retryPayload }),
+            });
+            const retryResult = await retryRes.json().catch(() => ({}));
+            if (!retryRes.ok) {
+              throw new Error(
+                (retryResult as { error?: string }).error ||
+                  syncErr ||
+                  'Не удалось сохранить выезды'
+              );
+            }
+            toast('Гид был занят — слоты сохранены без гида, подбираем по шаблону…', { icon: 'ℹ️' });
+          } else {
+            throw new Error(syncErr);
           }
-          toast('Гид был занят — слоты сохранены без гида, подбираем по шаблону…', { icon: 'ℹ️' });
-        } else {
-          throw new Error(syncErr);
         }
       }
 
@@ -1315,7 +1347,7 @@ export default function TourForm({
           {/* Start Date */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Дата начала <span className="text-red-500">*</span>
+              Дата начала {!datesOptional && <span className="text-red-500">*</span>}
             </label>
             <input
               type="datetime-local"
@@ -1329,13 +1361,18 @@ export default function TourForm({
               }`}
             />
             <ErrorMessage message={errors.start_date && touched.start_date ? errors.start_date : undefined} />
+            {datesOptional && (
+              <p className="text-xs text-gray-500 mt-1">
+                Необязательно: даты подставит авторасписание или можно указать позже в черновике.
+              </p>
+            )}
           </div>
 
           {/* End Date */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="block text-sm font-medium text-gray-700">
-                Дата окончания <span className="text-red-500">*</span>
+                Дата окончания {!datesOptional && <span className="text-red-500">*</span>}
               </label>
               <button
                 type="button"
@@ -1395,7 +1432,12 @@ export default function TourForm({
             </label>
             <select
               value={formData.status}
-              onChange={(e) => handleFieldChange('status', e.target.value)}
+              onChange={(e) => {
+                handleFieldChange('status', e.target.value);
+                if (e.target.value === 'draft') {
+                  setErrors((prev) => ({ ...prev, start_date: undefined, end_date: undefined }));
+                }
+              }}
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-500 transition-all"
             >
               <option value="draft">📝 Черновик</option>
@@ -1426,7 +1468,16 @@ export default function TourForm({
                     type="checkbox"
                     className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     checked={autoScheduleAfterSave}
-                    onChange={(e) => setAutoScheduleAfterSave(e.target.checked)}
+                    onChange={(e) => {
+                      setAutoScheduleAfterSave(e.target.checked);
+                      if (e.target.checked) {
+                        setErrors((prev) => ({
+                          ...prev,
+                          start_date: undefined,
+                          end_date: undefined,
+                        }));
+                      }
+                    }}
                   />
                   <span>
                     <span className="font-semibold">Заполнить по шаблону сразу после сохранения</span>
