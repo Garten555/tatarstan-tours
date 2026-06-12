@@ -24,7 +24,16 @@ type BulkResult = {
   toursProcessed: number;
   totalSlotsAdded: number;
   failed: number;
-  results: Array<{ title: string; added: number; error?: string }>;
+  alreadyFull?: number;
+  activeGuides?: number;
+  results: Array<{
+    title: string;
+    added: number;
+    existingFuture?: number;
+    target?: number;
+    note?: string;
+    error?: string;
+  }>;
 };
 
 export default function TourAutoScheduleSettings() {
@@ -145,9 +154,26 @@ export default function TourAutoScheduleSettings() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Ошибка');
       setBulkResult(data);
-      toast.success(
-        `Готово: +${data.totalSlotsAdded} слотов по ${data.toursProcessed} турам`
-      );
+      if (data.totalSlotsAdded === 0) {
+        const guides = data.activeGuides ?? '?';
+        if (data.alreadyFull === data.toursProcessed) {
+          toast(
+            `Слотов не добавлено: у всех туров уже есть будущие выезды (лимит «слотов вперёд»). Гидов: ${guides}.`,
+            { icon: 'ℹ️' }
+          );
+        } else if (guides === 0) {
+          toast.error('Нет активных гидов (роль guide). Слоты не создаются.');
+        } else {
+          toast(
+            `+0 слотов. Гидов: ${guides}. Смотрите детали ниже — возможно, расписание уже заполнено или гиды заняты.`,
+            { icon: '⚠️' }
+          );
+        }
+      } else {
+        toast.success(
+          `Готово: +${data.totalSlotsAdded} слотов по ${data.toursProcessed} турам`
+        );
+      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Массовое заполнение не удалось');
     } finally {
@@ -438,12 +464,17 @@ export default function TourAutoScheduleSettings() {
           <p className="font-semibold text-gray-900 mb-2">
             Обработано туров: {bulkResult.toursProcessed}, добавлено слотов:{' '}
             {bulkResult.totalSlotsAdded}
-            {bulkResult.failed > 0 ? `, ошибок: ${bulkResult.failed}` : ''}
+            {bulkResult.activeGuides != null ? ` · гидов: ${bulkResult.activeGuides}` : ''}
+            {bulkResult.failed > 0 ? ` · ошибок: ${bulkResult.failed}` : ''}
           </p>
           <ul className="space-y-1 max-h-48 overflow-y-auto text-gray-700">
             {bulkResult.results.map((r, i) => (
               <li key={i}>
                 {r.title}: +{r.added}
+                {r.existingFuture != null && r.target != null && r.added === 0
+                  ? ` (сейчас ${r.existingFuture}/${r.target})`
+                  : ''}
+                {r.note ? ` — ${r.note}` : ''}
                 {r.error ? ` — ${r.error}` : ''}
               </li>
             ))}

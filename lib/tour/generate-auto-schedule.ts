@@ -11,12 +11,13 @@ export type ExistingTourSession = {
   start_at: string;
   end_at: string | null;
   guide_id?: string | null;
+  status?: string;
 };
 
 export type GeneratedSlot = {
   start_at: string;
   end_at: string;
-  guide_id: string;
+  guide_id: string | null;
 };
 
 export type GenerateScheduleResult = {
@@ -25,17 +26,25 @@ export type GenerateScheduleResult = {
   targetSlots: number;
   skippedNoGuide: number;
   skippedDuplicate: number;
+  /** Почему новых слотов 0 (для UI). */
+  zeroReason?: 'already_full' | 'no_guides' | 'no_free_days';
 };
 
 function countFutureSessions(sessions: ExistingTourSession[], nowMs: number): number {
-  return sessions.filter((s) => new Date(s.start_at).getTime() > nowMs).length;
+  return sessions.filter((s) => {
+    if ((s as { status?: string }).status === 'cancelled') return false;
+    return new Date(s.start_at).getTime() > nowMs;
+  }).length;
 }
 
 function tourHasSlotAt(
   sessions: ExistingTourSession[],
   startIso: string
 ): boolean {
-  return sessions.some((s) => sameInstant(s.start_at, startIso));
+  return sessions.some((s) => {
+    if (s.status === 'cancelled') return false;
+    return sameInstant(s.start_at, startIso);
+  });
 }
 
 /**
@@ -54,6 +63,21 @@ export function generateTourScheduleSlots(params: {
 
   const existingFutureCount = countFutureSessions(existingSessions, nowMs);
   const need = Math.max(0, config.slots_ahead - existingFutureCount);
+
+  if (need === 0) {
+    return {
+      newSlots: [],
+      existingFutureCount,
+      targetSlots: config.slots_ahead,
+      skippedNoGuide: 0,
+      skippedDuplicate: 0,
+      zeroReason: 'already_full',
+    };
+  }
+
+  if (guideIds.length === 0) {
+    // Слоты без гида — потом назначат вручную или при появлении гидов.
+  }
 
   const newSlots: GeneratedSlot[] = [];
   let skippedNoGuide = 0;
@@ -128,13 +152,13 @@ export function generateTourScheduleSlots(params: {
         cursor.weekday
       );
 
-      if (!guideId) {
+      if (guideId) {
+        roundRobinIndex += 1;
+        busyCounts.set(guideId, (busyCounts.get(guideId) ?? 0) + 1);
+      } else if (guideIds.length > 0) {
         skippedNoGuide += 1;
         continue;
       }
-
-      roundRobinIndex += 1;
-      busyCounts.set(guideId, (busyCounts.get(guideId) ?? 0) + 1);
 
       const slot: GeneratedSlot = {
         start_at: startIso,
@@ -146,14 +170,24 @@ export function generateTourScheduleSlots(params: {
         start_at: startIso,
         end_at: endIso,
         guide_id: guideId,
+        status: 'active',
       });
-      mutableBusy.push({
-        id: `draft-${newSlots.length}`,
-        guide_id: guideId,
-        start_at: startIso,
-        end_at: endIso,
-      });
+      if (guideId) {
+        mutableBusy.push({
+          id: `draft-${newSlots.length}`,
+          guide_id: guideId,
+          start_at: startIso,
+          end_at: endIso,
+        });
+      }
     }
+  }
+
+  let zeroReason: GenerateScheduleResult['zeroReason'];
+  if (newSlots.length === 0) {
+    if (guideIds.length === 0) zeroReason = 'no_guides';
+    else if (skippedNoGuide > 0) zeroReason = 'no_free_days';
+    else zeroReason = 'no_free_days';
   }
 
   return {
@@ -162,5 +196,6 @@ export function generateTourScheduleSlots(params: {
     targetSlots: config.slots_ahead,
     skippedNoGuide,
     skippedDuplicate,
+    zeroReason,
   };
 }

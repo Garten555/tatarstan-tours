@@ -74,12 +74,15 @@ export async function runAutoScheduleForTour(
     };
   }
 
-  const existingSessions = (existing ?? []).map((r) => ({
-    id: (r as { id: string }).id,
-    start_at: (r as { start_at: string }).start_at,
-    end_at: (r as { end_at: string | null }).end_at ?? null,
-    guide_id: (r as { guide_id?: string | null }).guide_id ?? null,
-  }));
+  const existingSessions = (existing ?? [])
+    .filter((r) => (r as { status?: string }).status !== 'cancelled')
+    .map((r) => ({
+      id: (r as { id: string }).id,
+      start_at: (r as { start_at: string }).start_at,
+      end_at: (r as { end_at: string | null }).end_at ?? null,
+      guide_id: (r as { guide_id?: string | null }).guide_id ?? null,
+      status: (r as { status?: string }).status,
+    }));
 
   const guideIds = await loadActiveGuideIds(serviceClient);
   const busySessions = await loadBusyGuideSessions(
