@@ -59,10 +59,10 @@ const nextConfig: NextConfig = {
       'pusher-js',
     ],
     /**
-     * Middleware на /api/*: Next буферизует тело (дефолт 10MB). Видео до 100MB → обрезка → FormData падает.
+     * Middleware на /api/*: Next буферизует тело (дефолт 10MB). Видео тура до 500MB → нужен запас.
      * В Next 16 лимит задаётся через proxyClientMaxBodySize (см. предупреждение сборки про middlewareClientMaxBodySize).
      */
-    proxyClientMaxBodySize: '110mb',
+    proxyClientMaxBodySize: '520mb',
   },
   allowedDevOrigins: parseAllowedDevOrigins(),
   async redirects() {

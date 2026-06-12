@@ -54,3 +54,6 @@ export function sortCatalogTourRows<T extends Record<string, unknown>>(
     return (ta - tb) * dir;
   });
 }
+
+/** Туров на одной странице публичного каталога /tours */
+export const CATALOG_TOURS_PER_PAGE = 6;

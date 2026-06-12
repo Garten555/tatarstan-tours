@@ -17,10 +17,14 @@ import {
 import { isDepartureStillInFuture } from '@/lib/tour/session-bookable';
 import TourAutoScheduleButton from '@/components/admin/TourAutoScheduleButton';
 
-/** Согласовано с подписью в форме и лимитом в app/api/upload/route.ts */
-const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
-
+import {
+  formatMaxMb,
+  MAX_IMAGE_BYTES,
+  MAX_TOUR_ADMIN_VIDEO_BYTES,
+} from '@/lib/upload/file-size-limits';
 import { isoToDatetimeLocalInput, datetimeLocalInputToIso } from '@/lib/date/tour-timestamp';
+
+const TOUR_VIDEO_ACCEPT = 'video/mp4,video/webm,video/quicktime,video/x-msvideo';
 
 const isoToDatetimeLocal = isoToDatetimeLocalInput;
 
@@ -439,8 +443,11 @@ export default function TourForm({
     const file = e.target.files?.[0];
     if (!file) return;
     
-    if (file.size > 10 * 1024 * 1024) {
-      setErrors(prev => ({ ...prev, cover_image: 'Файл слишком большой (максимум 10 МБ)' }));
+    if (file.size > MAX_IMAGE_BYTES) {
+      setErrors(prev => ({
+        ...prev,
+        cover_image: `Файл слишком большой (максимум ${formatMaxMb(MAX_IMAGE_BYTES)})`,
+      }));
       return;
     }
     
@@ -484,6 +491,17 @@ export default function TourForm({
   const handleGalleryChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
+
+    const oversized = files.filter((f) => f.size > MAX_IMAGE_BYTES);
+    if (oversized.length > 0) {
+      toast.error(
+        oversized.length === 1
+          ? `Фото «${oversized[0].name}» больше ${formatMaxMb(MAX_IMAGE_BYTES)}`
+          : `Фото больше ${formatMaxMb(MAX_IMAGE_BYTES)}: ${oversized.map((f) => f.name).join(', ')}`
+      );
+      e.target.value = '';
+      return;
+    }
     
     try {
       setUploadBusy(true);
@@ -539,12 +557,13 @@ export default function TourForm({
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    const oversized = files.filter((f) => f.size > MAX_VIDEO_BYTES);
+    const oversized = files.filter((f) => f.size > MAX_TOUR_ADMIN_VIDEO_BYTES);
     if (oversized.length > 0) {
+      const limitLabel = formatMaxMb(MAX_TOUR_ADMIN_VIDEO_BYTES);
       toast.error(
         oversized.length === 1
-          ? `Файл «${oversized[0].name}» больше 100 МБ`
-          : `Превышен лимит 100 МБ: ${oversized.map((f) => f.name).join(', ')}`
+          ? `Файл «${oversized[0].name}» больше ${limitLabel}`
+          : `Превышен лимит ${limitLabel}: ${oversized.map((f) => f.name).join(', ')}`
       );
       e.target.value = '';
       return;
@@ -1657,14 +1676,14 @@ export default function TourForm({
               </span>
               <input
                 type="file"
-                accept="video/*"
+                accept={TOUR_VIDEO_ACCEPT}
                 multiple
                 onChange={handleVideoChange}
                 className="hidden"
               />
             </label>
             <p className="text-xs text-gray-500">
-              Видео будет отображаться на странице тура. Максимум 100 МБ на файл
+              Видео на странице тура: MP4, WebM или MOV, до {formatMaxMb(MAX_TOUR_ADMIN_VIDEO_BYTES)} на файл. Фото и обложка — до {formatMaxMb(MAX_IMAGE_BYTES)}.
             </p>
           </div>
         </div>

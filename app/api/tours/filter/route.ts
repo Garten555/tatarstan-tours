@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
 import { dedupeTourRowsForCatalog } from '@/lib/tours/listing-dedupe';
-import { sortCatalogTourRows } from '@/lib/tours/catalog-sort';
+import { CATALOG_TOURS_PER_PAGE, sortCatalogTourRows } from '@/lib/tours/catalog-sort';
 import { filterCatalogToursByUpcomingSessions } from '@/lib/tours/tour-public-visibility';
 
 // Динамический роут (использует searchParams)
@@ -30,7 +30,10 @@ export async function GET(request: NextRequest) {
     if (sortBy === 'price') sortBy = 'price_per_person';
     const sortOrder = searchParams.get('sort_order') === 'asc' ? 'asc' : 'desc';
     const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
-    const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') || '10')), 50); // Максимум 50, минимум 1
+    const limit = Math.min(
+      Math.max(1, parseInt(searchParams.get('limit') || String(CATALOG_TOURS_PER_PAGE), 10)),
+      50
+    );
     const offset = (page - 1) * limit;
 
     // Начинаем запрос

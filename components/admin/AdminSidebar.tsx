@@ -190,7 +190,7 @@ export default function AdminSidebar({ userRole, userName, avatarUrl }: AdminSid
 
       {/* Sidebar */}
       <div 
-        className={`sticky top-0 bg-gradient-to-b from-gray-900 via-gray-900 to-gray-950 text-white flex flex-col h-screen transition-all duration-300 relative flex-shrink-0 shadow-2xl z-50 ${
+        className={`sticky top-0 bg-gradient-to-b from-gray-900 via-gray-900 to-gray-950 text-white flex flex-col h-full min-h-0 transition-all duration-300 relative flex-shrink-0 shadow-2xl z-50 ${
           isCollapsed ? 'w-16 sm:w-20' : 'w-64 sm:w-72'
         }`}
       >

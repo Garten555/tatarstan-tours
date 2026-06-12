@@ -18,7 +18,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { sanitizeText } from '@/lib/utils/sanitize';
-import { parseClientSortParam } from '@/lib/tours/catalog-sort';
+import { CATALOG_TOURS_PER_PAGE, parseClientSortParam } from '@/lib/tours/catalog-sort';
 
 interface Tour {
   id: string;
@@ -123,7 +123,7 @@ function ToursPageContent() {
       params.set('sort_by', sortField);
       params.set('sort_order', sortOrder);
       params.set('page', page.toString());
-      params.set('limit', '10');
+      params.set('limit', String(CATALOG_TOURS_PER_PAGE));
 
       const response = await fetch(`/api/tours/filter?${params.toString()}`);
       if (!response.ok) throw new Error('Ошибка загрузки туров');

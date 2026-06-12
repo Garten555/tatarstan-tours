@@ -2,12 +2,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadFileToS3, generateUniqueFileName } from '@/lib/s3/upload';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
-
-// Максимальный размер файла
-const MAX_FILE_SIZE = {
-  image: 10 * 1024 * 1024, // 10MB
-  video: 100 * 1024 * 1024, // 100MB
-};
+import {
+  formatMaxMb,
+  MAX_IMAGE_BYTES,
+  maxVideoBytesForFolder,
+} from '@/lib/upload/file-size-limits';
 
 // Разрешённые типы файлов
 const ALLOWED_TYPES = {
@@ -103,12 +102,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Проверка размера файла
-    const maxSize = isVideo ? MAX_FILE_SIZE.video : MAX_FILE_SIZE.image;
+    // Проверка размера файла (изображения — строго 10 МБ; видео тура — до 500 МБ)
+    const maxSize = isVideo ? maxVideoBytesForFolder(folder) : MAX_IMAGE_BYTES;
     if (file.size > maxSize) {
       return NextResponse.json(
         {
-          error: `Файл слишком большой. Максимум ${isVideo ? '100MB' : '10MB'}`,
+          error: `Файл слишком большой. Максимум ${formatMaxMb(maxSize)}`,
         },
         { status: 400 }
       );

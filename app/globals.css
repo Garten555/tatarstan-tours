@@ -186,6 +186,13 @@ body {
   min-width: 0;
 }
 
+/* Админка: одна прокрутка только в <main>, без второго скроллбара у окна */
+html:has(.admin-shell),
+body:has(.admin-shell) {
+  height: 100%;
+  overflow: hidden;
+}
+
 /* Container max-width */
 .container {
   max-width: min(1280px, 100%);
