@@ -17,6 +17,8 @@ import {
   scheduleIssueMessage,
   type BusyGuideSession,
 } from '@/lib/tour/guide-schedule-conflict';
+import { loadTourAutoScheduleConfig } from '@/lib/tour/auto-schedule-settings';
+import { listGuidesRestingOnDay } from '@/lib/tour/guide-rest-display';
 import { sessionEndMs } from '@/lib/tour/schedule-slot';
 
 type SessionRow = {
@@ -239,6 +241,53 @@ export async function GET(request: NextRequest) {
 
     const legacyWeekStart = parseMoscowDayKey(weekParam) ?? currentMoscowWeekStart();
 
+    const scheduleTemplate =
+      auth.role === 'tour_admin' || auth.role === 'super_admin'
+        ? await loadTourAutoScheduleConfig(serviceClient)
+        : null;
+
+    let restByDay: Record<
+      string,
+      Array<{ id: string; name: string; kind: 'fixed' | 'rotation' }>
+    > = {};
+
+    if (
+      scheduleTemplate &&
+      guides.length > 0 &&
+      (auth.role === 'tour_admin' || auth.role === 'super_admin')
+    ) {
+      const { data: allGuideSessions } = await serviceClient
+        .from('tour_sessions')
+        .select('guide_id, start_at')
+        .gte('start_at', from)
+        .lt('start_at', to)
+        .neq('status', 'cancelled')
+        .not('guide_id', 'is', null);
+
+      const guideIdsByDay = new Map<string, Set<string>>();
+      for (const row of allGuideSessions ?? []) {
+        const gid = (row as { guide_id: string }).guide_id;
+        const key = sessionMoscowDayKey((row as { start_at: string }).start_at);
+        const set = guideIdsByDay.get(key) ?? new Set<string>();
+        set.add(gid);
+        guideIdsByDay.set(key, set);
+      }
+
+      const guideNameMap = new Map(guides.map((g) => [g.id, g.name]));
+      const guideIdList = guides.map((g) => g.id);
+
+      for (const cell of calendarCells) {
+        restByDay[cell.key] = listGuidesRestingOnDay({
+          dayKey: cell.key,
+          weekday: cell.weekday,
+          guideIds: guideIdList,
+          guideNames: guideNameMap,
+          config: scheduleTemplate,
+          guideIdsWithSessions: guideIdsByDay.get(cell.key) ?? new Set(),
+        });
+      }
+    }
+
     return NextResponse.json({
       mode: useMonth ? 'month' : 'week',
       month: monthKey,
@@ -254,6 +303,8 @@ export async function GET(request: NextRequest) {
       days: moscowWeekDays(legacyWeekStart).map((d) => ({ key: d.key, weekday: d.weekday })),
       sessions,
       guides,
+      schedule_template: scheduleTemplate,
+      rest_by_day: restByDay,
       buffer_minutes: GUIDE_BETWEEN_TOURS_BUFFER_MINUTES,
       viewer: { role: auth.role, user_id: auth.user.id },
     });

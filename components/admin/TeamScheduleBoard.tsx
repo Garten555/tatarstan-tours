@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -13,6 +13,10 @@ import {
   User,
 } from 'lucide-react';
 import { formatDayMonthYearRu, formatTimeRu } from '@/lib/date/format-ru';
+import type { TourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
+import {
+  guideRestKindLabel,
+} from '@/lib/tour/guide-rest-display';
 import { moscowNowParts } from '@/lib/tour/moscow-wall-clock';
 import { currentMoscowDay, moscowDayKey, shiftMoscowMonth } from '@/lib/tour/team-schedule-range';
 import { sessionEndMs } from '@/lib/tour/schedule-slot';
@@ -62,6 +66,8 @@ type EnrichedScheduleSession = ScheduleSession & { time_phase: SessionTimePhase 
 
 type TimeFilter = 'all' | SessionTimePhase;
 
+type GuideRestEntry = { id: string; name: string; kind: 'fixed' | 'rotation' };
+
 type ScheduleResponse = {
   month: string;
   today: string;
@@ -69,9 +75,13 @@ type ScheduleResponse = {
   day_markers: Record<string, DayMarker>;
   sessions: ScheduleSession[];
   guides: Array<{ id: string; name: string }>;
+  schedule_template: TourAutoScheduleConfig | null;
+  rest_by_day: Record<string, GuideRestEntry[]>;
   buffer_minutes: number;
   viewer: { role: string; user_id: string };
 };
+
+const FETCH_TIMEOUT_MS = 25_000;
 
 const WEEKDAY_SHORT = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'];
 const MONTH_NAMES = [
@@ -265,9 +275,12 @@ export default function TeamScheduleBoard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [shiftSession, setShiftSession] = useState<ScheduleSession | null>(null);
+  const fetchGenRef = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const isAdmin = viewerRole === 'tour_admin' || viewerRole === 'super_admin';
   const bufferMinutes = data?.buffer_minutes ?? 60;
+  const calendarStale = loading || !data || data.month !== viewMonth;
 
   const todayKey = useMemo(() => {
     const now = moscowNowParts();
@@ -275,30 +288,60 @@ export default function TeamScheduleBoard({
   }, []);
 
   const loadSchedule = useCallback(async () => {
+    const gen = ++fetchGenRef.current;
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
     setError(null);
+
+    const timeoutId = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
     try {
       const params = new URLSearchParams({ month: viewMonth });
       if (isAdmin && guideFilter !== 'all') {
         params.set('guide_id', guideFilter);
       }
-      const res = await fetch(`/api/admin/team-schedule?${params.toString()}`);
+      const res = await fetch(`/api/admin/team-schedule?${params.toString()}`, {
+        signal: controller.signal,
+        cache: 'no-store',
+      });
       const json = await res.json();
+      if (gen !== fetchGenRef.current) return;
       if (!res.ok) {
         throw new Error(json.error || 'Не удалось загрузить расписание');
       }
       setData(json as ScheduleResponse);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Ошибка загрузки');
-      setData(null);
+      if (gen !== fetchGenRef.current) return;
+      if (e instanceof DOMException && e.name === 'AbortError') {
+        setError('Превышено время ожидания. Нажмите «Сегодня» или смените месяц.');
+      } else {
+        setError(e instanceof Error ? e.message : 'Ошибка загрузки');
+      }
     } finally {
-      setLoading(false);
+      window.clearTimeout(timeoutId);
+      if (gen === fetchGenRef.current) {
+        setLoading(false);
+      }
     }
   }, [viewMonth, guideFilter, isAdmin]);
 
   useEffect(() => {
-    loadSchedule();
+    void loadSchedule();
+    return () => {
+      abortRef.current?.abort();
+    };
   }, [loadSchedule]);
+
+  const restingByDay = useMemo(() => {
+    const map = new Map<string, GuideRestEntry[]>();
+    for (const [key, list] of Object.entries(data?.rest_by_day ?? {})) {
+      map.set(key, list);
+    }
+    return map;
+  }, [data?.rest_by_day]);
 
   const enrichedSessions = useMemo((): EnrichedScheduleSession[] => {
     const nowMs = Date.now();
@@ -320,6 +363,16 @@ export default function TeamScheduleBoard({
 
   const selectedSessions = sessionsByDay.get(selectedDay) ?? [];
   const selectedMarker = dayMarkers[selectedDay];
+  const selectedResting =
+    isAdmin && guideFilter === 'all'
+      ? (restingByDay.get(selectedDay) ?? [])
+      : [];
+  const selectedGuideRest = useMemo(() => {
+    if (!isAdmin || guideFilter === 'all' || guideFilter === 'unassigned') {
+      return null;
+    }
+    return (restingByDay.get(selectedDay) ?? []).find((r) => r.id === guideFilter)?.kind ?? null;
+  }, [isAdmin, guideFilter, selectedDay, restingByDay]);
   const issueCount = filteredSessions.filter((s) => s.schedule_issue).length;
   const totalSessions = filteredSessions.length;
   const endedCount = enrichedSessions.filter((s) => s.time_phase === 'ended').length;
@@ -450,8 +503,15 @@ export default function TeamScheduleBoard({
       </div>
 
       {error && (
-        <div className="rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800">
-          {error}
+        <div className="rounded-xl border-2 border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800 flex flex-wrap items-center justify-between gap-2">
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => void loadSchedule()}
+            className="rounded-lg bg-red-100 px-3 py-1.5 text-xs font-bold text-red-900 hover:bg-red-200"
+          >
+            Повторить
+          </button>
         </div>
       )}
 
@@ -472,7 +532,7 @@ export default function TeamScheduleBoard({
             ))}
           </div>
 
-          {loading && !data ? (
+          {calendarStale ? (
             <div className="py-16 text-center text-sm text-gray-500">Загрузка календаря…</div>
           ) : (
             <div className="grid grid-cols-7 gap-1">
@@ -483,21 +543,30 @@ export default function TeamScheduleBoard({
                 const hasTours = (marker?.count ?? 0) > 0;
                 const hasIssue = marker?.has_overlap || marker?.has_buffer;
                 const accent = dayMarkerAccent(marker);
+                const resting = restingByDay.get(cell.key) ?? [];
+                const guideOnRestDay =
+                  isAdmin &&
+                  guideFilter !== 'all' &&
+                  guideFilter !== 'unassigned' &&
+                  !hasTours &&
+                  resting.some((r) => r.id === guideFilter);
 
                 const cellClass =
                   isSelected
                     ? 'border-emerald-500 bg-emerald-50 shadow-md ring-2 ring-emerald-200'
-                    : accent === 'overlap'
-                      ? 'border-red-300 bg-red-50/50 hover:border-red-400'
-                      : accent === 'buffer'
-                        ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400'
-                        : accent === 'ongoing'
-                          ? 'border-blue-300 bg-blue-50/40 hover:border-blue-400'
-                          : accent === 'ended'
-                            ? 'border-slate-300 bg-slate-100/70 hover:border-slate-400'
-                            : accent === 'upcoming'
-                              ? 'border-emerald-200 bg-emerald-50/40 hover:border-emerald-300'
-                              : 'border-transparent bg-gray-50/80 hover:border-gray-200 hover:bg-white';
+                    : guideOnRestDay
+                      ? 'border-slate-300 bg-slate-100/90 hover:border-slate-400'
+                      : accent === 'overlap'
+                        ? 'border-red-300 bg-red-50/50 hover:border-red-400'
+                        : accent === 'buffer'
+                          ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400'
+                          : accent === 'ongoing'
+                            ? 'border-blue-300 bg-blue-50/40 hover:border-blue-400'
+                            : accent === 'ended'
+                              ? 'border-slate-300 bg-slate-100/70 hover:border-slate-400'
+                              : accent === 'upcoming'
+                                ? 'border-emerald-200 bg-emerald-50/40 hover:border-emerald-300'
+                                : 'border-transparent bg-gray-50/80 hover:border-gray-200 hover:bg-white';
 
                 const dotClass =
                   accent === 'overlap'
@@ -571,6 +640,18 @@ export default function TeamScheduleBoard({
                         ) : null}
                       </div>
                     )}
+
+                    {!hasTours && guideOnRestDay && (
+                      <span className="mt-auto text-[9px] font-bold leading-tight text-slate-600">
+                        отдых
+                      </span>
+                    )}
+
+                    {!hasTours && !guideOnRestDay && isAdmin && guideFilter === 'all' && resting.length > 0 && (
+                      <span className="mt-auto text-[9px] font-bold leading-tight text-slate-600">
+                        отдых: {resting.length}
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -598,6 +679,12 @@ export default function TeamScheduleBoard({
               <span className="h-2 w-2 rounded-full bg-red-500" />
               Пересечение
             </span>
+            {isAdmin && (
+              <span className="flex items-center gap-1.5 text-slate-600">
+                <span className="h-2 w-2 rounded-full bg-slate-400" />
+                Отдых гида (по шаблону)
+              </span>
+            )}
           </div>
         </div>
 
@@ -610,9 +697,11 @@ export default function TeamScheduleBoard({
             <p className="text-sm font-medium text-gray-600">{weekdayLabelForDayKey(selectedDay)}</p>
             <p className="mt-1 text-sm text-gray-600">
               {selectedSessions.length === 0
-                ? timeFilter === 'all'
-                  ? 'Нет выездов'
-                  : 'Нет выездов с выбранным фильтром'
+                ? selectedGuideRest
+                  ? `Отдых · ${guideRestKindLabel(selectedGuideRest)}`
+                  : timeFilter === 'all'
+                    ? 'Нет выездов'
+                    : 'Нет выездов с выбранным фильтром'
                 : selectedMarker?.has_overlap
                   ? `${tourCountLabel(selectedSessions.length)} · есть пересечения`
                   : selectedMarker?.has_buffer
@@ -621,18 +710,43 @@ export default function TeamScheduleBoard({
             </p>
           </div>
 
-          {loading ? (
+          {isAdmin && selectedResting.length > 0 && (
+            <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-600">
+                Отдыхают ({selectedResting.length})
+              </p>
+              <ul className="space-y-1 text-sm text-slate-800">
+                {selectedResting.map((g) => (
+                  <li key={g.id} className="flex flex-wrap items-center gap-2">
+                    <User className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                    <span className="font-semibold">{g.name}</span>
+                    <span className="text-xs text-slate-500">{guideRestKindLabel(g.kind)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {calendarStale ? (
             <div className="py-12 text-center text-sm text-gray-500">Загрузка…</div>
           ) : selectedSessions.length === 0 ? (
             <div className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 py-12 text-center">
               <CalendarDays className="mx-auto mb-3 h-10 w-10 text-gray-300" />
               <p className="text-sm font-semibold text-gray-500">
-                {timeFilter === 'all' ? 'В этот день туров нет' : 'Нет туров с выбранным фильтром'}
+                {selectedGuideRest
+                  ? 'У выбранного гида выходной по шаблону'
+                  : timeFilter === 'all'
+                    ? 'В этот день туров нет'
+                    : 'Нет туров с выбранным фильтром'}
               </p>
               <p className="mt-1 text-xs text-gray-400">
-                {timeFilter === 'all'
-                  ? 'Выберите день с меткой или фильтр «Завершены» для прошедших выездов'
-                  : 'Попробуйте «Все выезды» или другой статус'}
+                {selectedGuideRest
+                  ? guideRestKindLabel(selectedGuideRest)
+                  : timeFilter === 'all'
+                    ? selectedResting.length > 0
+                      ? 'Список отдыхающих — выше'
+                      : 'Выберите день с меткой или фильтр «Завершены» для прошедших выездов'
+                    : 'Попробуйте «Все выезды» или другой статус'}
               </p>
             </div>
           ) : (
