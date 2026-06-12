@@ -1,9 +1,10 @@
 import type { TourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
 import { parseTimeHHmm } from '@/lib/tour/auto-schedule-config';
 import type { BusyGuideSession } from '@/lib/tour/guide-schedule-conflict';
-import { guideHasConflict } from '@/lib/tour/guide-schedule-conflict';
 import { addMoscowCalendarDays, moscowNowParts, moscowWallClockToIso } from '@/lib/tour/moscow-wall-clock';
-import { sameInstant, sessionEndMs } from '@/lib/tour/schedule-slot';
+import { pickGuideForSlot } from '@/lib/tour/pick-guide-for-slot';
+import { sessionMoscowDayKey } from '@/lib/tour/session-moscow-day';
+import { sameInstant } from '@/lib/tour/schedule-slot';
 
 export type ExistingTourSession = {
   id?: string;
@@ -35,36 +36,6 @@ function tourHasSlotAt(
   startIso: string
 ): boolean {
   return sessions.some((s) => sameInstant(s.start_at, startIso));
-}
-
-function pickGuide(
-  guideIds: string[],
-  busy: BusyGuideSession[],
-  startMs: number,
-  endMs: number,
-  config: TourAutoScheduleConfig,
-  busyCounts: Map<string, number>,
-  roundRobinIndex: number
-): string | null {
-  if (guideIds.length === 0) return null;
-
-  const free = guideIds.filter(
-    (id) => !guideHasConflict(busy, id, startMs, endMs)
-  );
-  if (free.length === 0) return null;
-
-  if (config.guide_strategy === 'round_robin') {
-    const ordered = [...free].sort((a, b) => a.localeCompare(b));
-    return ordered[roundRobinIndex % ordered.length];
-  }
-
-  free.sort((a, b) => {
-    const ca = busyCounts.get(a) ?? 0;
-    const cb = busyCounts.get(b) ?? 0;
-    if (ca !== cb) return ca - cb;
-    return a.localeCompare(b);
-  });
-  return free[0];
 }
 
 /**
@@ -145,14 +116,16 @@ export function generateTourScheduleSlots(params: {
       ).toISOString();
       const endMs = new Date(endIso).getTime();
 
-      const guideId = pickGuide(
+      const guideId = pickGuideForSlot(
         guideIds,
         mutableBusy,
         startMs,
         endMs,
         config,
         busyCounts,
-        roundRobinIndex
+        roundRobinIndex,
+        sessionMoscowDayKey(startIso),
+        cursor.weekday
       );
 
       if (!guideId) {

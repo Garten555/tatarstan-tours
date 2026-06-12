@@ -5,6 +5,7 @@ import { Loader2, Play, Plus, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { TourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
 import {
+  complementTourWeekdays,
   durationMinutesToParts,
   durationPartsToMinutes,
 } from '@/lib/tour/auto-schedule-config';
@@ -56,7 +57,22 @@ export default function TourAutoScheduleSettings() {
     const set = new Set(config.weekdays);
     if (set.has(day)) set.delete(day);
     else set.add(day);
-    setConfig({ ...config, weekdays: [...set].sort((a, b) => a - b) });
+    const weekdays = [...set].sort((a, b) => a - b);
+    setConfig({
+      ...config,
+      weekdays,
+      guide_rest_weekdays: config.guide_rest_auto
+        ? complementTourWeekdays(weekdays)
+        : config.guide_rest_weekdays,
+    });
+  };
+
+  const toggleGuideRestDay = (day: number) => {
+    if (!config || config.guide_rest_auto) return;
+    const set = new Set(config.guide_rest_weekdays);
+    if (set.has(day)) set.delete(day);
+    else set.add(day);
+    setConfig({ ...config, guide_rest_weekdays: [...set].sort((a, b) => a - b) });
   };
 
   const updateStartTime = (index: number, value: string) => {
@@ -155,13 +171,13 @@ export default function TourAutoScheduleSettings() {
           <h2 className="text-lg font-bold text-gray-900">Общий шаблон</h2>
           <p className="text-sm text-gray-600 mt-1">
             Один раз настроили — для каждого тура «Заполнить по шаблону» или кнопка ниже для всех
-            туров сразу (черновики, активные и завершённые). Завершённый тур снова станет активным,
-            если добавятся новые слоты. Гиды подбираются автоматически.
+            туров сразу. Гиды подбираются с учётом занятости и выходных: минимум один день отдыха
+            в неделю, на туровых днях — по очереди.
           </p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Дни недели</label>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Рабочие дни туров</label>
           <div className="flex flex-wrap gap-2">
             {WEEKDAY_OPTIONS.map((d) => {
               const on = config.weekdays.includes(d.value);
@@ -181,6 +197,91 @@ export default function TourAutoScheduleSettings() {
               );
             })}
           </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 space-y-4">
+          <div>
+            <h3 className="text-sm font-bold text-gray-900">Выходные гидов</h3>
+            <p className="text-xs text-gray-600 mt-1">
+              Если туры только в сб/вс — отдых гидов в пн–пт. На туровых днях гиды чередуются,
+              чтобы не все работали каждую субботу и воскресенье.
+            </p>
+          </div>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={config.guide_rest_auto}
+              onChange={(e) => {
+                const guide_rest_auto = e.target.checked;
+                setConfig({
+                  ...config,
+                  guide_rest_auto,
+                  guide_rest_weekdays: guide_rest_auto
+                    ? complementTourWeekdays(config.weekdays)
+                    : config.guide_rest_weekdays,
+                });
+              }}
+              className="mt-1"
+            />
+            <span className="text-sm text-gray-800">
+              <span className="font-semibold">Авто под рабочие дни</span> — отдых в днях без туров
+            </span>
+          </label>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Дни отдыха гида
+              {config.guide_rest_auto && (
+                <span className="ml-2 text-xs font-normal text-gray-500">
+                  (обновляются автоматически)
+                </span>
+              )}
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {WEEKDAY_OPTIONS.map((d) => {
+                const on = config.guide_rest_weekdays.includes(d.value);
+                const isTourDay = config.weekdays.includes(d.value);
+                return (
+                  <button
+                    key={`rest-${d.value}`}
+                    type="button"
+                    disabled={config.guide_rest_auto}
+                    onClick={() => toggleGuideRestDay(d.value)}
+                    className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-colors ${
+                      on
+                        ? 'bg-slate-600 text-white border-slate-600'
+                        : 'bg-white text-gray-700 border-gray-300 hover:border-slate-300'
+                    } ${config.guide_rest_auto ? 'opacity-80 cursor-default' : ''} ${
+                      isTourDay && on ? 'ring-2 ring-amber-300' : ''
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
+            {config.weekdays.some((d) => config.guide_rest_weekdays.includes(d)) && (
+              <p className="text-xs text-amber-800 mt-2">
+                Совпадают с туровыми днями — на них действует только чередование, не полный отдых.
+              </p>
+            )}
+          </div>
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={config.guide_rotate_rest_on_tour_days}
+              onChange={(e) =>
+                setConfig({ ...config, guide_rotate_rest_on_tour_days: e.target.checked })
+              }
+              className="mt-1"
+            />
+            <span className="text-sm text-gray-800">
+              <span className="font-semibold">Чередовать отдых на туровых днях</span> — при двух и
+              более гидах не все работают каждую субботу/воскресенье
+            </span>
+          </label>
         </div>
 
         <div className="grid md:grid-cols-2 gap-4">
