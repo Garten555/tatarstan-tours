@@ -1,7 +1,7 @@
 // Страница управления комнатами туров и назначения гидов
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { 
   Search, 
@@ -16,6 +16,8 @@ import {
   DoorOpen,
   Info,
   Timer,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { escapeHtml } from '@/lib/utils/sanitize';
@@ -64,6 +66,7 @@ interface TourRoom {
 }
 
 const AUTO_CLEANUP_STORAGE_KEY = 'admin-tour-rooms-auto-cleanup-ts';
+const ROOMS_PER_PAGE = 10;
 
 function tourPublicViewHref(room: TourRoom): string {
   const slug = room.tour.slug?.trim();
@@ -108,6 +111,7 @@ export default function TourRoomsPage() {
   const [deleteAllLoading, setDeleteAllLoading] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<TourRoomsConfirm>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     let cancelled = false;
@@ -423,6 +427,24 @@ export default function TourRoomsPage() {
 
   const listBusy = loading;
 
+  const totalFiltered = filteredRooms.length;
+  const totalPages = Math.max(1, Math.ceil(totalFiltered / ROOMS_PER_PAGE));
+
+  const paginatedRooms = useMemo(() => {
+    const start = (page - 1) * ROOMS_PER_PAGE;
+    return filteredRooms.slice(start, start + ROOMS_PER_PAGE);
+  }, [filteredRooms, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, guideFilter, participantsFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
   return (
     <div>
       {/* Заголовок в стиле главной страницы */}
@@ -583,8 +605,9 @@ export default function TourRoomsPage() {
             </p>
           </div>
         ) : (
+          <>
           <div className="space-y-4">
-            {filteredRooms.map((room) => (
+            {paginatedRooms.map((room) => (
               <div key={room.id} className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm hover:shadow-xl hover:border-emerald-400 p-6 transition-all duration-200">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex min-w-0 flex-1 gap-4">
@@ -689,6 +712,69 @@ export default function TourRoomsPage() {
               </div>
             ))}
           </div>
+
+          {totalFiltered > 0 && (
+            <div className="bg-white border border-gray-200 rounded-2xl mt-8 py-6 px-4 sm:px-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setPage(Math.max(1, page - 1))}
+                  disabled={page === 1}
+                  className="w-full sm:w-auto px-6 py-3 border-2 border-gray-300 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 hover:border-emerald-500 transition-all flex items-center justify-center gap-2 font-bold text-base"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                  Назад
+                </button>
+
+                {totalPages > 1 && (
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                      let pageNum: number;
+                      if (totalPages <= 5) {
+                        pageNum = i + 1;
+                      } else if (page <= 3) {
+                        pageNum = i + 1;
+                      } else if (page >= totalPages - 2) {
+                        pageNum = totalPages - 4 + i;
+                      } else {
+                        pageNum = page - 2 + i;
+                      }
+
+                      return (
+                        <button
+                          type="button"
+                          key={pageNum}
+                          onClick={() => setPage(pageNum)}
+                          className={`w-12 h-12 rounded-xl font-black text-base transition-all ${
+                            page === pageNum
+                              ? 'bg-emerald-600 text-white shadow-lg'
+                              : 'bg-white border-2 border-gray-300 text-gray-700 hover:border-emerald-500 hover:text-emerald-600'
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <span className="text-base font-bold text-gray-700 px-2 text-center">
+                  Страница {page} из {totalPages} · комнат: {totalFiltered}
+                </span>
+
+                <button
+                  type="button"
+                  onClick={() => setPage(Math.min(totalPages, page + 1))}
+                  disabled={page === totalPages}
+                  className="w-full sm:w-auto px-6 py-3 border-2 border-gray-300 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 hover:border-emerald-500 transition-all flex items-center justify-center gap-2 font-bold text-base"
+                >
+                  Вперёд
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </div>
 
