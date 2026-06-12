@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export default function MessengerPage() {
   return (
-    <main className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white">
       {/* Hero секция */}
       <section className="relative py-16 md:py-24 overflow-hidden bg-white">
         {/* Декоративные элементы */}
@@ -59,6 +59,6 @@ export default function MessengerPage() {
           </Suspense>
         </div>
       </section>
-    </main>
+    </div>
   );
 }

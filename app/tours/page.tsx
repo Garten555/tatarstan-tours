@@ -263,7 +263,7 @@ function ToursPageContent() {
   }, [filtersSheetOpen]);
 
   return (
-    <main className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white">
       {/* Hero секция */}
       <section className="relative py-12 sm:py-16 md:py-20 lg:py-24 overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-sky-50">
         {/* Декоративные элементы */}
@@ -812,7 +812,7 @@ function ToursPageContent() {
           </div>
         </>
       ) : null}
-    </main>
+    </div>
   );
 }
 

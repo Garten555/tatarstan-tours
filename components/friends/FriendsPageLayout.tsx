@@ -19,7 +19,7 @@ export default function FriendsPageLayout({
   children,
 }: Props) {
   return (
-    <main className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white">
       <section className="relative overflow-hidden bg-white py-8 sm:py-10 md:py-12 lg:py-16">
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute -right-32 top-1/4 h-72 w-72 rounded-full bg-blue-100/40 blur-3xl sm:h-96 sm:w-96" />
@@ -59,6 +59,6 @@ export default function FriendsPageLayout({
           <div className="mx-auto max-w-6xl">{children}</div>
         </div>
       </section>
-    </main>
+    </div>
   );
 }

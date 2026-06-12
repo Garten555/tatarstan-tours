@@ -4,6 +4,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Calendar, Users, Clock } from 'lucide-react';
 import ClampedText from '@/components/ui/ClampedText';
+import { formatDayMonthLongRu } from '@/lib/date/format-ru';
 
 interface TourCardProps {
   id: string;
@@ -57,15 +58,6 @@ export default function TourCard({
   const isFullyBooked = availableSpots <= 0;
   const titleSingleLine = title.replace(/\s+/g, ' ').trim();
   const descSingleLine = short_desc.replace(/\s+/g, ' ').trim();
-
-  // Форматирование даты
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('ru-RU', {
-      day: 'numeric',
-      month: 'long',
-    });
-  };
 
   // Вычисляем продолжительность
   const getDuration = () => {
@@ -143,7 +135,7 @@ export default function TourCard({
           <div className="grid grid-cols-2 gap-2 sm:gap-3 mb-3 sm:mb-4 md:mb-5">
             <div className="flex items-start gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-700 bg-gray-50 rounded-lg sm:rounded-xl px-2 sm:px-3 py-2 sm:py-2.5 font-medium min-w-0">
               <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-600 shrink-0 mt-0.5" />
-              <span className="min-w-0 leading-snug break-words">{formatDate(start_date)}</span>
+              <span className="min-w-0 leading-snug break-words">{formatDayMonthLongRu(start_date)}</span>
             </div>
 
             <div className="flex items-start gap-1.5 sm:gap-2 text-xs sm:text-sm text-gray-700 bg-gray-50 rounded-lg sm:rounded-xl px-2 sm:px-3 py-2 sm:py-2.5 font-medium min-w-0">

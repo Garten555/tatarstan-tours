@@ -50,6 +50,17 @@ export function formatDateTimeShortRu(value: string | Date | null | undefined): 
   }).format(d);
 }
 
+/** 22 мая (длинный месяц, без года) */
+export function formatDayMonthLongRu(value: string | Date | null | undefined): string {
+  const d = toDate(value);
+  if (!d) return '';
+  return new Intl.DateTimeFormat(LOCALE, {
+    timeZone: TZ,
+    day: 'numeric',
+    month: 'long',
+  }).format(d);
+}
+
 /** 22 мая (без года) */
 export function formatDayMonthRu(value: string | Date | null | undefined): string {
   const d = toDate(value);

@@ -14,7 +14,7 @@ export default async function Home() {
   const { heroTours, featuredTours, featuredTotal } = await getHomeCatalogData();
 
   return (
-    <main>
+    <div>
       <HeroSection popularTours={heroTours} />
       <StatsSection />
       <WhyUsSection />
@@ -22,6 +22,6 @@ export default async function Home() {
       <HowItWorksSection />
       <TestimonialsSection />
       <AuthAwareCTA />
-    </main>
+    </div>
   );
 }

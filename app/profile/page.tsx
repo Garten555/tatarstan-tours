@@ -109,7 +109,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
     console.log('Insert error:', insertError);
 
     return (
-      <main className="min-h-screen bg-white">
+      <div className="min-h-screen bg-white">
         <div className="container mx-auto px-4 md:px-6 lg:px-8 py-8 md:py-12">
           <Link
             href="/"
@@ -120,12 +120,12 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           </Link>
           <ProfileContent profile={newProfile} user={user} />
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white">
       <div className="container mx-auto px-4 md:px-6 lg:px-8 py-8 md:py-12">
         <Link
           href="/"
@@ -145,6 +145,6 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
         )}
         <ProfileContent profile={profile} user={user} isViewMode={isViewingOtherProfile} />
       </div>
-    </main>
+    </div>
   );
 }
