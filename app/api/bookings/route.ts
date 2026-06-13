@@ -12,6 +12,7 @@ import {
   isBlockingDuplicateBooking,
   normalizeBookingDuplicateRow,
 } from '@/lib/bookings/duplicate-booking';
+import { bookingIncludesSelfAttendee } from '@/lib/bookings/booking-includes-self';
 import {
   findUserBookingScheduleConflict,
   userScheduleConflictMessage,
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
     let payment_data = paymentDataRaw;
     const session_id =
       typeof sessionIdRaw === 'string' && sessionIdRaw.length > 0 ? sessionIdRaw : null;
+    const includesSelf = bookingIncludesSelfAttendee(attendees, num_people);
 
     if (!tour_id || !num_people || !total_price || !payment_method) {
       return NextResponse.json(
@@ -220,15 +222,17 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const hasActiveDuplicate = userActiveBookings.some((row) =>
-        isBlockingDuplicateBooking(row, tour_id, session_id)
-      );
-
-      if (hasActiveDuplicate) {
-        return NextResponse.json(
-          { error: 'У вас уже есть бронирование на этот выезд' },
-          { status: 400 }
+      if (includesSelf) {
+        const hasActiveDuplicate = userActiveBookings.some((row) =>
+          isBlockingDuplicateBooking(row, tour_id, session_id)
         );
+
+        if (hasActiveDuplicate) {
+          return NextResponse.json(
+            { error: 'У вас уже есть бронирование на этот выезд' },
+            { status: 400 }
+          );
+        }
       }
     } else {
       const tourStart = (tour as { start_date?: string | null }).start_date;
@@ -255,15 +259,17 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const hasActiveDuplicate = userActiveBookings.some((row) =>
-        isBlockingDuplicateBooking(row, tour_id, null)
-      );
-
-      if (hasActiveDuplicate) {
-        return NextResponse.json(
-          { error: 'У вас уже есть бронирование на этот тур' },
-          { status: 400 }
+      if (includesSelf) {
+        const hasActiveDuplicate = userActiveBookings.some((row) =>
+          isBlockingDuplicateBooking(row, tour_id, null)
         );
+
+        if (hasActiveDuplicate) {
+          return NextResponse.json(
+            { error: 'У вас уже есть бронирование на этот тур' },
+            { status: 400 }
+          );
+        }
       }
     }
 
@@ -274,7 +280,7 @@ export async function POST(request: NextRequest) {
       ? sessionRow.end_at ?? null
       : (tour as { end_date?: string | null }).end_date ?? null;
 
-    if (departureStartAt) {
+    if (includesSelf && departureStartAt) {
       const scheduleConflict = findUserBookingScheduleConflict(userActiveBookings, {
         startAt: departureStartAt,
         endAt: departureEndAt,

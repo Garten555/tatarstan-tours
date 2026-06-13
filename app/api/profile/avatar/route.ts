@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { uploadFileToS3, generateUniqueFileName, getS3Path, deleteFileFromS3 } from '@/lib/s3/upload';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { validateAvatarImageBuffer } from '@/lib/images/profile-avatar';
 
 // Максимальный размер файла для аватара (5MB)
 const MAX_AVATAR_SIZE = 5 * 1024 * 1024;
@@ -61,6 +62,12 @@ export async function POST(request: NextRequest) {
         { error: 'Файл слишком большой. Максимум 5MB' },
         { status: 400 }
       );
+    }
+
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const dimensionError = await validateAvatarImageBuffer(buffer, file.type);
+    if (dimensionError) {
+      return NextResponse.json({ error: dimensionError }, { status: 400 });
     }
 
     // Получаем текущий профиль для удаления старого аватара

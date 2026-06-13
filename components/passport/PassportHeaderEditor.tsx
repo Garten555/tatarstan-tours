@@ -7,6 +7,8 @@ import { Upload, X, Loader2 } from 'lucide-react';
 import { LevelProgressBar } from '@/components/reputation/LevelProgressBar';
 import { PROFILE_COVER_SIZE_HINT } from '@/lib/images/profile-cover';
 import { validateCoverImageFile } from '@/lib/images/profile-cover-client';
+import { PROFILE_AVATAR_SIZE_HINT } from '@/lib/images/profile-avatar';
+import { validateAvatarImageFile } from '@/lib/images/profile-avatar-client';
 
 interface PassportHeaderEditorProps {
   fullName: string;
@@ -34,6 +36,7 @@ export default function PassportHeaderEditor({
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initialAvatarUrl);
   const [coverUrl, setCoverUrl] = useState<string | null>(initialCoverUrl);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editorMode, setEditorMode] = useState<'full' | 'avatar'>('full');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -96,6 +99,15 @@ export default function PassportHeaderEditor({
       }
     }
 
+    if (type === 'avatar') {
+      const dimensionError = await validateAvatarImageFile(file);
+      if (dimensionError) {
+        setError(dimensionError);
+        event.target.value = '';
+        return;
+      }
+    }
+
     const previewUrl = URL.createObjectURL(file);
     if (type === 'avatar') {
       if (avatarPreview) URL.revokeObjectURL(avatarPreview);
@@ -109,7 +121,11 @@ export default function PassportHeaderEditor({
   };
 
   const saveChanges = async () => {
-    if (!avatarFile && !coverFile) {
+    if (editorMode === 'avatar' && !avatarFile) {
+      setError('Выберите аватар');
+      return;
+    }
+    if (editorMode === 'full' && !avatarFile && !coverFile) {
       setError('Выберите аватар и/или шапку для изменения');
       return;
     }
@@ -144,6 +160,12 @@ export default function PassportHeaderEditor({
     }
   };
 
+  const openEditor = (mode: 'full' | 'avatar') => {
+    resetModalState();
+    setEditorMode(mode);
+    setIsModalOpen(true);
+  };
+
   return (
     <>
       <div className="bg-white border-b border-gray-200 shadow-sm">
@@ -164,10 +186,7 @@ export default function PassportHeaderEditor({
           <div className="absolute right-2 top-2 z-20 sm:right-4 sm:top-4">
             <button
               type="button"
-              onClick={() => {
-                resetModalState();
-                setIsModalOpen(true);
-              }}
+              onClick={() => openEditor('full')}
               className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300/80 bg-emerald-50/95 hover:bg-emerald-100 text-emerald-950 px-2.5 py-1.5 text-xs font-semibold shadow-sm backdrop-blur-sm transition-colors sm:gap-2 sm:px-3.5 sm:py-2 sm:text-sm"
             >
               <Upload className="w-4 h-4" />
@@ -188,6 +207,17 @@ export default function PassportHeaderEditor({
                   </div>
                 )}
               </div>
+              <button
+                type="button"
+                onClick={() => openEditor('avatar')}
+                className="absolute inset-0 rounded-full bg-black/0 hover:bg-black/25 transition-colors flex items-center justify-center group/avatar"
+                title="Сменить аватар"
+              >
+                <span className="inline-flex items-center gap-1 rounded-lg bg-white/95 px-2 py-1 text-xs font-semibold text-gray-800 opacity-0 group-hover/avatar:opacity-100 shadow">
+                  <Upload className="w-3.5 h-3.5" />
+                  Аватар
+                </span>
+              </button>
             </div>
 
             <div className="mt-3 sm:mt-4">
@@ -239,7 +269,9 @@ export default function PassportHeaderEditor({
         <div className="fixed inset-0 z-[100] flex items-center justify-center overscroll-contain bg-black/45 p-4">
           <div className="w-full max-w-3xl rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-black text-gray-900">Сменить шапку и аватар</h3>
+              <h3 className="text-lg font-black text-gray-900">
+                {editorMode === 'avatar' ? 'Сменить аватар' : 'Сменить шапку и аватар'}
+              </h3>
               <button
                 type="button"
                 className="p-1.5 rounded-lg hover:bg-gray-100"
@@ -254,6 +286,7 @@ export default function PassportHeaderEditor({
             </div>
 
             <div className="p-5 space-y-4">
+              {editorMode === 'full' && (
               <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
                 <div className="relative h-44">
                   {finalCover ? (
@@ -275,6 +308,7 @@ export default function PassportHeaderEditor({
                   <p className="mt-2 text-xs text-gray-500">{PROFILE_COVER_SIZE_HINT}</p>
                 </div>
               </div>
+              )}
 
               <div className="flex items-center gap-4">
                 <div className="w-24 h-24 rounded-full border-4 border-white shadow overflow-hidden bg-gray-100">
@@ -286,15 +320,18 @@ export default function PassportHeaderEditor({
                     </div>
                   )}
                 </div>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
-                  onClick={() => avatarInputRef.current?.click()}
-                  disabled={isSaving}
-                >
-                  <Upload className="w-4 h-4" />
-                  Выбрать аватар
-                </button>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={isSaving}
+                  >
+                    <Upload className="w-4 h-4" />
+                    Выбрать аватар
+                  </button>
+                  <p className="text-xs text-gray-500">{PROFILE_AVATAR_SIZE_HINT}</p>
+                </div>
               </div>
 
               {error && (

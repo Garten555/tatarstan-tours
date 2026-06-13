@@ -99,6 +99,8 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
   const availableSpots = session
     ? session.max_participants - (session.current_participants ?? 0)
     : tour.max_participants - (tour.current_participants || 0);
+  const includesSelf = attendees.some((attendee) => attendee.source === 'self');
+  const selfScheduleBlocked = includesSelf && Boolean(scheduleConflictMessage);
 
   // Функция форматирования телефона с улучшенной маской
   const formatPhone = (value: string): string => {
@@ -315,7 +317,7 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
 
   // Обработка бронирования
   const handleBooking = async () => {
-    if (scheduleConflictMessage) {
+    if (selfScheduleBlocked) {
       setError(scheduleConflictMessage);
       return;
     }
@@ -975,7 +977,7 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
                 </div>
               )}
 
-              {scheduleConflictMessage && (
+              {includesSelf && scheduleConflictMessage && (
                 <div className="mt-6 p-5 bg-gradient-to-br from-amber-50 to-amber-100/50 border-2 border-amber-300 rounded-2xl flex items-center gap-3">
                   <AlertCircle className="w-6 h-6 text-amber-700 flex-shrink-0" />
                   <span className="text-base font-medium text-amber-950">{scheduleConflictMessage}</span>
@@ -1000,7 +1002,7 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
                 </button>
                 <button
                   onClick={handleBooking}
-                  disabled={loading || Boolean(scheduleConflictMessage) || hasExistingBooking}
+                  disabled={loading || selfScheduleBlocked}
                   className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white px-6 py-4 rounded-xl font-bold text-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                 >
                   {loading ? (

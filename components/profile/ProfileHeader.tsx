@@ -25,6 +25,8 @@ import { LevelProgressBar } from '@/components/reputation/LevelProgressBar';
 import { profileDisplayName, profileInitials } from '@/lib/profile/display';
 import { PROFILE_COVER_SIZE_HINT } from '@/lib/images/profile-cover';
 import { validateCoverImageFile } from '@/lib/images/profile-cover-client';
+import { PROFILE_AVATAR_SIZE_HINT } from '@/lib/images/profile-avatar';
+import { validateAvatarImageFile } from '@/lib/images/profile-avatar-client';
 
 interface ProfileHeaderProps {
   profileData: {
@@ -97,6 +99,7 @@ export default function ProfileHeader({
   const [friendActivity, setFriendActivity] = useState<Record<string, string | null>>({});
   const [coverError, setCoverError] = useState<string | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editorMode, setEditorMode] = useState<'full' | 'avatar'>('full');
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -210,6 +213,13 @@ export default function ProfileHeader({
       return;
     }
 
+    const dimensionError = await validateAvatarImageFile(file);
+    if (dimensionError) {
+      setCoverError(dimensionError);
+      if (avatarInputRef.current) avatarInputRef.current.value = '';
+      return;
+    }
+
     try {
       setIsUploadingAvatar(true);
       setProfileMediaUploadKind('avatar');
@@ -269,6 +279,14 @@ export default function ProfileHeader({
         return;
       }
     }
+    if (type === 'avatar') {
+      const dimensionError = await validateAvatarImageFile(file);
+      if (dimensionError) {
+        setEditorError(dimensionError);
+        event.target.value = '';
+        return;
+      }
+    }
     setEditorError(null);
     const preview = URL.createObjectURL(file);
     if (type === 'avatar') {
@@ -283,7 +301,11 @@ export default function ProfileHeader({
   };
 
   const saveEditorChanges = async () => {
-    if (!avatarFile && !coverFile) {
+    if (editorMode === 'avatar' && !avatarFile) {
+      setEditorError('Выберите аватар');
+      return;
+    }
+    if (editorMode === 'full' && !avatarFile && !coverFile) {
       setEditorError('Выберите аватар и/или шапку');
       return;
     }
@@ -302,6 +324,12 @@ export default function ProfileHeader({
     } catch {
       setEditorError('Не удалось сохранить изменения');
     }
+  };
+
+  const openEditor = (mode: 'full' | 'avatar') => {
+    resetEditorState();
+    setEditorMode(mode);
+    setIsEditorOpen(true);
   };
 
   const getRoleLabel = (role: string) => {
@@ -340,10 +368,7 @@ export default function ProfileHeader({
           <div className="absolute right-4 top-4 z-20">
             <button
               type="button"
-              onClick={() => {
-                resetEditorState();
-                setIsEditorOpen(true);
-              }}
+              onClick={() => openEditor('full')}
               disabled={isUploadingCover}
               className="inline-flex items-center gap-2 rounded-xl border border-emerald-300/80 bg-emerald-50/95 hover:bg-emerald-100 text-emerald-950 px-3.5 py-2 text-sm font-semibold shadow-sm backdrop-blur-sm transition-colors disabled:opacity-60"
             >
@@ -384,6 +409,20 @@ export default function ProfileHeader({
                 </div>
               )}
             </div>
+            {isOwner && (
+              <button
+                type="button"
+                onClick={() => openEditor('avatar')}
+                disabled={isUploadingAvatar}
+                className="absolute inset-0 rounded-full bg-black/0 hover:bg-black/25 transition-colors flex items-center justify-center group/avatar"
+                title="Сменить аватар"
+              >
+                <span className="inline-flex items-center gap-1 rounded-lg bg-white/95 px-2 py-1 text-xs font-semibold text-gray-800 opacity-0 group-hover/avatar:opacity-100 shadow">
+                  <Upload className="w-3.5 h-3.5" />
+                  Аватар
+                </span>
+              </button>
+            )}
             {/* Бейдж уровня по опыту — не для staff-ролей (у них отдельный бейдж роли) */}
             {!isBanned && !isAdmin && (
               <div className={`absolute -bottom-2 -right-2 ${statusLevel.color} text-white rounded-full w-12 h-12 md:w-14 md:h-14 flex items-center justify-center text-xl md:text-2xl shadow-xl border-4 border-white`}>
@@ -680,7 +719,9 @@ export default function ProfileHeader({
         <div className="fixed inset-0 z-[120] flex items-center justify-center overscroll-contain bg-black/45 p-4">
           <div className="w-full max-w-3xl rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-black text-gray-900">Сменить шапку и аватар</h3>
+              <h3 className="text-lg font-black text-gray-900">
+                {editorMode === 'avatar' ? 'Сменить аватар' : 'Сменить шапку и аватар'}
+              </h3>
               <button
                 type="button"
                 className="p-1.5 rounded-lg hover:bg-gray-100"
@@ -694,6 +735,7 @@ export default function ProfileHeader({
               </button>
             </div>
             <div className="p-5 space-y-4">
+              {editorMode === 'full' && (
               <div className="rounded-xl overflow-hidden border border-gray-200 bg-gray-50">
                 <div className="relative h-44">
                   {coverPreview || coverUrl ? (
@@ -715,6 +757,7 @@ export default function ProfileHeader({
                   <p className="mt-2 text-xs text-gray-500">{PROFILE_COVER_SIZE_HINT}</p>
                 </div>
               </div>
+              )}
               <div className="flex items-center gap-4">
                 <div className="w-24 h-24 rounded-full border-4 border-white shadow overflow-hidden bg-gray-100">
                   {avatarPreview || avatarUrl ? (
@@ -731,15 +774,18 @@ export default function ProfileHeader({
                     </div>
                   )}
                 </div>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
-                  onClick={() => avatarInputRef.current?.click()}
-                  disabled={isUploadingCover || isUploadingAvatar}
-                >
-                  <Upload className="w-4 h-4" />
-                  Выбрать аватар
-                </button>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+                    onClick={() => avatarInputRef.current?.click()}
+                    disabled={isUploadingCover || isUploadingAvatar}
+                  >
+                    <Upload className="w-4 h-4" />
+                    Выбрать аватар
+                  </button>
+                  <p className="text-xs text-gray-500">{PROFILE_AVATAR_SIZE_HINT}</p>
+                </div>
               </div>
               {editorError && (
                 <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { User, Mail, Phone, Calendar, Shield, Upload, Loader2, Trash2, Star, Edit2, Eye, Settings, CheckCircle2, BookOpen, Ban, CheckCircle, X } from 'lucide-react';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
+import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import UserBookings from './UserBookings';
 import { ReviewTourContext } from '@/components/reviews/ReviewTourContext';
 import ReviewModal from '@/components/reviews/ReviewModal';
@@ -15,6 +16,8 @@ import {
   getEffectiveBookingStatus,
 } from '@/lib/bookings/review-eligibility';
 import { isTourPageLinkable } from '@/lib/tours/tour-public-visibility';
+import { PROFILE_AVATAR_SIZE_HINT } from '@/lib/images/profile-avatar';
+import { validateAvatarImageFile } from '@/lib/images/profile-avatar-client';
 
 interface ProfileContentProps {
   profile: any;
@@ -42,6 +45,10 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
   });
   const [loadingStats, setLoadingStats] = useState(true);
   const [avatarViewerOpen, setAvatarViewerOpen] = useState(false);
+  const [isAvatarEditorOpen, setIsAvatarEditorOpen] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarEditorError, setAvatarEditorError] = useState<string | null>(null);
   const [reviews, setReviews] = useState<any[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(true);
   const [editingReview, setEditingReview] = useState<any | null>(null);
@@ -70,25 +77,49 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
     ? (profile?.email || '')
     : (user.email || '');
 
-  // Функция для загрузки аватара
-  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (isViewMode) {
-      setUploadError('В режиме просмотра нельзя изменять аватар другого пользователя');
-      return;
-    }
+  useBodyScrollLock(!isViewMode && isAvatarEditorOpen);
 
+  const resetAvatarEditor = () => {
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    setAvatarPreview(null);
+    setAvatarFile(null);
+    setAvatarEditorError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const onSelectAvatarFile = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Валидация типа файла
-    if (!file.type.startsWith('image/')) {
-      setUploadError('Файл должен быть изображением');
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setAvatarEditorError('Разрешены только JPG, PNG и WEBP');
+      event.target.value = '';
       return;
     }
 
-    // Валидация размера (5MB)
     if (file.size > 5 * 1024 * 1024) {
-      setUploadError('Файл слишком большой. Максимум 5MB');
+      setAvatarEditorError('Аватар: максимум 5MB');
+      event.target.value = '';
+      return;
+    }
+
+    const dimensionError = await validateAvatarImageFile(file);
+    if (dimensionError) {
+      setAvatarEditorError(dimensionError);
+      event.target.value = '';
+      return;
+    }
+
+    setAvatarEditorError(null);
+    if (avatarPreview) URL.revokeObjectURL(avatarPreview);
+    setAvatarPreview(URL.createObjectURL(file));
+    setAvatarFile(file);
+  };
+
+  const saveAvatarChanges = async () => {
+    if (!avatarFile) {
+      setAvatarEditorError('Выберите аватар');
       return;
     }
 
@@ -96,10 +127,11 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
     setAvatarUploadPercent(0);
     setUploadError(null);
     setUploadSuccess(false);
+    setAvatarEditorError(null);
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', avatarFile);
 
       const { ok, data } = await uploadFormDataWithProgress('/api/profile/avatar', formData, setAvatarUploadPercent);
 
@@ -111,32 +143,26 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
       if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
         setAvatarUrl(url);
         setUploadSuccess(true);
+        window.dispatchEvent(new CustomEvent('avatarUpdated', { detail: { url } }));
+        resetAvatarEditor();
+        setIsAvatarEditorOpen(false);
+        setTimeout(() => setUploadSuccess(false), 3000);
       } else {
         throw new Error('Получен некорректный URL аватара');
       }
-
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-
-      window.dispatchEvent(new CustomEvent('avatarUpdated', { detail: { url } }));
-
-      setTimeout(() => {
-        setUploadSuccess(false);
-      }, 3000);
     } catch (error) {
-      console.error('Ошибка загрузки аватара:', error);
-      setUploadError(error instanceof Error ? error.message : 'Не удалось загрузить аватар');
+      setAvatarEditorError(error instanceof Error ? error.message : 'Не удалось загрузить аватар');
     } finally {
       setIsUploading(false);
       setAvatarUploadPercent(null);
     }
   };
 
-  // Открытие диалога выбора файла
+  // Открытие редактора аватара
   const handleAvatarClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    fileInputRef.current?.click();
+    resetAvatarEditor();
+    setIsAvatarEditorOpen(true);
   };
 
   // Открытие просмотрщика аватара
@@ -562,7 +588,7 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
                 ref={fileInputRef}
                 type="file"
                 accept="image/jpeg,image/jpg,image/png,image/webp"
-                onChange={handleAvatarUpload}
+                onChange={onSelectAvatarFile}
                 className="hidden"
               />
             </div>
@@ -990,6 +1016,88 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
           initialIndex={0}
           onClose={() => setAvatarViewerOpen(false)}
         />
+      )}
+
+      {!isViewMode && isAvatarEditorOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center overscroll-contain bg-black/45 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-black text-gray-900">Сменить аватар</h3>
+              <button
+                type="button"
+                className="p-1.5 rounded-lg hover:bg-gray-100"
+                onClick={() => {
+                  resetAvatarEditor();
+                  setIsAvatarEditorOpen(false);
+                }}
+                disabled={isUploading}
+              >
+                <X className="w-5 h-5 text-gray-700" />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="w-24 h-24 rounded-full border-4 border-white shadow overflow-hidden bg-gray-100">
+                  {avatarPreview || avatarUrl ? (
+                    <Image
+                      src={avatarPreview || avatarUrl || ''}
+                      alt="Превью аватара"
+                      width={96}
+                      height={96}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white text-2xl font-black">
+                      {firstName[0]?.toUpperCase() || 'U'}
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploading}
+                  >
+                    <Upload className="w-4 h-4" />
+                    Выбрать аватар
+                  </button>
+                  <p className="text-xs text-gray-500">{PROFILE_AVATAR_SIZE_HINT}</p>
+                </div>
+              </div>
+              {isUploading && (
+                <UploadProgressBar label="Загрузка аватара" percent={avatarUploadPercent} />
+              )}
+              {avatarEditorError && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                  {avatarEditorError}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-200 bg-gray-50">
+              <button
+                type="button"
+                className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-white"
+                onClick={() => {
+                  resetAvatarEditor();
+                  setIsAvatarEditorOpen(false);
+                }}
+                disabled={isUploading}
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={saveAvatarChanges}
+                disabled={isUploading}
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-sm font-semibold disabled:opacity-60"
+              >
+                {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {isUploading ? 'Сохранение...' : 'Сохранить'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Модальное окно для бана */}
