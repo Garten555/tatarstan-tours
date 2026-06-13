@@ -9,6 +9,7 @@ import {
   computeNextCatalogVisibilityChangeAt,
   filterCatalogToursByUpcomingSessions,
   isTourVisibleInPublicCatalog,
+  nearestUpcomingDepartureAt,
 } from '@/lib/tours/tour-public-visibility';
 
 export const FEATURED_HOME_TOUR_LIMIT = 3;
@@ -61,9 +62,12 @@ function isDisplayableCatalogTour(
   );
 }
 
+export type CatalogSessionRow = { id: string; start_at: string };
+
 export type ActiveCatalogSnapshot = {
   rows: ActiveCatalogTourRow[];
   nextVisibilityChangeAt: string | null;
+  sessionsByTourId: Map<string, CatalogSessionRow[]>;
 };
 
 /** Активные туры каталога: как в /api/tours/filter до сортировки и пагинации. */
@@ -89,7 +93,7 @@ export async function fetchActiveCatalogSnapshot(
 
   if (error) {
     console.error('fetchActiveCatalogSnapshot:', error);
-    return { rows: [], nextVisibilityChangeAt: null };
+    return { rows: [], nextVisibilityChangeAt: null, sessionsByTourId: new Map() };
   }
 
   const active = (data ?? []).filter((tour) => {
@@ -98,7 +102,7 @@ export async function fetchActiveCatalogSnapshot(
   }) as ActiveCatalogTourRow[];
 
   if (active.length === 0) {
-    return { rows: [], nextVisibilityChangeAt: null };
+    return { rows: [], nextVisibilityChangeAt: null, sessionsByTourId: new Map() };
   }
 
   const tourIds = active.map((t) => t.id);
@@ -111,10 +115,14 @@ export async function fetchActiveCatalogSnapshot(
   if (sessionError) {
     console.error('fetchActiveCatalogSnapshot sessions:', sessionError);
     const bookable = await filterCatalogToursByUpcomingSessions(supabase, active);
-    return { rows: dedupeTourRowsForCatalog(bookable), nextVisibilityChangeAt: null };
+    return {
+      rows: dedupeTourRowsForCatalog(bookable),
+      nextVisibilityChangeAt: null,
+      sessionsByTourId: new Map(),
+    };
   }
 
-  const sessionsByTourId = new Map<string, { id: string; start_at: string }[]>();
+  const sessionsByTourId = new Map<string, CatalogSessionRow[]>();
   for (const row of sessionRows ?? []) {
     const list = sessionsByTourId.get(row.tour_id) ?? [];
     list.push({ id: row.id, start_at: row.start_at });
@@ -131,7 +139,7 @@ export async function fetchActiveCatalogSnapshot(
     now
   );
 
-  return { rows, nextVisibilityChangeAt };
+  return { rows, nextVisibilityChangeAt, sessionsByTourId };
 }
 
 export function pickHomeFeaturedTours(
@@ -161,9 +169,10 @@ export type HeroPopularTour = {
 };
 
 export function toHeroPopularTour(
-  tour: Pick<ActiveCatalogTourRow, 'title' | 'slug' | 'price_per_person' | 'start_date' | 'end_date'>
+  tour: Pick<ActiveCatalogTourRow, 'title' | 'slug' | 'price_per_person' | 'start_date' | 'end_date'>,
+  nearestDepartureIso?: string | null
 ): HeroPopularTour {
-  const start = tour.start_date ? String(tour.start_date) : '';
+  const start = nearestDepartureIso || (tour.start_date ? String(tour.start_date) : '');
   const endRaw = tour.end_date != null ? String(tour.end_date) : start;
   let durationLabel: string | null = null;
   if (start) {
@@ -190,16 +199,37 @@ export function toHeroPopularTour(
   };
 }
 
-/** Hero «Ближайший выезд»: те же правила, что в каталоге; сортировка по start_date. */
+export type PickHeroNearestOptions = {
+  sessionsByTourId?: Map<string, CatalogSessionRow[]>;
+  now?: Date;
+};
+
+/** Hero «Ближайший выезд»: сортировка по ближайшему будущему слоту, не по start_date тура. */
 export function pickHeroNearestTours(
   rows: ActiveCatalogTourRow[],
-  limit = 5
+  limit = 5,
+  options?: PickHeroNearestOptions
 ): HeroPopularTour[] {
-  const sorted = sortCatalogTourRows(rows, 'start_date', 'asc');
+  const now = options?.now ?? new Date();
+  const sessionsByTourId = options?.sessionsByTourId;
+
+  const ranked = rows
+    .map((tour) => {
+      const sessions = sessionsByTourId?.get(tour.id) ?? [];
+      const departureAt = nearestUpcomingDepartureAt(tour, sessions, now);
+      return { tour, departureAt };
+    })
+    .filter(
+      (entry): entry is { tour: ActiveCatalogTourRow; departureAt: string } =>
+        Boolean(entry.departureAt && entry.tour.title?.trim() && entry.tour.slug?.trim())
+    )
+    .sort(
+      (a, b) => new Date(a.departureAt).getTime() - new Date(b.departureAt).getTime()
+    );
+
   const tours: HeroPopularTour[] = [];
-  for (const tour of sorted) {
-    if (!tour.title?.trim() || !tour.slug?.trim()) continue;
-    tours.push(toHeroPopularTour(tour));
+  for (const { tour, departureAt } of ranked) {
+    tours.push(toHeroPopularTour(tour, departureAt));
     if (tours.length >= limit) break;
   }
   return tours;

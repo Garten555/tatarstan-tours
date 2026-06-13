@@ -93,6 +93,33 @@ export function isSessionBookable(startAt: string, now: Date = new Date()): bool
   return isUpcomingSession(startAt, now);
 }
 
+/** Ближайший будущий выезд тура: минимум среди слотов и start_date (если в будущем). */
+export function nearestUpcomingDepartureAt(
+  tour: TourDates,
+  sessions: SessionRow[],
+  now: Date = new Date()
+): string | null {
+  const nowMs = now.getTime();
+  let minMs: number | null = null;
+
+  const realSessions = sessions.filter((s) => s.id !== LEGACY_TOUR_SESSION_ID);
+  for (const session of realSessions) {
+    const t = new Date(session.start_at).getTime();
+    if (Number.isFinite(t) && t > nowMs) {
+      minMs = minMs === null ? t : Math.min(minMs, t);
+    }
+  }
+
+  if (tour.start_date) {
+    const t = new Date(tour.start_date).getTime();
+    if (Number.isFinite(t) && t > nowMs) {
+      minMs = minMs === null ? t : Math.min(minMs, t);
+    }
+  }
+
+  return minMs !== null ? new Date(minMs).toISOString() : null;
+}
+
 /** Ближайший момент, когда тур исчезнет из публичного каталога (старт выезда). */
 export function computeNextCatalogVisibilityChangeAt(
   tours: CatalogTourRow[],

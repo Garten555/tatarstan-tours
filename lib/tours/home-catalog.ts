@@ -2,7 +2,7 @@ import { cache } from 'react';
 
 import { createServiceClient } from '@/lib/supabase/server';
 import {
-  fetchActiveCatalogTourRows,
+  fetchActiveCatalogSnapshot,
   pickHeroNearestTours,
   pickHomeFeaturedTours,
   type HeroPopularTour,
@@ -18,11 +18,13 @@ export type HomeCatalogData = {
 /** Один запрос каталога на главную (React cache + ISR на странице). */
 export const getHomeCatalogData = cache(async (): Promise<HomeCatalogData> => {
   const supabase = createServiceClient();
-  const catalogRows = await fetchActiveCatalogTourRows(supabase);
-  const featured = pickHomeFeaturedTours(catalogRows);
+  const snapshot = await fetchActiveCatalogSnapshot(supabase);
+  const featured = pickHomeFeaturedTours(snapshot.rows);
 
   return {
-    heroTours: pickHeroNearestTours(catalogRows, 5),
+    heroTours: pickHeroNearestTours(snapshot.rows, 5, {
+      sessionsByTourId: snapshot.sessionsByTourId,
+    }),
     featuredTours: featured.tours,
     featuredTotal: featured.total,
   };

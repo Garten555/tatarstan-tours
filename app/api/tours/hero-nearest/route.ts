@@ -11,7 +11,9 @@ export async function GET() {
   try {
     const supabase = createServiceClient();
     const snapshot = await fetchActiveCatalogSnapshot(supabase);
-    const tours = pickHeroNearestTours(snapshot.rows, 5);
+    const tours = pickHeroNearestTours(snapshot.rows, 5, {
+      sessionsByTourId: snapshot.sessionsByTourId,
+    });
 
     return NextResponse.json(
       { tours, nextVisibilityChangeAt: snapshot.nextVisibilityChangeAt },
