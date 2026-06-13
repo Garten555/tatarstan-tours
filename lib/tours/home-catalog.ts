@@ -13,6 +13,7 @@ export type HomeCatalogData = {
   heroTours: HeroPopularTour[];
   featuredTours: DisplayableCatalogTourRow[];
   featuredTotal: number;
+  nextVisibilityChangeAt: string | null;
 };
 
 /** Один запрос каталога на главную (React cache + ISR на странице). */
@@ -27,5 +28,6 @@ export const getHomeCatalogData = cache(async (): Promise<HomeCatalogData> => {
     }),
     featuredTours: featured.tours,
     featuredTotal: featured.total,
+    nextVisibilityChangeAt: snapshot.nextVisibilityChangeAt,
   };
 });

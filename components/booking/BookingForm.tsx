@@ -362,7 +362,9 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
         throw new Error(result.error || 'Не удалось создать бронирование');
       }
 
-      router.replace(`/booking/success?id=${result.booking.id}`);
+      router.replace(
+        `/booking/success?id=${result.booking.id}&email_sent=${result.emailSent ? '1' : '0'}`
+      );
     } catch (err: any) {
       setError(err.message || 'Произошла ошибка при бронировании');
     } finally {

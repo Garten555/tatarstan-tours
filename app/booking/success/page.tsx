@@ -5,11 +5,11 @@ import Link from 'next/link';
 import BookingSuccessQr from '@/components/booking/BookingSuccessQr';
 
 interface BookingSuccessPageProps {
-  searchParams: Promise<{ id?: string }>;
+  searchParams: Promise<{ id?: string; email_sent?: string }>;
 }
 
 export default async function BookingSuccessPage({ searchParams }: BookingSuccessPageProps) {
-  const { id } = await searchParams;
+  const { id, email_sent: emailSentParam } = await searchParams;
   const supabase = await createClient();
   const serviceClient = await createServiceClient();
 
@@ -72,6 +72,9 @@ export default async function BookingSuccessPage({ searchParams }: BookingSucces
     return methods[method] || method;
   };
 
+  const emailSent = emailSentParam === '1';
+  const isCashPending = b.payment_method === 'cash' && b.payment_status === 'pending';
+
   return (
     <div className="min-h-screen bg-gray-50 py-12">
       <div className="container mx-auto px-4">
@@ -84,7 +87,11 @@ export default async function BookingSuccessPage({ searchParams }: BookingSucces
               Бронирование успешно создано!
             </h1>
             <p className="text-gray-600">
-              Ваше бронирование подтверждено. Детали отправлены на вашу почту.
+              {emailSent
+                ? isCashPending
+                  ? 'Заявка принята. Подтверждение отправлено на вашу почту — оплата наличными при встрече.'
+                  : 'Бронирование подтверждено. Детали отправлены на вашу почту.'
+                : 'Бронирование создано. Если письмо не пришло в течение нескольких минут — проверьте «Спам» или раздел «Мои бронирования».'}
             </p>
           </div>
 

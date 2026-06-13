@@ -132,16 +132,8 @@ export async function GET(request: NextRequest) {
     }
 
     const isAdminViewer = auth.role === 'tour_admin' || auth.role === 'super_admin';
-
-    const restSessionsQuery = isAdminViewer
-      ? serviceClient
-          .from('tour_sessions')
-          .select('guide_id, start_at')
-          .gte('start_at', from)
-          .lt('start_at', to)
-          .neq('status', 'cancelled')
-          .not('guide_id', 'is', null)
-      : null;
+    const needsAllGuideSessionsForRest =
+      isAdminViewer && Boolean(guideFilter && guideFilter !== 'all');
 
     const guidesQuery = isAdminViewer
       ? serviceClient
@@ -153,10 +145,21 @@ export async function GET(request: NextRequest) {
           .limit(200)
       : null;
 
+    const restSessionsQuery =
+      needsAllGuideSessionsForRest
+        ? serviceClient
+            .from('tour_sessions')
+            .select('guide_id, start_at')
+            .gte('start_at', from)
+            .lt('start_at', to)
+            .neq('status', 'cancelled')
+            .not('guide_id', 'is', null)
+        : null;
+
     const [sessionsResult, restSessionsResult, guideProfilesResult, scheduleTemplate] =
       await Promise.all([
         query,
-        restSessionsQuery ?? Promise.resolve({ data: [], error: null }),
+        restSessionsQuery ?? Promise.resolve({ data: null, error: null }),
         guidesQuery ?? Promise.resolve({ data: [], error: null }),
         isAdminViewer ? loadTourAutoScheduleConfig(serviceClient) : Promise.resolve(null),
       ]);
@@ -202,6 +205,13 @@ export async function GET(request: NextRequest) {
         tour_id: (row as { tour_id: string }).tour_id,
       }));
 
+    const busyByGuide = new Map<string, BusyGuideSession[]>();
+    for (const row of busyForConflict) {
+      const list = busyByGuide.get(row.guide_id) ?? [];
+      list.push(row);
+      busyByGuide.set(row.guide_id, list);
+    }
+
     const dayMarkers: Record<
       string,
       { count: number; has_overlap: boolean; has_buffer: boolean }
@@ -217,7 +227,7 @@ export async function GET(request: NextRequest) {
       const conflictDetail =
         typed.guide_id != null
           ? findGuideScheduleConflict(
-              busyForConflict,
+              busyByGuide.get(typed.guide_id) ?? [],
               typed.guide_id,
               startMs,
               endMs,
@@ -274,7 +284,12 @@ export async function GET(request: NextRequest) {
 
     if (scheduleTemplate && guides.length > 0 && isAdminViewer) {
       const guideIdsByDay = new Map<string, Set<string>>();
-      for (const row of restSessionsResult.data ?? []) {
+      const restRows =
+        needsAllGuideSessionsForRest && restSessionsResult.data
+          ? restSessionsResult.data
+          : (sessionsRaw ?? []).filter((row) => (row as { guide_id?: string | null }).guide_id);
+
+      for (const row of restRows) {
         const gid = (row as { guide_id: string }).guide_id;
         const key = sessionMoscowDayKey((row as { start_at: string }).start_at);
         const set = guideIdsByDay.get(key) ?? new Set<string>();

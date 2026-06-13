@@ -12,17 +12,28 @@ import { usePublicCatalogRefresh } from '@/lib/hooks/use-public-catalog-refresh'
 type FeaturedToursProps = {
   tours: DisplayableCatalogTourRow[];
   totalAvailableTours: number;
+  nextVisibilityChangeAt?: string | null;
 };
 
-export function FeaturedTours({ tours: initialTours, totalAvailableTours: initialTotal }: FeaturedToursProps) {
+export function FeaturedTours({
+  tours: initialTours,
+  totalAvailableTours: initialTotal,
+  nextVisibilityChangeAt: initialNextChange,
+}: FeaturedToursProps) {
   const [tours, setTours] = useState(initialTours);
   const [totalAvailableTours, setTotalAvailableTours] = useState(initialTotal);
-  const [nextVisibilityChangeAt, setNextVisibilityChangeAt] = useState<string | null>(null);
+  const [nextVisibilityChangeAt, setNextVisibilityChangeAt] = useState<string | null>(
+    initialNextChange ?? null
+  );
 
   useEffect(() => {
     setTours(initialTours);
     setTotalAvailableTours(initialTotal);
   }, [initialTours, initialTotal]);
+
+  useEffect(() => {
+    if (initialNextChange) setNextVisibilityChangeAt(initialNextChange);
+  }, [initialNextChange]);
 
   const refetchFeatured = useCallback(async () => {
     try {

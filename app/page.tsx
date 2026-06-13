@@ -11,14 +11,19 @@ import AuthAwareCTA from '../components/home/AuthAwareCTA';
 export const revalidate = 45;
 
 export default async function Home() {
-  const { heroTours, featuredTours, featuredTotal } = await getHomeCatalogData();
+  const { heroTours, featuredTours, featuredTotal, nextVisibilityChangeAt } =
+    await getHomeCatalogData();
 
   return (
     <div>
-      <HeroSection popularTours={heroTours} />
+      <HeroSection popularTours={heroTours} nextVisibilityChangeAt={nextVisibilityChangeAt} />
       <StatsSection />
       <WhyUsSection />
-      <FeaturedTours tours={featuredTours} totalAvailableTours={featuredTotal} />
+      <FeaturedTours
+        tours={featuredTours}
+        totalAvailableTours={featuredTotal}
+        nextVisibilityChangeAt={nextVisibilityChangeAt}
+      />
       <HowItWorksSection />
       <TestimonialsSection />
       <AuthAwareCTA />

@@ -1,6 +1,14 @@
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { Plus, Map } from 'lucide-react';
-import TourAdminList from '@/components/admin/TourAdminList';
+
+const TourAdminList = dynamic(() => import('@/components/admin/TourAdminList'), {
+  loading: () => (
+    <div className="rounded-2xl border border-gray-200 bg-white p-12 text-center text-gray-500">
+      Загрузка списка туров…
+    </div>
+  ),
+});
 
 export const metadata = {
   title: 'Управление турами - Админ панель',
@@ -37,9 +45,7 @@ export default function AdminToursPage() {
         </div>
       </div>
 
-      {/* Список туров с фильтрацией и пагинацией */}
       <TourAdminList />
     </div>
   );
 }
-

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { sendEmail, getBookingConfirmationEmail } from '@/lib/email/send-email';
+import { sendEmail, getBookingConfirmationEmail, isSmtpConfigured } from '@/lib/email/send-email';
 
 function formatTourDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', {
@@ -19,9 +19,23 @@ export async function sendBookingConfirmationEmail(params: {
   sessionStartAt?: string | null;
   numPeople: number;
   totalPrice: number;
-}): Promise<{ sent: boolean; recipients: string[] }> {
-  const { serviceClient, userId, authEmail, tourId, sessionStartAt, numPeople, totalPrice } =
-    params;
+  paymentStatus?: 'pending' | 'paid' | string | null;
+}): Promise<{ sent: boolean; recipients: string[]; reason?: string }> {
+  const {
+    serviceClient,
+    userId,
+    authEmail,
+    tourId,
+    sessionStartAt,
+    numPeople,
+    totalPrice,
+    paymentStatus,
+  } = params;
+
+  if (!isSmtpConfigured()) {
+    console.error('[booking-email] SMTP not configured (EMAIL_USER/EMAIL_PASSWORD on server)');
+    return { sent: false, recipients: [], reason: 'smtp_not_configured' };
+  }
 
   const [{ data: profile }, { data: tour }] = await Promise.all([
     serviceClient
@@ -42,7 +56,7 @@ export async function sendBookingConfirmationEmail(params: {
 
   if (!recipient) {
     console.error('[booking-email] no recipient email for user', userId);
-    return { sent: false, recipients: [] };
+    return { sent: false, recipients: [], reason: 'no_recipient' };
   }
 
   const userName =
@@ -54,17 +68,23 @@ export async function sendBookingConfirmationEmail(params: {
   const dateSource = sessionStartAt || tour.start_date;
   const tourDate = dateSource ? formatTourDate(dateSource) : 'уточняется';
 
+  const pendingPayment = paymentStatus === 'pending';
   const html = getBookingConfirmationEmail(
     userName,
     tour.title,
     tourDate,
     numPeople,
-    parseFloat(String(totalPrice))
+    parseFloat(String(totalPrice)),
+    { pendingPayment }
   );
+
+  const subject = pendingPayment
+    ? `Заявка на бронирование: ${tour.title}`
+    : `Бронирование подтверждено: ${tour.title}`;
 
   const ok = await sendEmail({
     to: recipient,
-    subject: `Бронирование подтверждено: ${tour.title}`,
+    subject,
     html,
   });
 

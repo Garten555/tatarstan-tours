@@ -3,7 +3,6 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
 import {
   attachEffectiveTourStatus,
-  completeFinishedActiveTours,
   fetchActiveSessionsByTourId,
 } from '@/lib/tours/tour-lifecycle-status';
 
@@ -45,12 +44,10 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') || '10')), 50);
     const offset = (page - 1) * limit;
 
-    await completeFinishedActiveTours(serviceClient);
-
-    // Начинаем запрос
     let query = serviceClient
       .from('tours')
-      .select(`
+      .select(
+        `
         id,
         title,
         slug,
@@ -65,7 +62,9 @@ export async function GET(request: NextRequest) {
         cover_image,
         city_id,
         created_at
-      `);
+      `,
+        { count: 'exact' }
+      );
 
     // Поиск по названию
     if (search) {
@@ -92,10 +91,9 @@ export async function GET(request: NextRequest) {
     const validSortFields = ['created_at', 'title', 'price_per_person', 'start_date', 'status'];
     const sortField = validSortFields.includes(sortBy) ? sortBy : 'created_at';
     query = query.order(sortField, { ascending: sortOrder === 'asc' });
+    query = query.range(offset, offset + limit - 1);
 
-    query = query.limit(8000);
-
-    const { data: toursRaw, error } = await query;
+    const { data: toursRaw, error, count } = await query;
 
     if (error) {
       console.error('Ошибка загрузки туров:', error);
@@ -105,12 +103,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // В админке показываем все записи туров без дедупликации.
-    // Дедуп используется только в публичном каталоге, где объединяются похожие карточки.
-    const toursAll = toursRaw || [];
-    const total = toursAll.length;
+    const pageTours = toursRaw || [];
+    const total = count ?? pageTours.length;
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
-    const pageTours = toursAll.slice(offset, offset + limit);
     const sessionsByTourId = await fetchActiveSessionsByTourId(
       serviceClient,
       pageTours.map((t) => t.id)

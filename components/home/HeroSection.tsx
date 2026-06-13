@@ -58,9 +58,17 @@ function GlassTourCard({ tour, linked }: { tour: PopularTour; linked: boolean })
   return <div className="group/card">{inner}</div>;
 }
 
-export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | null }) {
+export function HeroSection({
+  popularTours,
+  nextVisibilityChangeAt: initialNextChange,
+}: {
+  popularTours?: PopularTour[] | null;
+  nextVisibilityChangeAt?: string | null;
+}) {
   const [items, setItems] = useState<PopularTour[]>(() => normalizeHeroItems(popularTours));
-  const [nextVisibilityChangeAt, setNextVisibilityChangeAt] = useState<string | null>(null);
+  const [nextVisibilityChangeAt, setNextVisibilityChangeAt] = useState<string | null>(
+    initialNextChange ?? null
+  );
 
   const refetchHeroTours = useCallback(async () => {
     try {
@@ -80,6 +88,10 @@ export function HeroSection({ popularTours }: { popularTours?: PopularTour[] | n
   useEffect(() => {
     setItems(normalizeHeroItems(popularTours));
   }, [popularTours]);
+
+  useEffect(() => {
+    if (initialNextChange) setNextVisibilityChangeAt(initialNextChange);
+  }, [initialNextChange]);
 
   const watchStartDates = useMemo(
     () => items.map((tour) => tour.startDateIso),

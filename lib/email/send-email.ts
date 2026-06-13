@@ -31,16 +31,31 @@ function getSmtpHostDefault(): string {
   return 'smtp.gmail.com';
 }
 
-// Создаем transporter для отправки email
-function createTransporter(hostOverride?: string, tlsServerName?: string) {
-  const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST || getSmtpHostDefault();
-  const smtpPort = parseInt(process.env.SMTP_PORT || process.env.EMAIL_PORT || '587');
-  const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
-  const smtpPassword =
+function readSmtpCredentials(): { user: string | undefined; password: string | undefined } {
+  const user =
+    process.env.SMTP_USER ||
+    process.env.EMAIL_USER ||
+    process.env.MAIL_USER;
+  const password =
     process.env.SMTP_PASSWORD ||
     process.env.SMTP_PASS ||
-    process.env.EMAIL_PASSWORD;
-  const smtpFrom = process.env.SMTP_FROM || process.env.EMAIL_FROM || smtpUser;
+    process.env.EMAIL_PASSWORD ||
+    process.env.MAIL_PASSWORD;
+  return { user, password };
+}
+
+/** Проверка наличия SMTP-настроек (отдельно от Supabase Auth). */
+export function isSmtpConfigured(): boolean {
+  const { user, password } = readSmtpCredentials();
+  return Boolean(user && password);
+}
+
+// Создаем transporter для отправки email
+function createTransporter(hostOverride?: string, tlsServerName?: string) {
+  const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST || process.env.MAIL_HOST || getSmtpHostDefault();
+  const smtpPort = parseInt(process.env.SMTP_PORT || process.env.EMAIL_PORT || process.env.MAIL_PORT || '587', 10);
+  const { user: smtpUser, password: smtpPassword } = readSmtpCredentials();
+  const smtpFrom = process.env.SMTP_FROM || process.env.EMAIL_FROM || process.env.MAIL_FROM || smtpUser;
 
   if (!smtpUser || !smtpPassword) {
     console.error('❌ SMTP credentials not configured!');
@@ -101,10 +116,11 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
       return false;
     }
 
-    const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
+    const smtpUser = readSmtpCredentials().user;
     const smtpFrom =
       process.env.SMTP_FROM ||
       process.env.EMAIL_FROM ||
+      process.env.MAIL_FROM ||
       smtpUser;
     console.log(`📤 Attempting to send email to ${options.to}...`);
     console.log(`📧 From: ${smtpFrom}`);
@@ -176,8 +192,14 @@ export function getBookingConfirmationEmail(
   tourTitle: string,
   tourDate: string,
   numPeople: number,
-  totalPrice: number
+  totalPrice: number,
+  options?: { pendingPayment?: boolean }
 ): string {
+  const pending = options?.pendingPayment;
+  const headline = pending ? 'Заявка на бронирование принята' : 'Бронирование подтверждено!';
+  const intro = pending
+    ? 'Ваша заявка принята. Оплата наличными при встрече — мы подтвердим бронирование после проверки.'
+    : 'Ваше бронирование успешно создано и подтверждено.';
   return `
     <!DOCTYPE html>
     <html>
@@ -196,11 +218,11 @@ export function getBookingConfirmationEmail(
     <body>
       <div class="container">
         <div class="header">
-          <h1>🎉 Бронирование подтверждено!</h1>
+          <h1>🎉 ${headline}</h1>
         </div>
         <div class="content">
           <p>Здравствуйте, ${userName}!</p>
-          <p>Ваше бронирование успешно создано и подтверждено.</p>
+          <p>${intro}</p>
           
           <div class="info-box">
             <h2 style="margin-top: 0; color: #059669;">Детали бронирования</h2>

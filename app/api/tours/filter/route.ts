@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
-import { dedupeTourRowsForCatalog } from '@/lib/tours/listing-dedupe';
-import { CATALOG_TOURS_PER_PAGE, sortCatalogTourRows } from '@/lib/tours/catalog-sort';
-import { filterCatalogToursByUpcomingSessions } from '@/lib/tours/tour-public-visibility';
+import { CATALOG_TOURS_PER_PAGE } from '@/lib/tours/catalog-sort';
+import { fetchActiveCatalogSnapshot } from '@/lib/tours/active-catalog-listing';
+import { filterCatalogSnapshotRows } from '@/lib/tours/filter-catalog-rows';
 
-// Динамический роут (использует searchParams)
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
@@ -13,7 +12,6 @@ export async function GET(request: NextRequest) {
     const supabase = await createServiceClient();
     const searchParams = request.nextUrl.searchParams;
 
-    // Параметры фильтрации с санитизацией
     const search = sanitizeText(searchParams.get('search') || '').trim();
     const tourType = sanitizeText(searchParams.get('tour_type') || '').trim();
     const category = sanitizeText(searchParams.get('category') || '').trim();
@@ -29,188 +27,78 @@ export async function GET(request: NextRequest) {
     let sortBy = sanitizeText(searchParams.get('sort_by') || 'created_at').trim();
     if (sortBy === 'price') sortBy = 'price_per_person';
     const sortOrder = searchParams.get('sort_order') === 'asc' ? 'asc' : 'desc';
-    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
     const limit = Math.min(
       Math.max(1, parseInt(searchParams.get('limit') || String(CATALOG_TOURS_PER_PAGE), 10)),
       50
     );
     const offset = (page - 1) * limit;
 
-    // Начинаем запрос
-    const now = new Date().toISOString();
-    let query = supabase
-      .from('tours')
-      .select(`
-        id,
-        title,
-        slug,
-        short_desc,
-        cover_image,
-        price_per_person,
-        start_date,
-        end_date,
-        max_participants,
-        current_participants,
-        tour_type,
-        category,
-        status,
-        city_id,
-        city:cities(id, name),
-        created_at
-      `)
-      .eq('status', 'active')
-      .or(`end_date.is.null,end_date.gte.${now}`);
-
-    // Поиск по названию, описанию и городу
+    let cityIdsMatchingSearch: string[] = [];
     if (search) {
-      // Экранируем специальные символы для ilike
       const escapedSearch = search.replace(/%/g, '\\%').replace(/_/g, '\\_');
-      
-      // Сначала ищем города по названию (параллельно с поиском туров)
-      const citiesPromise = supabase
+      const { data: cities } = await supabase
         .from('cities')
         .select('id')
         .ilike('name', `%${escapedSearch}%`)
         .limit(50);
-      
-      // Ищем туры по тексту (название, описание)
-      const textToursPromise = supabase
-        .from('tours')
-        .select('id, city_id')
-        .eq('status', 'active')
-        .or(`end_date.is.null,end_date.gte.${now}`)
-        .or(`title.ilike.%${escapedSearch}%,short_desc.ilike.%${escapedSearch}%,description.ilike.%${escapedSearch}%`);
-      
-      const [citiesResult, textToursResult] = await Promise.all([citiesPromise, textToursPromise]);
-      
-      const cityIds = citiesResult.data?.map(c => c.id) || [];
-      const textTourIds = textToursResult.data?.map(t => t.id) || [];
-      
-      // Находим туры по городам (если города найдены)
-      let cityTourIds: string[] = [];
-      if (cityIds.length > 0) {
-        const cityToursResult = await supabase
-          .from('tours')
-          .select('id')
-          .eq('status', 'active')
-          .or(`end_date.is.null,end_date.gte.${now}`)
-          .in('city_id', cityIds);
-        
-        cityTourIds = cityToursResult.data?.map(t => t.id) || [];
-      }
-      
-      // Объединяем уникальные ID
-      const allTourIds = [...new Set([...textTourIds, ...cityTourIds])];
-      
-      if (allTourIds.length > 0) {
-        query = query.in('id', allTourIds);
-      } else {
-        // Если ничего не найдено, возвращаем пустой результат
-        query = query.eq('id', '00000000-0000-0000-0000-000000000000'); // Несуществующий ID
-      }
+      cityIdsMatchingSearch = (cities ?? []).map((c) => (c as { id: string }).id);
     }
 
-    // Фильтр по типу тура
-    if (tourType) {
-      query = query.eq('tour_type', tourType);
-    }
-
-    // Фильтр по категории
-    if (category) {
-      query = query.eq('category', category);
-    }
-
-    // Фильтр по городу
-    if (cityId) {
-      query = query.eq('city_id', cityId);
-    }
-
-    // Фильтр по цене
-    if (minPrice !== null && minPrice >= 0) {
-      query = query.gte('price_per_person', minPrice);
-    }
-    if (maxPrice !== null && maxPrice >= 0) {
-      query = query.lte('price_per_person', maxPrice);
-    }
-
-    // Фильтр по дате начала
-    if (startDate) {
-      query = query.gte('start_date', startDate);
-    }
-
-    // Фильтр по дате окончания
-    if (endDate) {
-      query = query.lte('end_date', endDate);
-    }
-
-    // Сортировка
-    const validSortFields = ['created_at', 'price_per_person', 'start_date', 'title'];
-    const sortField = validSortFields.includes(sortBy) ? sortBy : 'created_at';
-    query = query.order(sortField, { ascending: sortOrder === 'asc' });
-
-    // Без range: нужна полная выборка для склейки дубликатов одного продукта (одно название + город)
-    query = query.limit(8000);
-
-    const { data: tours, error } = await query;
-
-    if (error) {
-      console.error('Ошибка загрузки туров:', error);
-      return NextResponse.json(
-        { error: 'Не удалось загрузить туры' },
-        { status: 500 }
-      );
-    }
-
-    // Дополнительная фильтрация на уровне приложения
-    // Исключаем туры где end_date < NOW() (завершенные туры)
-    const currentTime = new Date();
-    const activeTours = (tours || []).filter((tour: any) => {
-      // Если end_date нет - показываем (бессрочный тур)
-      if (!tour.end_date) return true;
-      // Если end_date есть - проверяем что тур еще не закончился
-      const endDate = new Date(tour.end_date);
-      return endDate >= currentTime;
+    const snapshot = await fetchActiveCatalogSnapshot(supabase);
+    const catalogTours = filterCatalogSnapshotRows(snapshot.rows, {
+      search,
+      tourType,
+      category,
+      cityId,
+      minPrice,
+      maxPrice,
+      startDate,
+      endDate,
+      sortField: sortBy,
+      sortOrder,
+      cityIdsMatchingSearch,
     });
 
-    const priceFiltered = activeTours.filter((tour: any) => {
-      const p = Number(tour.price_per_person);
-      if (!Number.isFinite(p)) return false;
-      if (minPrice !== null && minPrice >= 0 && p < minPrice) return false;
-      if (maxPrice !== null && maxPrice >= 0 && p > maxPrice) return false;
-      return true;
-    });
-
-    const bookableTours = await filterCatalogToursByUpcomingSessions(
-      supabase,
-      priceFiltered
-    );
-
-    const deduped = dedupeTourRowsForCatalog(bookableTours);
-    const catalogTours = sortCatalogTourRows(deduped, sortField, sortOrder);
     const total = catalogTours.length;
     const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
     const pageSlice = catalogTours.slice(offset, offset + limit);
 
-    // Вычисляем доступные места
-    const toursWithAvailability = pageSlice.map((tour: any) => ({
+    const cityIds = [...new Set(pageSlice.map((t) => t.city_id).filter(Boolean))] as string[];
+    const cityById = new Map<string, { id: string; name: string }>();
+    if (cityIds.length > 0) {
+      const { data: cityRows } = await supabase
+        .from('cities')
+        .select('id, name')
+        .in('id', cityIds);
+      for (const c of cityRows ?? []) {
+        cityById.set((c as { id: string }).id, c as { id: string; name: string });
+      }
+    }
+
+    const toursWithAvailability = pageSlice.map((tour) => ({
       ...tour,
+      city: tour.city_id ? cityById.get(tour.city_id) ?? null : null,
       available_spots: Math.max(0, tour.max_participants - (tour.current_participants || 0)),
       is_available: (tour.current_participants || 0) < tour.max_participants,
     }));
 
-    return NextResponse.json({
-      tours: toursWithAvailability,
-      total,
-      page,
-      limit,
-      totalPages,
-    });
+    return NextResponse.json(
+      {
+        tours: toursWithAvailability,
+        total,
+        page,
+        limit,
+        totalPages,
+      },
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=45, stale-while-revalidate=120',
+        },
+      }
+    );
   } catch (error) {
     console.error('Ошибка API фильтрации туров:', error);
-    return NextResponse.json(
-      { error: 'Внутренняя ошибка сервера' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Внутренняя ошибка сервера' }, { status: 500 });
   }
 }
-

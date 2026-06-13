@@ -1,29 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { unstable_cache } from 'next/cache';
 import { createServiceClient } from '@/lib/supabase/server';
+import { fetchActiveCatalogSnapshot } from '@/lib/tours/active-catalog-listing';
 
-export const dynamic = 'force-dynamic';
+const getCatalogCityIds = unstable_cache(
+  async () => {
+    const supabase = await createServiceClient();
+    const snapshot = await fetchActiveCatalogSnapshot(supabase);
+    return [...new Set(snapshot.rows.map((t) => t.city_id).filter(Boolean))] as string[];
+  },
+  ['catalog-city-ids'],
+  { revalidate: 60 }
+);
 
 /** Города, в которых есть хотя бы один активный тур в каталоге. */
 export async function GET(request: NextRequest) {
   try {
     const q = request.nextUrl.searchParams.get('q')?.trim().toLowerCase() || '';
     const supabase = await createServiceClient();
-    const now = new Date().toISOString();
 
-    const { data: tours, error: toursError } = await supabase
-      .from('tours')
-      .select('city_id')
-      .eq('status', 'active')
-      .or(`end_date.is.null,end_date.gte.${now}`);
-
-    if (toursError) {
-      console.error('[cities/catalog]', toursError);
-      return NextResponse.json({ error: 'Не удалось загрузить города' }, { status: 500 });
-    }
-
-    const cityIds = [...new Set((tours || []).map((t) => t.city_id).filter(Boolean))] as string[];
+    const cityIds = await getCatalogCityIds();
     if (cityIds.length === 0) {
-      return NextResponse.json({ cities: [] });
+      return NextResponse.json(
+        { cities: [] },
+        { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' } }
+      );
     }
 
     let query = supabase.from('cities').select('id, name').in('id', cityIds).order('name', { ascending: true });
@@ -39,7 +40,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Не удалось загрузить города' }, { status: 500 });
     }
 
-    return NextResponse.json({ cities: cities || [] });
+    return NextResponse.json(
+      { cities: cities || [] },
+      { headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120' } }
+    );
   } catch (e) {
     console.error('[cities/catalog]', e);
     return NextResponse.json({ error: 'Внутренняя ошибка сервера' }, { status: 500 });

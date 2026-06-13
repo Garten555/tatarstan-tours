@@ -7,6 +7,7 @@ import {
 } from '@/lib/bookings/admin-booking-patch';
 import { publishBookingsChanged } from '@/lib/pusher/data-sync';
 import { syncTourParticipationAchievements } from '@/lib/achievements/auto-award';
+import { sendBookingConfirmationEmail } from '@/lib/bookings/send-booking-confirmation-email';
 import { bookingCancellationBlockedReason } from '@/lib/bookings/booking-cancellation';
 import type { BookingForReview } from '@/lib/bookings/review-eligibility';
 
@@ -169,6 +170,30 @@ export async function PATCH(
     }
 
     console.log('✅ Бронирование обновлено:', booking);
+
+    if (
+      oldBooking &&
+      updateData.payment_status === 'paid' &&
+      oldBooking.payment_status !== 'paid' &&
+      oldBooking.status !== 'cancelled'
+    ) {
+      try {
+        const { data: authData } = await serviceClient.auth.admin.getUserById(oldBooking.user_id);
+        const tourRow = unwrapRelation(oldBooking.tour);
+        await sendBookingConfirmationEmail({
+          serviceClient,
+          userId: oldBooking.user_id,
+          authEmail: authData?.user?.email ?? null,
+          tourId: oldBooking.tour_id,
+          sessionStartAt: oldBooking.departure_start_at ?? tourRow?.start_date ?? null,
+          numPeople: oldBooking.num_people,
+          totalPrice: parseFloat(String(oldBooking.total_price)),
+          paymentStatus: 'paid',
+        });
+      } catch (emailError) {
+        console.error('[admin-booking] payment confirmation email failed:', emailError);
+      }
+    }
 
     // Отправляем email уведомление при отмене бронирования
     if (updateData.status === 'cancelled' && oldBooking && oldBooking.status !== 'cancelled') {

@@ -558,6 +558,7 @@ export async function POST(request: NextRequest) {
         .eq('id', booking.id);
     }
 
+    let emailSent = false;
     try {
       const emailResult = await sendBookingConfirmationEmail({
         serviceClient,
@@ -567,7 +568,9 @@ export async function POST(request: NextRequest) {
         sessionStartAt: departureStartAt,
         numPeople: num_people,
         totalPrice: total_price,
+        paymentStatus: payment_status,
       });
+      emailSent = emailResult.sent;
       if (!emailResult.sent) {
         console.warn('[booking] confirmation email was not sent', emailResult);
       }
@@ -582,6 +585,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       booking,
+      emailSent,
     });
   } catch (error) {
     console.error('Ошибка API бронирования:', error);

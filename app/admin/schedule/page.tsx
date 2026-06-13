@@ -1,8 +1,16 @@
 import { redirect } from 'next/navigation';
+import dynamic from 'next/dynamic';
 import { createClient } from '@/lib/supabase/server';
-import TeamScheduleBoard from '@/components/admin/TeamScheduleBoard';
 import { canViewTeamSchedule } from '@/lib/admin/require-schedule-viewer';
 import { currentMoscowDay } from '@/lib/tour/team-schedule-range';
+
+const TeamScheduleBoard = dynamic(() => import('@/components/admin/TeamScheduleBoard'), {
+  loading: () => (
+    <div className="rounded-2xl border border-gray-200 bg-white p-16 text-center text-gray-500">
+      Загрузка календаря…
+    </div>
+  ),
+});
 
 export const metadata = {
   title: 'Расписание - Админ панель',
