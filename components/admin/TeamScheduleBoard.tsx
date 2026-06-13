@@ -279,15 +279,23 @@ export default function TeamScheduleBoard({
   const [shiftSession, setShiftSession] = useState<ScheduleSession | null>(null);
   const fetchGenRef = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+  const monthCacheRef = useRef<Map<string, ScheduleResponse>>(new Map());
 
   const isAdmin = viewerRole === 'tour_admin' || viewerRole === 'super_admin';
   const bufferMinutes = data?.buffer_minutes ?? 60;
-  const calendarStale = loading || !data || data.month !== viewMonth;
+
+  const cacheKey = `${viewMonth}:${isAdmin ? guideFilter : 'guide'}`;
+  const calendarStale = loading && !data;
+  const isRefreshing = loading && Boolean(data);
 
   const todayKey = useMemo(() => {
     const now = moscowNowParts();
     return moscowDayKey(now.year, now.month, now.day);
   }, []);
+
+  useEffect(() => {
+    setData(monthCacheRef.current.get(cacheKey) ?? null);
+  }, [cacheKey]);
 
   const loadSchedule = useCallback(async () => {
     const gen = ++fetchGenRef.current;
@@ -295,10 +303,15 @@ export default function TeamScheduleBoard({
     const controller = new AbortController();
     abortRef.current = controller;
 
+    const key = `${viewMonth}:${isAdmin ? guideFilter : 'guide'}`;
     setLoading(true);
     setError(null);
 
-    const timeoutId = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    let timedOut = false;
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, FETCH_TIMEOUT_MS);
 
     try {
       const params = new URLSearchParams({ month: viewMonth });
@@ -314,14 +327,18 @@ export default function TeamScheduleBoard({
       if (!res.ok) {
         throw new Error(json.error || 'Не удалось загрузить расписание');
       }
-      setData(json as ScheduleResponse);
+      const payload = json as ScheduleResponse;
+      monthCacheRef.current.set(key, payload);
+      setData(payload);
     } catch (e) {
       if (gen !== fetchGenRef.current) return;
       if (e instanceof DOMException && e.name === 'AbortError') {
-        setError('Превышено время ожидания. Нажмите «Сегодня» или смените месяц.');
-      } else {
-        setError(e instanceof Error ? e.message : 'Ошибка загрузки');
+        if (timedOut) {
+          setError('Превышено время ожидания. Нажмите «Сегодня» или смените месяц.');
+        }
+        return;
       }
+      setError(e instanceof Error ? e.message : 'Ошибка загрузки');
     } finally {
       window.clearTimeout(timeoutId);
       if (gen === fetchGenRef.current) {
@@ -533,8 +550,13 @@ export default function TeamScheduleBoard({
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
         <div className="rounded-2xl border-2 border-gray-200 bg-white p-4 shadow-lg md:p-5">
-          <h2 className="mb-4 text-sm font-black uppercase tracking-wide text-gray-700">
-            {monthTitle(viewMonth)}
+          <h2 className="mb-4 flex items-center justify-between gap-2 text-sm font-black uppercase tracking-wide text-gray-700">
+            <span>{monthTitle(viewMonth)}</span>
+            {isRefreshing && (
+              <span className="text-[10px] font-semibold normal-case tracking-normal text-emerald-600">
+                Обновление…
+              </span>
+            )}
           </h2>
 
           <div className="mb-2 grid grid-cols-7 gap-1">
@@ -551,7 +573,7 @@ export default function TeamScheduleBoard({
           {calendarStale ? (
             <div className="py-16 text-center text-sm text-gray-500">Загрузка календаря…</div>
           ) : (
-            <div className="grid grid-cols-7 gap-1">
+            <div className={`grid grid-cols-7 gap-1 transition-opacity ${isRefreshing ? 'opacity-60' : ''}`}>
               {(data?.calendar_cells ?? []).map((cell) => {
                 const marker = dayMarkers[cell.key];
                 const isSelected = cell.key === selectedDay;

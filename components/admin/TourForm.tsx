@@ -1157,12 +1157,17 @@ export default function TourForm({
   return (
     <>
     <form onSubmit={handleSubmit} className="max-w-5xl mx-auto space-y-8">
-      {(fileUploadProgress !== null || uploadBusy) && (
+      {(loading || uploadBusy) && (
         <UploadProgressBar
           layout="floating"
-          label={loadingStatus || 'Загрузка файла'}
+          label={
+            loadingStatus ||
+            (uploadBusy ? 'Загрузка файла' : 'Сохранение тура…')
+          }
           subtitle={uploadActiveFileName ?? undefined}
-          percent={fileUploadProgress}
+          percent={
+            uploadBusy && fileUploadProgress !== null ? fileUploadProgress : null
+          }
           indeterminateStyle="shuttle"
         />
       )}

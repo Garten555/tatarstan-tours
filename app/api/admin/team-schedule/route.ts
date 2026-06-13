@@ -131,11 +131,45 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const { data: sessionsRaw, error } = await query;
+    const isAdminViewer = auth.role === 'tour_admin' || auth.role === 'super_admin';
+
+    const restSessionsQuery = isAdminViewer
+      ? serviceClient
+          .from('tour_sessions')
+          .select('guide_id, start_at')
+          .gte('start_at', from)
+          .lt('start_at', to)
+          .neq('status', 'cancelled')
+          .not('guide_id', 'is', null)
+      : null;
+
+    const guidesQuery = isAdminViewer
+      ? serviceClient
+          .from('profiles')
+          .select('id, first_name, last_name')
+          .eq('role', 'guide')
+          .eq('is_banned', false)
+          .order('first_name')
+          .limit(200)
+      : null;
+
+    const [sessionsResult, restSessionsResult, guideProfilesResult, scheduleTemplate] =
+      await Promise.all([
+        query,
+        restSessionsQuery ?? Promise.resolve({ data: [], error: null }),
+        guidesQuery ?? Promise.resolve({ data: [], error: null }),
+        isAdminViewer ? loadTourAutoScheduleConfig(serviceClient) : Promise.resolve(null),
+      ]);
+
+    const { data: sessionsRaw, error } = sessionsResult;
 
     if (error) {
       console.error('GET /api/admin/team-schedule', error);
       return NextResponse.json({ error: 'Не удалось загрузить расписание' }, { status: 500 });
+    }
+
+    if (restSessionsResult.error) {
+      console.error('GET /api/admin/team-schedule rest sessions', restSessionsResult.error);
     }
 
     const tourIds = [
@@ -224,16 +258,8 @@ export async function GET(request: NextRequest) {
     });
 
     let guides: Array<{ id: string; name: string }> = [];
-    if (auth.role === 'tour_admin' || auth.role === 'super_admin') {
-      const { data: guideProfiles } = await serviceClient
-        .from('profiles')
-        .select('id, first_name, last_name')
-        .eq('role', 'guide')
-        .eq('is_banned', false)
-        .order('first_name')
-        .limit(200);
-
-      guides = (guideProfiles ?? []).map((g) => ({
+    if (isAdminViewer) {
+      guides = (guideProfilesResult.data ?? []).map((g) => ({
         id: (g as { id: string }).id,
         name: guideName(g as { first_name: string | null; last_name: string | null }),
       }));
@@ -241,31 +267,14 @@ export async function GET(request: NextRequest) {
 
     const legacyWeekStart = parseMoscowDayKey(weekParam) ?? currentMoscowWeekStart();
 
-    const scheduleTemplate =
-      auth.role === 'tour_admin' || auth.role === 'super_admin'
-        ? await loadTourAutoScheduleConfig(serviceClient)
-        : null;
-
     let restByDay: Record<
       string,
       Array<{ id: string; name: string; kind: 'fixed' | 'rotation' }>
     > = {};
 
-    if (
-      scheduleTemplate &&
-      guides.length > 0 &&
-      (auth.role === 'tour_admin' || auth.role === 'super_admin')
-    ) {
-      const { data: allGuideSessions } = await serviceClient
-        .from('tour_sessions')
-        .select('guide_id, start_at')
-        .gte('start_at', from)
-        .lt('start_at', to)
-        .neq('status', 'cancelled')
-        .not('guide_id', 'is', null);
-
+    if (scheduleTemplate && guides.length > 0 && isAdminViewer) {
       const guideIdsByDay = new Map<string, Set<string>>();
-      for (const row of allGuideSessions ?? []) {
+      for (const row of restSessionsResult.data ?? []) {
         const gid = (row as { guide_id: string }).guide_id;
         const key = sessionMoscowDayKey((row as { start_at: string }).start_at);
         const set = guideIdsByDay.get(key) ?? new Set<string>();
