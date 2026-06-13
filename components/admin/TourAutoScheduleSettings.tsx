@@ -10,6 +10,7 @@ import {
   durationMinutesToParts,
   durationPartsToMinutes,
 } from '@/lib/tour/auto-schedule-config';
+import { GUIDE_REST } from '@/lib/tour/rest-day-ui';
 
 const WEEKDAY_OPTIONS = [
   { value: 1, label: 'Пн' },
@@ -307,9 +308,9 @@ export default function TourAutoScheduleSettings() {
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 space-y-4">
+        <div className={`rounded-xl border p-4 space-y-4 ${GUIDE_REST.section}`}>
           <div>
-            <h3 className="text-sm font-bold text-gray-900">Выходные гидов</h3>
+            <h3 className="text-sm font-bold text-violet-950">Выходные гидов</h3>
             <p className="text-xs text-gray-600 mt-1">
               При шаблоне пн–сб общий выходной — воскресенье. Плюс у каждого гида свой день без
               выезда среди рабочих (например, один отдыхает в понедельник, другой во вторник).
@@ -356,12 +357,12 @@ export default function TourAutoScheduleSettings() {
                     type="button"
                     disabled={config.guide_rest_auto}
                     onClick={() => toggleGuideRestDay(d.value)}
-                    className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-colors ${
+                    className={`px-3 py-2 rounded-xl text-sm font-semibold border transition-all ${
                       on
-                        ? 'bg-slate-600 text-white border-slate-600'
-                        : 'bg-white text-gray-700 border-gray-300 hover:border-slate-300'
-                    } ${config.guide_rest_auto ? 'opacity-80 cursor-default' : ''} ${
-                      isTourDay && on ? 'ring-2 ring-amber-300' : ''
+                        ? GUIDE_REST.dayButtonOn
+                        : GUIDE_REST.dayButtonOff
+                    } ${config.guide_rest_auto ? GUIDE_REST.dayButtonDisabled : ''} ${
+                      isTourDay && on ? 'ring-2 ring-amber-300/90' : ''
                     }`}
                   >
                     {d.label}

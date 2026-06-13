@@ -10,6 +10,7 @@ import {
   Clock,
   DoorOpen,
   Map as MapIcon,
+  Moon,
   User,
 } from 'lucide-react';
 import { formatDayMonthYearRu, formatTimeRu } from '@/lib/date/format-ru';
@@ -17,6 +18,7 @@ import type { TourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
 import {
   guideRestKindLabel,
 } from '@/lib/tour/guide-rest-display';
+import { GUIDE_REST } from '@/lib/tour/rest-day-ui';
 import { moscowNowParts } from '@/lib/tour/moscow-wall-clock';
 import { currentMoscowDay, moscowDayKey, shiftMoscowMonth } from '@/lib/tour/team-schedule-range';
 import { sessionEndMs } from '@/lib/tour/schedule-slot';
@@ -377,6 +379,20 @@ export default function TeamScheduleBoard({
   const totalSessions = filteredSessions.length;
   const endedCount = enrichedSessions.filter((s) => s.time_phase === 'ended').length;
 
+  const monthLegend = useMemo(
+    () => ({
+      upcoming: enrichedSessions.some((s) => s.time_phase === 'upcoming'),
+      ongoing: enrichedSessions.some((s) => s.time_phase === 'ongoing'),
+      ended: enrichedSessions.some((s) => s.time_phase === 'ended'),
+      buffer: enrichedSessions.some((s) => s.schedule_issue === 'buffer'),
+      overlap: enrichedSessions.some((s) => s.schedule_issue === 'overlap'),
+      rest:
+        isAdmin &&
+        [...restingByDay.values()].some((list) => list.length > 0),
+    }),
+    [enrichedSessions, restingByDay, isAdmin]
+  );
+
   const goMonth = (delta: number) => {
     const [y, m] = viewMonth.split('-').map(Number);
     const next = shiftMoscowMonth(y, m, delta);
@@ -550,23 +566,29 @@ export default function TeamScheduleBoard({
                   guideFilter !== 'unassigned' &&
                   !hasTours &&
                   resting.some((r) => r.id === guideFilter);
+                const showRestCell =
+                  isAdmin &&
+                  resting.length > 0 &&
+                  (guideOnRestDay || (guideFilter === 'all' && !hasTours));
 
                 const cellClass =
-                  isSelected
-                    ? 'border-emerald-500 bg-emerald-50 shadow-md ring-2 ring-emerald-200'
-                    : guideOnRestDay
-                      ? 'border-slate-300 bg-slate-100/90 hover:border-slate-400'
-                      : accent === 'overlap'
-                        ? 'border-red-300 bg-red-50/50 hover:border-red-400'
-                        : accent === 'buffer'
-                          ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400'
-                          : accent === 'ongoing'
-                            ? 'border-blue-300 bg-blue-50/40 hover:border-blue-400'
-                            : accent === 'ended'
-                              ? 'border-slate-300 bg-slate-100/70 hover:border-slate-400'
-                              : accent === 'upcoming'
-                                ? 'border-emerald-200 bg-emerald-50/40 hover:border-emerald-300'
-                                : 'border-transparent bg-gray-50/80 hover:border-gray-200 hover:bg-white';
+                  isSelected && showRestCell
+                    ? GUIDE_REST.calendarCellSelected
+                    : isSelected
+                      ? 'border-emerald-500 bg-emerald-50 shadow-md ring-2 ring-emerald-200'
+                      : showRestCell
+                        ? GUIDE_REST.calendarCell
+                        : accent === 'overlap'
+                          ? 'border-red-300 bg-red-50/50 hover:border-red-400'
+                          : accent === 'buffer'
+                            ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400'
+                            : accent === 'ongoing'
+                              ? 'border-blue-400 bg-blue-50/50 hover:border-blue-500 ring-1 ring-blue-200/80'
+                              : accent === 'ended'
+                                ? 'border-slate-300 bg-slate-100/70 hover:border-slate-400'
+                                : accent === 'upcoming'
+                                  ? 'border-emerald-200 bg-emerald-50/40 hover:border-emerald-300'
+                                  : 'border-transparent bg-gray-50/80 hover:border-gray-200 hover:bg-white';
 
                 const dotClass =
                   accent === 'overlap'
@@ -603,7 +625,7 @@ export default function TeamScheduleBoard({
                         setViewMonth(`${y}-${m}`);
                       }
                     }}
-                    className={`relative flex min-h-[4.25rem] flex-col rounded-xl border-2 p-1.5 text-left transition-all sm:min-h-[4.75rem] ${cellClass} ${!cell.in_month ? 'opacity-45' : ''}`}
+                    className={`relative flex min-h-[4.25rem] flex-col rounded-xl border-2 p-1.5 text-left transition-all sm:min-h-[4.75rem] ${cellClass} ${!cell.in_month ? 'opacity-45' : ''} ${marker?.has_ongoing && accent !== 'ongoing' ? 'ring-2 ring-blue-200/70' : ''}`}
                   >
                     <span
                       className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-black ${
@@ -629,11 +651,12 @@ export default function TeamScheduleBoard({
                           <span className="text-[9px] font-bold leading-tight text-amber-800">
                             {marker?.has_overlap ? 'пересечение' : 'мало времени'}
                           </span>
-                        ) : accent === 'ended' ? (
+                        ) : accent === 'ended' && !marker?.has_ongoing && !marker?.has_upcoming ? (
                           <span className="text-[9px] font-bold leading-tight text-slate-600">
                             завершено
                           </span>
-                        ) : accent === 'ongoing' ? (
+                        ) : null}
+                        {marker?.has_ongoing ? (
                           <span className="text-[9px] font-bold leading-tight text-blue-700">
                             идёт сейчас
                           </span>
@@ -641,15 +664,17 @@ export default function TeamScheduleBoard({
                       </div>
                     )}
 
-                    {!hasTours && guideOnRestDay && (
-                      <span className="mt-auto text-[9px] font-bold leading-tight text-slate-600">
-                        отдых
+                    {showRestCell && (
+                      <span className={`mt-auto ${GUIDE_REST.badge}`}>
+                        <Moon className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                        {guideFilter === 'all' ? `отдых · ${resting.length}` : 'отдых'}
                       </span>
                     )}
 
-                    {!hasTours && !guideOnRestDay && isAdmin && guideFilter === 'all' && resting.length > 0 && (
-                      <span className="mt-auto text-[9px] font-bold leading-tight text-slate-600">
-                        отдых: {resting.length}
+                    {hasTours && isAdmin && guideFilter === 'all' && resting.length > 0 && (
+                      <span className={`mt-1 ${GUIDE_REST.badge}`}>
+                        <Moon className="h-2.5 w-2.5 shrink-0" aria-hidden />
+                        отдых · {resting.length}
                       </span>
                     )}
                   </button>
@@ -659,30 +684,40 @@ export default function TeamScheduleBoard({
           )}
 
           <div className="mt-4 flex flex-wrap gap-3 text-[11px] font-semibold text-gray-500">
-            <span className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Предстоит
-            </span>
-            <span className="flex items-center gap-1.5 text-blue-700">
-              <span className="h-2 w-2 rounded-full bg-blue-500" />
-              Идёт сейчас
-            </span>
-            <span className="flex items-center gap-1.5 text-slate-600">
-              <span className="h-2 w-2 rounded-full bg-slate-500" />
-              Завершён
-            </span>
-            <span className="flex items-center gap-1.5 text-amber-700">
-              <span className="h-2 w-2 rounded-full bg-amber-500" />
-              Мало времени между турами
-            </span>
-            <span className="flex items-center gap-1.5 text-red-600">
-              <span className="h-2 w-2 rounded-full bg-red-500" />
-              Пересечение
-            </span>
-            {isAdmin && (
+            {monthLegend.upcoming && (
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                Предстоит
+              </span>
+            )}
+            {monthLegend.ongoing && (
+              <span className="flex items-center gap-1.5 text-blue-700">
+                <span className="h-2 w-2 rounded-full bg-blue-500" />
+                Идёт сейчас
+              </span>
+            )}
+            {monthLegend.ended && (
               <span className="flex items-center gap-1.5 text-slate-600">
-                <span className="h-2 w-2 rounded-full bg-slate-400" />
-                Отдых гида (по шаблону)
+                <span className="h-2 w-2 rounded-full bg-slate-500" />
+                Завершён
+              </span>
+            )}
+            {monthLegend.buffer && (
+              <span className="flex items-center gap-1.5 text-amber-700">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                Мало времени между турами
+              </span>
+            )}
+            {monthLegend.overlap && (
+              <span className="flex items-center gap-1.5 text-red-600">
+                <span className="h-2 w-2 rounded-full bg-red-500" />
+                Пересечение
+              </span>
+            )}
+            {monthLegend.rest && (
+              <span className={`flex items-center gap-1.5 ${GUIDE_REST.legendText}`}>
+                <span className={`h-2 w-2 rounded-full ${GUIDE_REST.legendDot}`} />
+                Отдых гида
               </span>
             )}
           </div>
@@ -711,8 +746,8 @@ export default function TeamScheduleBoard({
           </div>
 
           {isAdmin && selectedResting.length > 0 && (
-            <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
-              <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-600">
+            <div className={`mb-4 ${GUIDE_REST.panel}`}>
+              <p className={`mb-2 ${GUIDE_REST.panelTitle}`}>
                 Отдыхают ({selectedResting.length})
               </p>
               <ul className="space-y-1 text-sm text-slate-800">
