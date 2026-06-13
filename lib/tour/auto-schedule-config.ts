@@ -33,7 +33,7 @@ export const DEFAULT_TOUR_AUTO_SCHEDULE_CONFIG: TourAutoScheduleConfig = {
   weekdays: [1, 2, 3, 4, 5, 6],
   guide_rest_auto: true,
   guide_rest_weekdays: [0],
-  guide_rotate_rest_on_tour_days: true,
+  guide_rotate_rest_on_tour_days: false,
   start_times: ['10:00'],
   duration_minutes: 180,
   slots_ahead: 8,
@@ -81,6 +81,8 @@ export function normalizeTourAutoScheduleConfig(
 
   if (base.guide_rest_auto) {
     base.guide_rest_weekdays = complementTourWeekdays(base.weekdays);
+    /** При авто-выходных (дни без туров) гиды работают все туровые дни; ротация не нужна. */
+    base.guide_rotate_rest_on_tour_days = false;
   }
 
   if (Array.isArray(o.start_times)) {

@@ -312,8 +312,9 @@ export default function TourAutoScheduleSettings() {
           <div>
             <h3 className="text-sm font-bold text-violet-950">Выходные гидов</h3>
             <p className="text-xs text-gray-600 mt-1">
-              При шаблоне пн–сб общий выходной — воскресенье. Плюс у каждого гида свой день без
-              выезда среди рабочих (например, один отдыхает в понедельник, другой во вторник).
+              Выходной — только в днях без туров по шаблону (например, воскресенье при турах пн–сб).
+              В рабочие дни гид может вести сколько угодно выездов; отдельный «день без туров» среди
+              пн–сб включается опционально ниже.
             </p>
           </div>
 
@@ -372,23 +373,28 @@ export default function TourAutoScheduleSettings() {
             </div>
             {config.weekdays.some((d) => config.guide_rest_weekdays.includes(d)) && (
               <p className="text-xs text-amber-800 mt-2">
-                Совпадают с туровыми днями — на них действует только чередование, не полный отдых.
+                День совпадает с туровым — при включённой ротации это не полный выходной, а чередование
+                «день без выезда».
               </p>
             )}
           </div>
 
-          <label className="flex items-start gap-3 cursor-pointer">
+          <label
+            className={`flex items-start gap-3 ${config.guide_rest_auto ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+          >
             <input
               type="checkbox"
               checked={config.guide_rotate_rest_on_tour_days}
+              disabled={config.guide_rest_auto}
               onChange={(e) =>
                 setConfig({ ...config, guide_rotate_rest_on_tour_days: e.target.checked })
               }
               className="mt-1"
             />
             <span className="text-sm text-gray-800">
-              <span className="font-semibold">Чередовать выходной среди рабочих дней</span> — при
-              6 турах в неделю каждый гид работает не более 5 дней (свой день пн–сб + общее вс)
+              <span className="font-semibold">Чередовать «день без выезда» среди рабочих</span>{' '}
+              (редкий режим: при ручных выходных — у каждого гида один туровый день в неделю без
+              слотов; при авто-выходных не используется)
             </span>
           </label>
         </div>

@@ -29,8 +29,8 @@ export function moscowIsoWeekIndex(dayKey: string): number {
 }
 
 /**
- * Туровый день недели, когда гид отдыхает в эту календарную неделю.
- * При 6 рабочих днях (пн–сб) и 2 гидах: у каждого свой день без выезда + общий воскресенье.
+ * Туровый день недели, когда гид отдыхает в эту календарную неделю (опционально).
+ * Только если guide_rotate_rest_on_tour_days — целый день без выездов, не лимит туров в день.
  */
 export function guideTourDayRestWeekdayThisWeek(params: {
   guideId: string;
