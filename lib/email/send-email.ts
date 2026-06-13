@@ -50,7 +50,85 @@ export function isSmtpConfigured(): boolean {
   return Boolean(user && password);
 }
 
-// Создаем transporter для отправки email
+function readResendApiKey(): string | undefined {
+  return process.env.RESEND_API_KEY?.trim() || undefined;
+}
+
+function resolveEmailProvider(): 'resend' | 'smtp' {
+  const explicit = (
+    process.env.MAIL_PROVIDER ||
+    process.env.EMAIL_PROVIDER ||
+    process.env.SMTP_PROVIDER ||
+    ''
+  ).toLowerCase();
+  if (explicit === 'resend') return 'resend';
+  if (explicit === 'smtp') return 'smtp';
+  if (readResendApiKey()) return 'resend';
+  return 'smtp';
+}
+
+export function isResendConfigured(): boolean {
+  return Boolean(readResendApiKey());
+}
+
+/** SMTP или Resend API (для VPS, где порты 587/465 заблокированы). */
+export function isEmailConfigured(): boolean {
+  return isResendConfigured() || isSmtpConfigured();
+}
+
+function readEmailFromAddress(): string | undefined {
+  return (
+    process.env.RESEND_FROM ||
+    process.env.SMTP_FROM ||
+    process.env.EMAIL_FROM ||
+    process.env.MAIL_FROM ||
+    readSmtpCredentials().user
+  )?.trim();
+}
+
+async function sendEmailViaResend(options: EmailOptions): Promise<boolean> {
+  const apiKey = readResendApiKey();
+  if (!apiKey) return false;
+
+  const from = readEmailFromAddress();
+  if (!from) {
+    console.error('❌ RESEND_FROM / SMTP_FROM not configured');
+    return false;
+  }
+
+  console.log(`📤 Resend API → ${options.to} (from: ${from})`);
+
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to: [options.to],
+      subject: options.subject,
+      html: options.html,
+      text: options.text || options.html.replace(/<[^>]*>/g, ''),
+    }),
+  });
+
+  const body = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
+
+  if (!res.ok) {
+    console.error('❌ Resend API error:', res.status, body.message ?? body);
+    return false;
+  }
+
+  console.log(`✅ Email sent via Resend to ${options.to} (id: ${body.id ?? 'ok'})`);
+  return true;
+}
+
+function isSmtpNetworkError(error: unknown): boolean {
+  const code = (error as { code?: string })?.code;
+  return code === 'ETIMEDOUT' || code === 'ECONNREFUSED' || code === 'ENOTFOUND';
+}
+
 function createTransporter(hostOverride?: string, tlsServerName?: string) {
   const smtpHost = process.env.SMTP_HOST || process.env.EMAIL_HOST || process.env.MAIL_HOST || getSmtpHostDefault();
   const smtpPort = parseInt(process.env.SMTP_PORT || process.env.EMAIL_PORT || process.env.MAIL_PORT || '587', 10);
@@ -107,6 +185,31 @@ async function resolveSmtpHost(): Promise<{ host: string; tlsServerName?: string
 }
 
 export async function sendEmail(options: EmailOptions): Promise<boolean> {
+  const provider = resolveEmailProvider();
+
+  if (provider === 'resend' && isResendConfigured()) {
+    return sendEmailViaResend(options);
+  }
+
+  if (isSmtpConfigured()) {
+    const smtpOk = await sendEmailViaSmtp(options);
+    if (smtpOk) return true;
+    if (isResendConfigured()) {
+      console.warn('⚠️ SMTP failed — falling back to Resend API');
+      return sendEmailViaResend(options);
+    }
+    return false;
+  }
+
+  if (isResendConfigured()) {
+    return sendEmailViaResend(options);
+  }
+
+  console.error('❌ Email not configured (set RESEND_API_KEY or SMTP_USER/SMTP_PASSWORD)');
+  return false;
+}
+
+async function sendEmailViaSmtp(options: EmailOptions): Promise<boolean> {
   try {
     const resolvedHost = await resolveSmtpHost();
     const transporter = createTransporter(resolvedHost.host, resolvedHost.tlsServerName);
@@ -153,6 +256,9 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
     if (error.command) {
       console.error(`   Failed command: ${error.command}`);
     }
+    if (isSmtpNetworkError(error)) {
+      console.error('   Hint: VPS may block SMTP ports — set RESEND_API_KEY and MAIL_PROVIDER=resend');
+    }
     
     // Логируем полную ошибку в dev режиме
     if (process.env.NODE_ENV === 'development') {
@@ -186,7 +292,6 @@ export async function sendEmail(options: EmailOptions): Promise<boolean> {
   }
 }
 
-// Шаблоны email для бронирований
 export function getBookingConfirmationEmail(
   userName: string,
   tourTitle: string,

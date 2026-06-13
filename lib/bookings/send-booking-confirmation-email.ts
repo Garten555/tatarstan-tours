@@ -1,5 +1,5 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { sendEmail, getBookingConfirmationEmail, isSmtpConfigured } from '@/lib/email/send-email';
+import { sendEmail, getBookingConfirmationEmail, isEmailConfigured } from '@/lib/email/send-email';
 
 function formatTourDate(iso: string): string {
   return new Date(iso).toLocaleDateString('ru-RU', {
@@ -32,9 +32,9 @@ export async function sendBookingConfirmationEmail(params: {
     paymentStatus,
   } = params;
 
-  if (!isSmtpConfigured()) {
-    console.error('[booking-email] SMTP not configured (EMAIL_USER/EMAIL_PASSWORD on server)');
-    return { sent: false, recipients: [], reason: 'smtp_not_configured' };
+  if (!isEmailConfigured()) {
+    console.error('[booking-email] Email not configured (RESEND_API_KEY or SMTP_USER/SMTP_PASSWORD on server)');
+    return { sent: false, recipients: [], reason: 'email_not_configured' };
   }
 
   const [{ data: profile }, { data: tour }] = await Promise.all([
