@@ -4,6 +4,68 @@ import { requireTourManager } from '@/lib/admin/require-tour-manager';
 import { loadActiveGuideIds } from '@/lib/tour/auto-schedule-settings';
 import { runAutoScheduleForTour } from '@/lib/tour/run-auto-schedule-for-tour';
 
+async function loadBulkTourRows(serviceClient: Awaited<ReturnType<typeof createServiceClient>>) {
+  return serviceClient
+    .from('tours')
+    .select('id, title, status')
+    .in('status', ['draft', 'active', 'completed', 'cancelled'])
+    .order('title', { ascending: true });
+}
+
+function noteForGenerated(g: {
+  newSlots: unknown[];
+  existingFutureCount: number;
+  targetSlots: number;
+  zeroReason?: string;
+  skippedNoGuide?: number;
+}): string | undefined {
+  if (g.newSlots.length > 0) return undefined;
+  if (g.zeroReason === 'already_full') {
+    return `уже ${g.existingFutureCount} будущих слотов (лимит ${g.targetSlots})`;
+  }
+  if (g.zeroReason === 'no_guides') {
+    return 'нет активных гидов — добавьте роль guide';
+  }
+  if ((g.skippedNoGuide ?? 0) > 0) {
+    return `нет свободного гида (${g.skippedNoGuide} пропусков)`;
+  }
+  return 'нет свободных дат в горизонте';
+}
+
+/**
+ * GET /api/admin/tours/auto-schedule/bulk — список туров для пошагового заполнения на клиенте.
+ */
+export async function GET() {
+  try {
+    const supabase = await createClient();
+    const serviceClient = await createServiceClient();
+
+    const auth = await requireTourManager(supabase);
+    if (!auth) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const { data: tours, error } = await loadBulkTourRows(serviceClient);
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const guideIds = await loadActiveGuideIds(serviceClient);
+
+    return NextResponse.json({
+      success: true,
+      tours: (tours ?? []).map((row) => ({
+        id: (row as { id: string }).id,
+        title: String((row as { title?: string }).title || (row as { id: string }).id),
+      })),
+      activeGuides: guideIds.length,
+    });
+  } catch (e) {
+    console.error('GET bulk auto-schedule', e);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
+
 /**
  * POST /api/admin/tours/auto-schedule/bulk
  * Заполняет расписание для черновиков, активных, завершённых и отменённых туров.
@@ -21,11 +83,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}));
     const apply = body?.apply !== false;
 
-    const { data: tours, error } = await serviceClient
-      .from('tours')
-      .select('id, title, status')
-      .in('status', ['draft', 'active', 'completed', 'cancelled'])
-      .order('title', { ascending: true });
+    const { data: tours, error } = await loadBulkTourRows(serviceClient);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -66,18 +124,7 @@ export async function POST(request: NextRequest) {
       }
 
       const g = result.generated;
-      let note: string | undefined;
-      if (g.newSlots.length === 0) {
-        if (g.zeroReason === 'already_full') {
-          note = `уже ${g.existingFutureCount} будущих слотов (лимит ${g.targetSlots})`;
-        } else if (g.zeroReason === 'no_guides') {
-          note = 'нет активных гидов — добавьте роль guide';
-        } else if (g.skippedNoGuide > 0) {
-          note = `нет свободного гида (${g.skippedNoGuide} пропусков)`;
-        } else {
-          note = 'нет свободных дат в горизонте';
-        }
-      }
+      const note = noteForGenerated(g);
 
       results.push({
         tourId,

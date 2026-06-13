@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CalendarClock, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import UploadProgressBar from '@/components/common/UploadProgressBar';
 import { formatDateTimeShortRu } from '@/lib/date/format-ru';
 
 type Props = {
@@ -12,12 +13,14 @@ type Props = {
 
 export default function TourAutoScheduleButton({ tourId, onApplied }: Props) {
   const [busy, setBusy] = useState(false);
+  const [progressLabel, setProgressLabel] = useState('Авторасписание');
   const [preview, setPreview] = useState<
     Array<{ start_at: string; end_at: string; guide_id: string }> | null
   >(null);
 
   const run = async (apply: boolean) => {
     setBusy(true);
+    setProgressLabel(apply ? 'Заполнение расписания…' : 'Предпросмотр слотов…');
     try {
       const res = await fetch(`/api/admin/tours/${tourId}/auto-schedule`, {
         method: 'POST',
@@ -54,6 +57,15 @@ export default function TourAutoScheduleButton({ tourId, onApplied }: Props) {
   };
 
   return (
+    <>
+      {busy && (
+        <UploadProgressBar
+          layout="floating"
+          label={progressLabel}
+          percent={null}
+          indeterminateStyle="shuttle"
+        />
+      )}
     <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-5 space-y-3">
       <div className="flex items-start gap-3">
         <CalendarClock className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
@@ -97,5 +109,6 @@ export default function TourAutoScheduleButton({ tourId, onApplied }: Props) {
         </ul>
       )}
     </div>
+    </>
   );
 }

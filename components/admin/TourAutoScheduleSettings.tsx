@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Play, Plus, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import UploadProgressBar from '@/components/common/UploadProgressBar';
 import type { TourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
 import {
   complementTourWeekdays,
@@ -41,6 +42,9 @@ export default function TourAutoScheduleSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [bulkRunning, setBulkRunning] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<number | null>(null);
+  const [bulkProgressLabel, setBulkProgressLabel] = useState('Авторасписание');
+  const [bulkProgressSubtitle, setBulkProgressSubtitle] = useState<string | undefined>();
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
 
   const load = useCallback(async () => {
@@ -145,39 +149,108 @@ export default function TourAutoScheduleSettings() {
   const runBulk = async () => {
     setBulkRunning(true);
     setBulkResult(null);
+    setBulkProgress(null);
+    setBulkProgressLabel('Загрузка списка туров…');
+    setBulkProgressSubtitle(undefined);
+
     try {
-      const res = await fetch('/api/admin/tours/auto-schedule/bulk', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apply: true }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Ошибка');
-      setBulkResult(data);
-      if (data.totalSlotsAdded === 0) {
-        const guides = data.activeGuides ?? '?';
-        if (data.alreadyFull === data.toursProcessed) {
+      const listRes = await fetch('/api/admin/tours/auto-schedule/bulk', { cache: 'no-store' });
+      const listData = await listRes.json();
+      if (!listRes.ok) throw new Error(listData.error || 'Не удалось получить список туров');
+
+      const tours: Array<{ id: string; title: string }> = listData.tours ?? [];
+      const activeGuides = listData.activeGuides ?? 0;
+      const total = tours.length;
+
+      if (total === 0) {
+        toast.error('Нет туров для заполнения');
+        return;
+      }
+
+      setBulkProgressLabel('Авторасписание');
+      const results: BulkResult['results'] = [];
+      let totalAdded = 0;
+
+      for (let i = 0; i < total; i++) {
+        const tour = tours[i];
+        setBulkProgressSubtitle(tour.title);
+        setBulkProgress(Math.round((i / total) * 100));
+
+        const res = await fetch(`/api/admin/tours/${tour.id}/auto-schedule`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ apply: true }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          results.push({
+            title: tour.title,
+            added: 0,
+            error: data.error || 'Ошибка',
+          });
+        } else {
+          const added = Array.isArray(data.newSlots) ? data.newSlots.length : 0;
+          totalAdded += added;
+          let note: string | undefined;
+          if (added === 0) {
+            if (data.zeroReason === 'already_full') {
+              note = `уже ${data.existingFutureCount} будущих слотов (лимит ${data.targetSlots})`;
+            } else if (data.zeroReason === 'no_guides') {
+              note = 'нет активных гидов — добавьте роль guide';
+            } else if ((data.skippedNoGuide ?? 0) > 0) {
+              note = `нет свободного гида (${data.skippedNoGuide} пропусков)`;
+            } else {
+              note = 'нет свободных дат в горизонте';
+            }
+          }
+          results.push({
+            title: data.tourTitle || tour.title,
+            added,
+            existingFuture: data.existingFutureCount,
+            target: data.targetSlots,
+            note,
+          });
+        }
+
+        setBulkProgress(Math.round(((i + 1) / total) * 100));
+      }
+
+      const failed = results.filter((r) => r.error).length;
+      const alreadyFull = results.filter((r) => r.note?.startsWith('уже')).length;
+      const bulk: BulkResult = {
+        toursProcessed: total,
+        totalSlotsAdded: totalAdded,
+        failed,
+        alreadyFull,
+        activeGuides,
+        results,
+      };
+      setBulkResult(bulk);
+
+      if (totalAdded === 0) {
+        if (alreadyFull === total) {
           toast(
-            `Слотов не добавлено: у всех туров уже есть будущие выезды (лимит «слотов вперёд»). Гидов: ${guides}.`,
+            `Слотов не добавлено: у всех туров уже есть будущие выезды (лимит «слотов вперёд»). Гидов: ${activeGuides}.`,
             { icon: 'ℹ️' }
           );
-        } else if (guides === 0) {
+        } else if (activeGuides === 0) {
           toast.error('Нет активных гидов (роль guide). Слоты не создаются.');
         } else {
           toast(
-            `+0 слотов. Гидов: ${guides}. Смотрите детали ниже — возможно, расписание уже заполнено или гиды заняты.`,
+            `+0 слотов. Гидов: ${activeGuides}. Смотрите детали ниже.`,
             { icon: '⚠️' }
           );
         }
       } else {
-        toast.success(
-          `Готово: +${data.totalSlotsAdded} слотов по ${data.toursProcessed} турам`
-        );
+        toast.success(`Готово: +${totalAdded} слотов по ${total} турам`);
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Массовое заполнение не удалось');
     } finally {
       setBulkRunning(false);
+      setBulkProgress(null);
+      setBulkProgressSubtitle(undefined);
     }
   };
 
@@ -192,6 +265,15 @@ export default function TourAutoScheduleSettings() {
 
   return (
     <div className="space-y-8">
+      {bulkRunning && (
+        <UploadProgressBar
+          layout="floating"
+          label={bulkProgressLabel}
+          subtitle={bulkProgressSubtitle}
+          percent={bulkProgress}
+          indeterminateStyle="shuttle"
+        />
+      )}
       <div className="rounded-2xl border border-emerald-100 bg-white p-6 shadow-sm space-y-6">
         <div>
           <h2 className="text-lg font-bold text-gray-900">Общий шаблон</h2>
