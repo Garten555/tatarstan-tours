@@ -9,10 +9,14 @@ import { publishBookingsChanged } from '@/lib/pusher/data-sync';
 import { syncTourParticipationAchievements } from '@/lib/achievements/auto-award';
 import { sendBookingConfirmationEmail } from '@/lib/bookings/send-booking-confirmation-email';
 import {
-  BOOKING_DUPLICATE_SELECT,
   isBlockingDuplicateBooking,
   normalizeBookingDuplicateRow,
 } from '@/lib/bookings/duplicate-booking';
+import {
+  findUserBookingScheduleConflict,
+  userScheduleConflictMessage,
+  USER_SCHEDULE_BOOKING_SELECT,
+} from '@/lib/bookings/user-schedule-conflict';
 import {
   buildSafeCardPaymentMeta,
   validateCardPaymentInput,
@@ -128,6 +132,35 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if ((tour as any).status !== 'active') {
+      return NextResponse.json(
+        { error: 'Тур недоступен для бронирования' },
+        { status: 400 }
+      );
+    }
+
+    const { data: userActiveBookingsRaw, error: userBookingsError } = await serviceClient
+      .from('bookings')
+      .select(USER_SCHEDULE_BOOKING_SELECT)
+      .eq('user_id', user.id)
+      .in('status', ['pending', 'confirmed']);
+
+    if (userBookingsError) {
+      console.error('Ошибка загрузки бронирований пользователя:', userBookingsError);
+      return NextResponse.json(
+        { error: 'Не удалось проверить бронирование' },
+        { status: 500 }
+      );
+    }
+
+    const userActiveBookings = (userActiveBookingsRaw || []).map((row) => {
+      const record = row as Record<string, unknown>;
+      return {
+        ...normalizeBookingDuplicateRow(record),
+        id: record.id ? String(record.id) : undefined,
+      };
+    });
+
     const now = new Date();
 
     const sessionProbeRes = await serviceClient
@@ -187,24 +220,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const { data: existingBookings, error: existingBookingsError } = await serviceClient
-        .from('bookings')
-        .select(BOOKING_DUPLICATE_SELECT)
-        .eq('tour_id', tour_id)
-        .eq('user_id', user.id)
-        .eq('session_id', session_id)
-        .in('status', ['pending', 'confirmed']);
-
-      if (existingBookingsError) {
-        console.error('Ошибка проверки бронирований:', existingBookingsError);
-        return NextResponse.json(
-          { error: 'Не удалось проверить бронирование' },
-          { status: 500 }
-        );
-      }
-
-      const hasActiveDuplicate = (existingBookings || []).some((row) =>
-        isBlockingDuplicateBooking(normalizeBookingDuplicateRow(row as Record<string, unknown>), tour_id, session_id)
+      const hasActiveDuplicate = userActiveBookings.some((row) =>
+        isBlockingDuplicateBooking(row, tour_id, session_id)
       );
 
       if (hasActiveDuplicate) {
@@ -238,28 +255,35 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const { data: existingBookings, error: existingBookingsError } = await serviceClient
-        .from('bookings')
-        .select(BOOKING_DUPLICATE_SELECT)
-        .eq('tour_id', tour_id)
-        .eq('user_id', user.id)
-        .in('status', ['pending', 'confirmed']);
-
-      if (existingBookingsError) {
-        console.error('Ошибка проверки бронирований:', existingBookingsError);
-        return NextResponse.json(
-          { error: 'Не удалось проверить бронирование' },
-          { status: 500 }
-        );
-      }
-
-      const hasActiveDuplicate = (existingBookings || []).some((row) =>
-        isBlockingDuplicateBooking(normalizeBookingDuplicateRow(row as Record<string, unknown>), tour_id, null)
+      const hasActiveDuplicate = userActiveBookings.some((row) =>
+        isBlockingDuplicateBooking(row, tour_id, null)
       );
 
       if (hasActiveDuplicate) {
         return NextResponse.json(
           { error: 'У вас уже есть бронирование на этот тур' },
+          { status: 400 }
+        );
+      }
+    }
+
+    const departureStartAt = sessionRow
+      ? sessionRow.start_at
+      : (tour as { start_date?: string | null }).start_date ?? null;
+    const departureEndAt = sessionRow
+      ? sessionRow.end_at ?? null
+      : (tour as { end_date?: string | null }).end_date ?? null;
+
+    if (departureStartAt) {
+      const scheduleConflict = findUserBookingScheduleConflict(userActiveBookings, {
+        startAt: departureStartAt,
+        endAt: departureEndAt,
+        excludeTourId: tour_id,
+        excludeSessionId: session_id,
+      });
+      if (scheduleConflict) {
+        return NextResponse.json(
+          { error: userScheduleConflictMessage(scheduleConflict) },
           { status: 400 }
         );
       }
@@ -288,13 +312,6 @@ export async function POST(request: NextRequest) {
       payment_method === 'qr_code'
         ? payment_data?.qr_payment_ref || generatePaymentRef()
         : null;
-
-    const departureStartAt = sessionRow
-      ? sessionRow.start_at
-      : (tour as { start_date?: string | null }).start_date ?? null;
-    const departureEndAt = sessionRow
-      ? sessionRow.end_at ?? null
-      : (tour as { end_date?: string | null }).end_date ?? null;
 
     const payment_status = initialPaymentStatus(payment_method);
     const booking_status = initialBookingStatus(payment_method);

@@ -29,9 +29,11 @@ import {
   normalizeCardNumber,
   validateCardPaymentInput,
 } from '@/lib/payment/card-validation';
-import { isBlockingDuplicateBooking } from '@/lib/bookings/duplicate-booking';
-import type { BookingForReview } from '@/lib/bookings/review-eligibility';
-
+import { isBlockingDuplicateBooking, normalizeBookingDuplicateRow, type BookingDuplicateCheck } from '@/lib/bookings/duplicate-booking';
+import {
+  findUserBookingScheduleConflict,
+  userScheduleConflictMessage,
+} from '@/lib/bookings/user-schedule-conflict';
 interface BookingFormProps {
   tour: any;
   /** Выбранный слот (несколько дат на один тур) */
@@ -74,6 +76,7 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
   const [profile, setProfile] = useState<any>(null);
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [hasExistingBooking, setHasExistingBooking] = useState(false);
+  const [scheduleConflictMessage, setScheduleConflictMessage] = useState<string | null>(null);
   const [qrPaymentRef, setQrPaymentRef] = useState<string | null>(null);
   
   // Данные формы
@@ -175,33 +178,34 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
         const response = await fetch('/api/user/bookings');
         const data = await response.json();
         if (response.ok && Array.isArray(data.bookings)) {
-          const hasBooking = data.bookings.some((booking: Record<string, unknown>) =>
-            isBlockingDuplicateBooking(
-              {
-                tour_id: String(booking.tour_id),
-                session_id: booking.session_id ? String(booking.session_id) : null,
-                status: String(booking.status ?? ''),
-                departure_end_at: (booking.departure_end_at as string | null) ?? null,
-                departure_start_at: (booking.departure_start_at as string | null) ?? null,
-                tour_session: Array.isArray(booking.tour_session)
-                  ? booking.tour_session[0] ?? null
-                  : (booking.tour_session as BookingForReview['tour_session']),
-                tour: Array.isArray(booking.tour)
-                  ? booking.tour[0] ?? null
-                  : (booking.tour as BookingForReview['tour']),
-              },
-              tour.id,
-              session?.id ?? null
-            )
+          const normalized: BookingDuplicateCheck[] = data.bookings.map((booking: Record<string, unknown>) =>
+            normalizeBookingDuplicateRow(booking)
           );
+          const hasBooking = normalized.some((booking: BookingDuplicateCheck) =>
+            isBlockingDuplicateBooking(booking, tour.id, session?.id ?? null)
+          );
+          const departureStart = session?.start_at ?? tour.start_date ?? null;
+          const departureEnd = session?.end_at ?? tour.end_date ?? null;
+          const scheduleConflict = departureStart
+            ? findUserBookingScheduleConflict(normalized, {
+                startAt: departureStart,
+                endAt: departureEnd,
+                excludeTourId: tour.id,
+                excludeSessionId: session?.id ?? null,
+              })
+            : null;
+
           setHasExistingBooking(hasBooking);
+          setScheduleConflictMessage(
+            scheduleConflict ? userScheduleConflictMessage(scheduleConflict) : null
+          );
         }
       } catch (err) {
         console.error('Ошибка загрузки бронирований:', err);
       }
     };
     loadExistingBookings();
-  }, [tour.id, session?.id]);
+  }, [tour.id, tour.start_date, tour.end_date, session?.id, session?.start_at, session?.end_at]);
 
   useEffect(() => {
     const loadTravelers = async () => {
@@ -311,6 +315,10 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
 
   // Обработка бронирования
   const handleBooking = async () => {
+    if (scheduleConflictMessage) {
+      setError(scheduleConflictMessage);
+      return;
+    }
     if (!validateForm()) return;
 
     setLoading(true);
@@ -967,6 +975,13 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
                 </div>
               )}
 
+              {scheduleConflictMessage && (
+                <div className="mt-6 p-5 bg-gradient-to-br from-amber-50 to-amber-100/50 border-2 border-amber-300 rounded-2xl flex items-center gap-3">
+                  <AlertCircle className="w-6 h-6 text-amber-700 flex-shrink-0" />
+                  <span className="text-base font-medium text-amber-950">{scheduleConflictMessage}</span>
+                </div>
+              )}
+
               {/* Ошибка */}
               {error && (
                 <div className="mt-6 p-5 bg-gradient-to-br from-red-50 to-red-100/50 border-2 border-red-300 rounded-2xl flex items-center gap-3">
@@ -985,7 +1000,7 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
                 </button>
                 <button
                   onClick={handleBooking}
-                  disabled={loading}
+                  disabled={loading || Boolean(scheduleConflictMessage) || hasExistingBooking}
                   className="flex-1 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white px-6 py-4 rounded-xl font-bold text-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                 >
                   {loading ? (
