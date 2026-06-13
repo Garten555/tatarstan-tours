@@ -1,8 +1,11 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { formatDayMonthLongRu } from '@/lib/date/format-ru';
+import { parseTourTimestampMs } from '@/lib/date/tour-timestamp';
 import { sortCatalogTourRows } from '@/lib/tours/catalog-sort';
 import {
   dedupeTourRowsForCatalog,
+  groupKey,
   type TourRowForDedupe,
 } from '@/lib/tours/listing-dedupe';
 import {
@@ -70,6 +73,37 @@ export type ActiveCatalogSnapshot = {
   sessionsByTourId: Map<string, CatalogSessionRow[]>;
 };
 
+/** После dedupe слоты всех дубликатов (название+город) привязываем к канонической карточке. */
+function mergeSessionsForDedupedCatalog<T extends TourRowForDedupe>(
+  bookable: T[],
+  deduped: T[],
+  sessionsByTourId: Map<string, CatalogSessionRow[]>
+): Map<string, CatalogSessionRow[]> {
+  const siblingsByKey = new Map<string, T[]>();
+  for (const tour of bookable) {
+    const key = groupKey(tour);
+    const list = siblingsByKey.get(key) ?? [];
+    list.push(tour);
+    siblingsByKey.set(key, list);
+  }
+
+  const merged = new Map<string, CatalogSessionRow[]>();
+  for (const tour of deduped) {
+    const siblings = siblingsByKey.get(groupKey(tour)) ?? [tour];
+    const sessions: CatalogSessionRow[] = [];
+    const seen = new Set<string>();
+    for (const sibling of siblings) {
+      for (const row of sessionsByTourId.get(sibling.id) ?? []) {
+        if (seen.has(row.id)) continue;
+        seen.add(row.id);
+        sessions.push(row);
+      }
+    }
+    merged.set(tour.id, sessions);
+  }
+  return merged;
+}
+
 /** Активные туры каталога: как в /api/tours/filter до сортировки и пагинации. */
 export async function fetchActiveCatalogTourRows(
   supabase: SupabaseClient
@@ -98,7 +132,8 @@ export async function fetchActiveCatalogSnapshot(
 
   const active = (data ?? []).filter((tour) => {
     if (!tour.end_date) return true;
-    return new Date(tour.end_date) >= now;
+    const endMs = parseTourTimestampMs(tour.end_date);
+    return endMs === null || endMs >= now.getTime();
   }) as ActiveCatalogTourRow[];
 
   if (active.length === 0) {
@@ -133,13 +168,18 @@ export async function fetchActiveCatalogSnapshot(
     isTourVisibleInPublicCatalog(tour, sessionsByTourId.get(tour.id) ?? [], now)
   );
   const rows = dedupeTourRowsForCatalog(bookable);
+  const mergedSessionsByTourId = mergeSessionsForDedupedCatalog(
+    bookable,
+    rows,
+    sessionsByTourId
+  );
   const nextVisibilityChangeAt = computeNextCatalogVisibilityChangeAt(
     bookable,
     sessionsByTourId,
     now
   );
 
-  return { rows, nextVisibilityChangeAt, sessionsByTourId };
+  return { rows, nextVisibilityChangeAt, sessionsByTourId: mergedSessionsByTourId };
 }
 
 export function pickHomeFeaturedTours(
@@ -172,19 +212,23 @@ export function toHeroPopularTour(
   tour: Pick<ActiveCatalogTourRow, 'title' | 'slug' | 'price_per_person' | 'start_date' | 'end_date'>,
   nearestDepartureIso?: string | null
 ): HeroPopularTour {
-  const start = nearestDepartureIso || (tour.start_date ? String(tour.start_date) : '');
-  const endRaw = tour.end_date != null ? String(tour.end_date) : start;
+  const departureIso =
+    nearestDepartureIso || (tour.start_date ? String(tour.start_date) : '');
+  const tourStart = tour.start_date ? String(tour.start_date) : '';
+  const tourEnd = tour.end_date != null ? String(tour.end_date) : tourStart;
   let durationLabel: string | null = null;
-  if (start) {
-    const s = new Date(start);
-    const e = new Date(endRaw);
-    const diffMs = Math.abs(e.getTime() - s.getTime());
-    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) {
-      const h = Math.ceil(diffMs / (1000 * 60 * 60));
-      durationLabel = h > 0 ? `${h} ч` : '1 день';
-    } else {
-      durationLabel = `${diffDays} ${diffDays === 1 ? 'день' : diffDays < 5 ? 'дня' : 'дней'}`;
+  if (tourStart) {
+    const startMs = parseTourTimestampMs(tourStart);
+    const endMs = parseTourTimestampMs(tourEnd);
+    if (startMs !== null && endMs !== null) {
+      const diffMs = Math.abs(endMs - startMs);
+      const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      if (diffDays === 0) {
+        const h = Math.ceil(diffMs / (1000 * 60 * 60));
+        durationLabel = h > 0 ? `${h} ч` : '1 день';
+      } else {
+        durationLabel = `${diffDays} ${diffDays === 1 ? 'день' : diffDays < 5 ? 'дня' : 'дней'}`;
+      }
     }
   }
   return {
@@ -192,10 +236,8 @@ export function toHeroPopularTour(
     slug: tour.slug ? String(tour.slug) : undefined,
     price: typeof tour.price_per_person === 'number' ? tour.price_per_person : null,
     durationLabel,
-    startDateLabel: start
-      ? new Date(start).toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' })
-      : null,
-    startDateIso: start || null,
+    startDateLabel: departureIso ? formatDayMonthLongRu(departureIso) : null,
+    startDateIso: departureIso || null,
   };
 }
 
@@ -224,7 +266,8 @@ export function pickHeroNearestTours(
         Boolean(entry.departureAt && entry.tour.title?.trim() && entry.tour.slug?.trim())
     )
     .sort(
-      (a, b) => new Date(a.departureAt).getTime() - new Date(b.departureAt).getTime()
+      (a, b) =>
+        (parseTourTimestampMs(a.departureAt) ?? 0) - (parseTourTimestampMs(b.departureAt) ?? 0)
     );
 
   const tours: HeroPopularTour[] = [];

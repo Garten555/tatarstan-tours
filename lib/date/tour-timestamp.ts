@@ -1,7 +1,7 @@
 /** Часовой пояс туров (Татарстан / Москва, без DST). */
 export const TOUR_WALL_CLOCK_TZ = 'Europe/Moscow';
 
-const DATETIME_LOCAL_RE = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/;
+const DATETIME_LOCAL_RE = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?$/;
 const HAS_TZ_RE = /[zZ]|[+-]\d{2}:\d{2}$/;
 
 /** ISO / timestamptz → значение для input[type="datetime-local"] (локальное время браузера). */
@@ -47,9 +47,31 @@ export function datetimeLocalInputToIso(value: string | null | undefined): strin
   return d.toISOString();
 }
 
-/** «Стенное» время без суффикса TZ трактуем как Europe/Moscow (для API на сервере в UTC). */
+/** Строка даты/времени тура → ms UTC (naive = Europe/Moscow). */
+export function parseTourTimestampMs(value: string | null | undefined): number | null {
+  if (value == null) return null;
+  const v = String(value).trim();
+  if (!v) return null;
+
+  if (HAS_TZ_RE.test(v)) {
+    const t = new Date(v).getTime();
+    return Number.isFinite(t) ? t : null;
+  }
+
+  const m = v.match(DATETIME_LOCAL_RE);
+  if (m) {
+    const [, y, mo, d, h = '0', mi = '0', s = '0'] = m;
+    const utcMs = Date.UTC(+y, +mo - 1, +d, +h - 3, +mi, +s);
+    return Number.isFinite(utcMs) ? utcMs : null;
+  }
+
+  const t = new Date(v).getTime();
+  return Number.isFinite(t) ? t : null;
+}
+
+/** Naive datetime-local → ISO UTC (08:00 = 08:00 Moscow). */
 function wallClockMoscowToIso(value: string): string | null {
-  const m = value.trim().match(DATETIME_LOCAL_RE);
+  const m = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/);
   if (!m) return null;
   const [, y, mo, d, h, mi, s = '0'] = m;
   const utcMs = Date.UTC(+y, +mo - 1, +d, +h - 3, +mi, +s);

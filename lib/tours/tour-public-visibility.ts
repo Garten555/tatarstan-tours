@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { LEGACY_TOUR_SESSION_ID } from '@/lib/tour/legacy-session';
+import { parseTourTimestampMs } from '@/lib/date/tour-timestamp';
 import type { TourRowForDedupe } from '@/lib/tours/listing-dedupe';
 
 type TourDates = {
@@ -19,14 +20,16 @@ export function isTourEndedByEndDate(
   now: Date = new Date()
 ): boolean {
   if (!tour.end_date) return false;
-  return new Date(tour.end_date) < now;
+  const endMs = parseTourTimestampMs(tour.end_date);
+  return endMs !== null && endMs < now.getTime();
 }
 
 export function isUpcomingSession(
   startAt: string,
   now: Date = new Date()
 ): boolean {
-  return new Date(startAt) > now;
+  const startMs = parseTourTimestampMs(startAt);
+  return startMs !== null && startMs > now.getTime();
 }
 
 /** Будущий старт по полям строки tours (повторный запуск после прошлых слотов). */
@@ -35,8 +38,8 @@ export function hasScheduledFutureStart(
   now: Date = new Date()
 ): boolean {
   if (!tour.start_date) return false;
-  const startMs = new Date(tour.start_date).getTime();
-  return Number.isFinite(startMs) && startMs > now.getTime();
+  const startMs = parseTourTimestampMs(tour.start_date);
+  return startMs !== null && startMs > now.getTime();
 }
 
 /** Только будущие слоты (для страницы тура и выбора даты). */
@@ -104,15 +107,15 @@ export function nearestUpcomingDepartureAt(
 
   const realSessions = sessions.filter((s) => s.id !== LEGACY_TOUR_SESSION_ID);
   for (const session of realSessions) {
-    const t = new Date(session.start_at).getTime();
-    if (Number.isFinite(t) && t > nowMs) {
+    const t = parseTourTimestampMs(session.start_at);
+    if (t !== null && t > nowMs) {
       minMs = minMs === null ? t : Math.min(minMs, t);
     }
   }
 
   if (tour.start_date) {
-    const t = new Date(tour.start_date).getTime();
-    if (Number.isFinite(t) && t > nowMs) {
+    const t = parseTourTimestampMs(tour.start_date);
+    if (t !== null && t > nowMs) {
       minMs = minMs === null ? t : Math.min(minMs, t);
     }
   }
@@ -135,15 +138,15 @@ export function computeNextCatalogVisibilityChangeAt(
 
     const realSessions = sessions.filter((s) => s.id !== LEGACY_TOUR_SESSION_ID);
     for (const session of realSessions) {
-      const t = new Date(session.start_at).getTime();
-      if (Number.isFinite(t) && t > nowMs) {
+      const t = parseTourTimestampMs(session.start_at);
+      if (t !== null && t > nowMs) {
         minMs = minMs === null ? t : Math.min(minMs, t);
       }
     }
 
     if (tour.start_date) {
-      const t = new Date(tour.start_date).getTime();
-      if (Number.isFinite(t) && t > nowMs) {
+      const t = parseTourTimestampMs(tour.start_date);
+      if (t !== null && t > nowMs) {
         minMs = minMs === null ? t : Math.min(minMs, t);
       }
     }
