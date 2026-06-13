@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import TourCard from '@/components/tours/TourCard';
 import CatalogCityCombobox, { type CatalogCity } from '@/components/tours/CatalogCityCombobox';
@@ -19,6 +19,11 @@ import {
 } from 'lucide-react';
 import { sanitizeText } from '@/lib/utils/sanitize';
 import { CATALOG_TOURS_PER_PAGE, parseClientSortParam } from '@/lib/tours/catalog-sort';
+import {
+  consumeToursCatalogScrollFlag,
+  scrollToToursCatalog,
+  TOURS_CATALOG_SECTION_ID,
+} from '@/lib/tours/catalog-navigation';
 
 interface Tour {
   id: string;
@@ -73,9 +78,16 @@ function ToursPageContent() {
   
   const [tours, setTours] = useState<Tour[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Всего по фильтрам (все страницы). */
   const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
+  /** Все туры каталога без фильтров — блок «N туров доступно» в hero. */
+  const [catalogTotal, setCatalogTotal] = useState(0);
+  const [page, setPage] = useState(() => {
+    const p = parseInt(searchParams.get('page') || '1', 10);
+    return Number.isFinite(p) && p > 0 ? p : 1;
+  });
   const [totalPages, setTotalPages] = useState(1);
+  const pageScrollReady = useRef(false);
   
   // Фильтры
   const [search, setSearch] = useState(searchParams.get('search') || '');
@@ -131,6 +143,9 @@ function ToursPageContent() {
       const data = await response.json();
       setTours(data.tours || []);
       setTotal(data.total || 0);
+      if (typeof data.catalogTotal === 'number') {
+        setCatalogTotal(data.catalogTotal);
+      }
       setTotalPages(data.totalPages || 1);
       
       // Обновляем URL без перезагрузки страницы
@@ -193,14 +208,39 @@ function ToursPageContent() {
     }
   }, [searchParams, selectedCity, catalogCities]);
 
+  // Страница из URL (назад в браузере)
+  useEffect(() => {
+    const urlPage = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    setPage((prev) => (prev !== urlPage ? urlPage : prev));
+  }, [searchParams]);
+
   // Загрузка туров при изменении фильтров
   useEffect(() => {
     loadTours();
   }, [loadTours]);
 
-  // Прокрутка вверх при смене страницы
+  // Прокрутка к каталогу после возврата с карточки тура или по #tours-catalog
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (loading) return;
+    const fromHash =
+      typeof window !== 'undefined' && window.location.hash === `#${TOURS_CATALOG_SECTION_ID}`;
+    const fromFlag = consumeToursCatalogScrollFlag();
+    if (fromHash || fromFlag) {
+      scrollToToursCatalog('smooth');
+      if (fromHash && typeof window !== 'undefined') {
+        const clean = `${window.location.pathname}${window.location.search}`;
+        window.history.replaceState(null, '', clean);
+      }
+    }
+  }, [loading]);
+
+  // Прокрутка к фильтрам при смене страницы пагинации (не в самый верх hero)
+  useEffect(() => {
+    if (!pageScrollReady.current) {
+      pageScrollReady.current = true;
+      return;
+    }
+    scrollToToursCatalog('smooth');
   }, [page]);
 
   // Сброс фильтров
@@ -302,9 +342,16 @@ function ToursPageContent() {
                 <Loader2 className="w-6 h-6 sm:w-7 sm:h-7 animate-spin text-emerald-600" />
               ) : (
                 <>
-                  <span className="text-3xl sm:text-4xl md:text-5xl font-black text-emerald-600">{total}</span>
+                  <span className="text-3xl sm:text-4xl md:text-5xl font-black text-emerald-600">
+                    {catalogTotal || total}
+                  </span>
                   <span className="text-gray-800 text-base sm:text-lg md:text-xl lg:text-2xl font-bold">
-                    {total === 1 ? 'тур' : total < 5 ? 'тура' : 'туров'} доступно
+                    {(catalogTotal || total) === 1
+                      ? 'тур'
+                      : (catalogTotal || total) < 5
+                        ? 'тура'
+                        : 'туров'}{' '}
+                    доступно
                   </span>
                 </>
               )}
@@ -314,7 +361,10 @@ function ToursPageContent() {
       </section>
 
       {/* Каталог: фильтры отдельно от сетки */}
-      <section className="border-t border-gray-100 bg-gray-50 py-6 sm:py-8 md:py-10">
+      <section
+        id={TOURS_CATALOG_SECTION_ID}
+        className="border-t border-gray-100 bg-gray-50 py-6 sm:py-8 md:py-10 scroll-mt-20"
+      >
         <div className="container mx-auto px-4 sm:px-5 md:px-6 lg:px-8 pb-14">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8 xl:gap-10">
             <aside className="w-full shrink-0 space-y-4 lg:sticky lg:top-20 lg:z-[5] lg:w-80 xl:w-[21rem]">
@@ -527,7 +577,8 @@ function ToursPageContent() {
                     'Загрузка…'
                   ) : (
                     <>
-                      Найдено: <span className="font-black text-emerald-700">{total}</span>
+                      Найдено:{' '}
+                      <span className="font-black text-emerald-700">{tours.length}</span>
                     </>
                   )}
                 </p>

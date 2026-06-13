@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { Calendar, Users, Clock } from 'lucide-react';
 import ClampedText from '@/components/ui/ClampedText';
 import { formatDayMonthLongRu } from '@/lib/date/format-ru';
+import { saveToursCatalogReturnUrl } from '@/lib/tours/catalog-navigation';
 
 interface TourCardProps {
   id: string;
@@ -75,7 +76,12 @@ export default function TourCard({
   };
 
   return (
-    <Link href={`/tours/${slug}`} prefetch={true} className="group block h-full min-w-0">
+    <Link
+      href={`/tours/${slug}`}
+      prefetch={true}
+      className="group block h-full min-w-0"
+      onClick={saveToursCatalogReturnUrl}
+    >
       <div className="bg-white rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm hover:shadow-2xl transition-all duration-300 overflow-hidden h-full flex flex-col min-w-0 max-w-full">
         {/* Фото фиксированного соотношения сторон — узкая колонка + фильтры не ломают сетку */}
         <div

@@ -86,7 +86,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         tours: toursWithAvailability,
+        /** Всего по текущим фильтрам (все страницы). */
         total,
+        /** Все активные туры каталога без фильтров — для блока «N туров доступно». */
+        catalogTotal: snapshot.rows.length,
         page,
         limit,
         totalPages,

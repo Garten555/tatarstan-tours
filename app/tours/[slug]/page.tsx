@@ -14,7 +14,7 @@ import TourMediaGallery from '@/components/tours/TourMediaGallery';
 import TourVideoSection from '@/components/tours/TourVideoSection';
 import TourMapSection from '@/components/tours/TourMapSection';
 import TourReviewsSection from '@/components/tours/TourReviewsSection';
-import { ArrowLeft } from 'lucide-react';
+import TourCatalogBackLink from '@/components/tours/TourCatalogBackLink';
 import { isInvalidTourSlug } from '@/lib/tours/isInvalidTourSlug';
 import TourBookingRedirectBanner from '@/components/tours/TourBookingRedirectBanner';
 import TourBookingSidebarCard from '@/components/tours/TourBookingSidebarCard';
@@ -465,13 +465,7 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
     <div className="min-h-screen bg-gray-50 relative w-full">
       <div className="relative z-10 container mx-auto px-3 sm:px-4 md:px-6 lg:px-8 pb-6 sm:pb-8 lg:pb-12 max-w-7xl w-full overflow-x-hidden">
         {/* Кнопка назад: отступ сверху под fixed Header, стиль как в каталоге туров */}
-        <Link
-          href="/tours"
-          className="group relative z-10 inline-flex items-center gap-2 sm:gap-3 text-gray-900 hover:text-emerald-600 transition-all duration-200 mb-6 sm:mb-8 px-4 sm:px-5 py-2.5 sm:py-3 rounded-lg sm:rounded-xl bg-white/95 backdrop-blur-md shadow-md hover:shadow-lg border-2 border-gray-200 hover:border-emerald-300 hover:bg-white"
-        >
-          <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 group-hover:-translate-x-1 transition-transform duration-200 flex-shrink-0" />
-          <span className="font-bold text-sm sm:text-base">Назад к турам</span>
-        </Link>
+        <TourCatalogBackLink />
 
         {bookingRedirectError && (
           <TourBookingRedirectBanner code={bookingRedirectError} />
