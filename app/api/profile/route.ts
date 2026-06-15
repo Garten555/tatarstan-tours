@@ -56,7 +56,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      profile,
+      profile: {
+        ...profile,
+        phone: profile.phone || user.phone || null,
+      },
     });
   } catch (error: any) {
     console.error('[Profile API] Unexpected error:', error);

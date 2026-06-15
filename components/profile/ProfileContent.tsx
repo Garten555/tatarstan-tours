@@ -18,6 +18,7 @@ import {
 import { isTourPageLinkable } from '@/lib/tours/tour-public-visibility';
 import { PROFILE_AVATAR_SIZE_HINT } from '@/lib/images/profile-avatar';
 import { validateAvatarImageFile } from '@/lib/images/profile-avatar-client';
+import { formatRuPhone } from '@/lib/phone/format-ru-phone';
 
 interface ProfileContentProps {
   profile: any;
@@ -60,6 +61,9 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
   const [banDurationHours, setBanDurationHours] = useState(0);
   const [banning, setBanning] = useState(false);
   const [banMessage, setBanMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [phone, setPhone] = useState(profile?.phone || '');
+  const [savingPersonal, setSavingPersonal] = useState(false);
+  const [personalSaveMessage, setPersonalSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   // Получаем данные из profile или user_metadata (fallback)
   // В режиме просмотра используем только данные из profile
@@ -170,6 +174,35 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
     e.stopPropagation();
     if (avatarUrl) {
       setAvatarViewerOpen(true);
+    }
+  };
+
+  useEffect(() => {
+    setPhone(profile?.phone || '');
+  }, [profile?.phone]);
+
+  const savePersonalData = async () => {
+    setSavingPersonal(true);
+    setPersonalSaveMessage(null);
+    try {
+      const response = await fetch('/api/profile/update', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: phone.trim() || null }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Не удалось сохранить телефон');
+      }
+      setPersonalSaveMessage({ type: 'success', text: 'Телефон сохранён' });
+      setIsEditing(false);
+    } catch (error) {
+      setPersonalSaveMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Не удалось сохранить',
+      });
+    } finally {
+      setSavingPersonal(false);
     }
   };
 
@@ -687,7 +720,8 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
             </label>
             <input
               type="tel"
-              value={profile?.phone || ''}
+              value={phone}
+              onChange={(e) => setPhone(formatRuPhone(e.target.value))}
               disabled={!isEditing || isViewMode}
               placeholder="+7 (900) 123-45-67"
               className="w-full px-4 py-3 md:py-4 border-2 border-gray-200 rounded-xl disabled:bg-gray-100 disabled:text-gray-600 font-medium text-base transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
@@ -738,16 +772,38 @@ export default function ProfileContent({ profile, user, isViewMode = false }: Pr
 
         {/* Кнопка сохранения */}
         {isEditing && (
-          <div className="mt-8 flex gap-4 pt-6 border-t-2 border-gray-100">
-            <button className="flex items-center gap-2 px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-base transition-all duration-300 hover:shadow-lg hover:scale-105">
+          <div className="mt-8 flex flex-col gap-4 pt-6 border-t-2 border-gray-100">
+            {personalSaveMessage && (
+              <p
+                className={`text-sm font-semibold ${
+                  personalSaveMessage.type === 'success' ? 'text-emerald-600' : 'text-red-600'
+                }`}
+              >
+                {personalSaveMessage.text}
+              </p>
+            )}
+            <div className="flex gap-4">
+            <button
+              type="button"
+              onClick={() => void savePersonalData()}
+              disabled={savingPersonal}
+              className="flex items-center gap-2 px-8 py-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-base transition-all duration-300 hover:shadow-lg hover:scale-105 disabled:opacity-60"
+            >
+              {savingPersonal ? <Loader2 className="w-5 h-5 animate-spin" /> : null}
               Сохранить изменения
             </button>
             <button
-              onClick={() => setIsEditing(false)}
+              type="button"
+              onClick={() => {
+                setPhone(profile?.phone || '');
+                setIsEditing(false);
+                setPersonalSaveMessage(null);
+              }}
               className="flex items-center gap-2 px-8 py-4 border-2 border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl font-bold text-base transition-all duration-200"
             >
               Отмена
             </button>
+            </div>
           </div>
         )}
       </div>

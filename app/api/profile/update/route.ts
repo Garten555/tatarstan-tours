@@ -16,7 +16,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { username, bio, public_profile_enabled } = body;
+    const { username, bio, public_profile_enabled, phone } = body;
 
     // Валидация username
     if (username !== null && username !== undefined) {
@@ -128,12 +128,16 @@ export async function PATCH(request: NextRequest) {
     if (public_profile_enabled !== undefined) {
       updateData.public_profile_enabled = public_profile_enabled;
     }
+    if (phone !== undefined) {
+      const trimmed = phone ? String(phone).trim() : '';
+      updateData.phone = trimmed || null;
+    }
 
     const { data: updatedProfile, error: updateError } = await serviceClient
       .from('profiles')
       .update(updateData)
       .eq('id', user.id)
-      .select('id, username, bio, public_profile_enabled, status_level, reputation_score')
+      .select('id, username, bio, public_profile_enabled, phone, status_level, reputation_score')
       .single();
 
     if (updateError) {

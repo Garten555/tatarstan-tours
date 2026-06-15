@@ -34,6 +34,8 @@ import {
   findUserBookingScheduleConflict,
   userScheduleConflictMessage,
 } from '@/lib/bookings/user-schedule-conflict';
+import { formatRuPhone, normalizeProfilePhoneForForm } from '@/lib/phone/format-ru-phone';
+import { resolveSelfContact } from '@/lib/profile/self-contact';
 interface BookingFormProps {
   tour: any;
   /** Выбранный слот (несколько дат на один тур) */
@@ -102,56 +104,7 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
   const includesSelf = attendees.some((attendee) => attendee.source === 'self');
   const selfScheduleBlocked = includesSelf && Boolean(scheduleConflictMessage);
 
-  // Функция форматирования телефона с улучшенной маской
-  const formatPhone = (value: string): string => {
-    // Убираем все символы кроме цифр и +
-    let cleaned = value.replace(/[^\d+]/g, '');
-    
-    // Если пусто, возвращаем пустую строку
-    if (cleaned.length === 0) {
-      return '';
-    }
-    
-    // Обработка разных форматов начала
-    if (cleaned.startsWith('8')) {
-      cleaned = '+7' + cleaned.slice(1);
-    } else if (cleaned.startsWith('7') && !cleaned.startsWith('+7')) {
-      cleaned = '+' + cleaned;
-    } else if (!cleaned.startsWith('+7') && !cleaned.startsWith('+')) {
-      cleaned = '+7' + cleaned;
-    } else if (cleaned.startsWith('+') && !cleaned.startsWith('+7')) {
-      cleaned = '+7' + cleaned.slice(1);
-    }
-    
-    // Ограничиваем длину (максимум 12 цифр после +7 = 13 символов всего)
-    cleaned = cleaned.slice(0, 13);
-    
-    // Если только +7, возвращаем как есть
-    if (cleaned.length <= 2) {
-      return cleaned;
-    }
-    
-    // Извлекаем только цифры после +7
-    const digits = cleaned.slice(2).replace(/\D/g, '');
-    
-    // Форматируем: +7 (900) 123-45-67
-    let formatted = '+7';
-    
-    if (digits.length > 0) {
-      formatted += ' (' + digits.slice(0, 3);
-    }
-    if (digits.length >= 4) {
-      formatted += ') ' + digits.slice(3, 6);
-    }
-    if (digits.length >= 7) {
-      formatted += '-' + digits.slice(6, 8);
-    }
-    if (digits.length >= 9) {
-      formatted += '-' + digits.slice(8, 10);
-    }
-    
-    return formatted;
-  };
+  const formatPhone = formatRuPhone;
 
   useEffect(() => {
     if (formData.payment_method === 'qr_code' && !qrPaymentRef) {
@@ -228,16 +181,16 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
   }, []);
 
   useEffect(() => {
-    const buildSelfAttendee = (): Attendee => ({
-      full_name:
-        profile?.first_name && profile?.last_name
-          ? `${profile.first_name} ${profile.last_name}`
-          : profile?.email || user.email || '',
-      email: profile?.email || user.email || null,
-      phone: profile?.phone || null,
-      source: 'self',
-      traveler_id: null,
-    });
+    const buildSelfAttendee = (): Attendee => {
+      const contact = resolveSelfContact(profile, user);
+      return {
+        full_name: contact.full_name,
+        email: contact.email,
+        phone: contact.phone,
+        source: 'self',
+        traveler_id: null,
+      };
+    };
 
     setAttendees((prev) => {
       let next = [...prev];
@@ -547,16 +500,14 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
                                   if (hasExistingBooking) {
                                     return;
                                   }
+                                  const contact = resolveSelfContact(profile, user);
                                   setAttendees((prev) =>
                                     prev.map((item, idx) =>
                                       idx === index
                                         ? {
-                                            full_name:
-                                              profile?.first_name && profile?.last_name
-                                                ? `${profile.first_name} ${profile.last_name}`
-                                                : profile?.email || user.email || '',
-                                            email: profile?.email || user.email || null,
-                                            phone: profile?.phone || null,
+                                            full_name: contact.full_name,
+                                            email: contact.email,
+                                            phone: contact.phone,
                                             source: 'self',
                                             traveler_id: null,
                                           }
@@ -591,7 +542,7 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
                                         ? {
                                             full_name: traveler.full_name,
                                             email: traveler.email || null,
-                                            phone: traveler.phone || null,
+                                            phone: normalizeProfilePhoneForForm(traveler.phone),
                                             source: 'saved',
                                             traveler_id: traveler.id,
                                           }
@@ -689,6 +640,9 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
                                   );
                                 }}
                                 onFocus={(e) => {
+                                  if (attendee.source === 'self' && attendee.phone) {
+                                    return;
+                                  }
                                   if (!e.target.value || e.target.value === '') {
                                     const formatted = formatPhone('+7');
                                     setAttendees((prev) =>
