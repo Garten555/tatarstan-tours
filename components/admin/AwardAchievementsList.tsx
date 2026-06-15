@@ -562,12 +562,12 @@ export default function AwardAchievementsList({
                       const isViewerSelf =
                         Boolean(viewerUserId) && participant.user_id === viewerUserId;
                       const showAdminBadge =
-                        isViewerSelf &&
-                        (adminCanBrowseAllRooms ||
-                          profileRole === 'super_admin' ||
-                          profileRole === 'tour_admin' ||
-                          viewerRole === 'super_admin' ||
-                          viewerRole === 'tour_admin');
+                        profileRole === 'super_admin' ||
+                        profileRole === 'tour_admin' ||
+                        (isViewerSelf &&
+                          (adminCanBrowseAllRooms ||
+                            viewerRole === 'super_admin' ||
+                            viewerRole === 'tour_admin'));
 
                       return (
                         <div

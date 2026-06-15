@@ -17,9 +17,25 @@ export function dedupeParticipantsByUserId<T extends ParticipantLike>(list: T[])
       continue;
     }
 
-    const existingSynthetic = String(existing.id ?? '').startsWith('admin-viewer-');
-    const rowSynthetic = String(row.id ?? '').startsWith('admin-viewer-');
+    const existingSynthetic =
+      String(existing.id ?? '').startsWith('admin-viewer-') ||
+      String(existing.id ?? '').startsWith('booking-');
+    const rowSynthetic =
+      String(row.id ?? '').startsWith('admin-viewer-') ||
+      String(row.id ?? '').startsWith('booking-');
     if (existingSynthetic && !rowSynthetic) {
+      byUser.set(uid, row);
+      continue;
+    }
+    if (!existingSynthetic && rowSynthetic) {
+      continue;
+    }
+
+    const existingHasBooking = Boolean(
+      (existing as { booking_id?: string | null }).booking_id
+    );
+    const rowHasBooking = Boolean((row as { booking_id?: string | null }).booking_id);
+    if (!existingHasBooking && rowHasBooking) {
       byUser.set(uid, row);
     }
   }

@@ -5,6 +5,8 @@ import {
   enrichRoomsWithSessionDates,
   parseEmbeddedSession,
 } from '@/lib/achievements/dedupe-award-rooms';
+import { getRelatedRoomIds, getRoomScope } from '@/lib/tour-rooms/merged-room-participants';
+import { pickCanonicalRoomId } from '@/lib/tour-rooms/pick-canonical-room';
 
 const GUIDE_ROOM_SELECT = `
   id,
@@ -160,5 +162,55 @@ export async function loadGuideTourRooms(
   const mapped = mapGuideTourRooms(data as RawGuideRoomRow[]);
   const enriched = await enrichRoomsWithSessionDates(serviceClient, mapped);
   const backfilled = await assignOrphanRoomsToGuideSessions(serviceClient, enriched);
-  return dedupeAwardRooms(backfilled);
+  const deduped = dedupeAwardRooms(backfilled);
+  return resolveCanonicalGuideRooms(serviceClient, deduped);
+}
+
+async function resolveCanonicalGuideRooms(
+  serviceClient: SupabaseClient,
+  rooms: MappedGuideTourRoom[]
+): Promise<MappedGuideTourRoom[]> {
+  const sessionGroups = new Map<string, MappedGuideTourRoom[]>();
+  const passthrough: MappedGuideTourRoom[] = [];
+
+  for (const room of rooms) {
+    if (room.tour_session_id) {
+      const key = room.tour_session_id;
+      const bucket = sessionGroups.get(key) ?? [];
+      bucket.push(room);
+      sessionGroups.set(key, bucket);
+    } else {
+      passthrough.push(room);
+    }
+  }
+
+  const resolvedSessions: MappedGuideTourRoom[] = [];
+  for (const group of sessionGroups.values()) {
+    const scope = {
+      id: group[0].id,
+      tour_id: group[0].tour_id,
+      tour_session_id: group[0].tour_session_id,
+      guide_id: group[0].guide_id,
+    };
+    const siblingIds = await getRelatedRoomIds(serviceClient, scope);
+    const canonicalId = (await pickCanonicalRoomId(serviceClient, siblingIds)) ?? group[0].id;
+    const best = group.reduce((a, b) =>
+      b.participants_count > a.participants_count ? b : a
+    );
+    resolvedSessions.push({ ...best, id: canonicalId });
+  }
+
+  const resolvedLegacy: MappedGuideTourRoom[] = [];
+  for (const room of passthrough) {
+    const scope = await getRoomScope(serviceClient, room.id);
+    if (!scope) {
+      resolvedLegacy.push(room);
+      continue;
+    }
+    const siblingIds = await getRelatedRoomIds(serviceClient, scope);
+    const canonicalId = (await pickCanonicalRoomId(serviceClient, siblingIds)) ?? room.id;
+    resolvedLegacy.push({ ...room, id: canonicalId });
+  }
+
+  return dedupeAwardRooms([...resolvedSessions, ...resolvedLegacy]);
 }

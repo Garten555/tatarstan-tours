@@ -9,6 +9,10 @@ import {
   canBypassRoomParticipantCheck,
   canIssueOfflineAchievements,
 } from '@/lib/achievements/offline-issue-access';
+import {
+  getRoomScope,
+  userHasDepartureAccess,
+} from '@/lib/tour-rooms/merged-room-participants';
 
 async function ensureRoomParticipant(
   serviceClient: Awaited<ReturnType<typeof createServiceClient>>,
@@ -97,7 +101,14 @@ export async function POST(
       .maybeSingle();
 
     if (!participant) {
-      if (isAdmin) {
+      const scope = await getRoomScope(serviceClient, room_id);
+      const canAwardTarget =
+        isAdmin ||
+        (isGuide &&
+          scope &&
+          (await userHasDepartureAccess(serviceClient, scope, user_id)));
+
+      if (canAwardTarget) {
         const ensured = await ensureRoomParticipant(serviceClient, room_id, user_id);
         if (!ensured) {
           return NextResponse.json(
