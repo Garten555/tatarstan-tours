@@ -4,6 +4,7 @@ import { sanitizeText } from '@/lib/utils/sanitize';
 import {
   attachEffectiveTourStatus,
   fetchActiveSessionsByTourId,
+  repairStaleTourStatuses,
 } from '@/lib/tours/tour-lifecycle-status';
 
 export async function GET(request: NextRequest) {
@@ -110,6 +111,7 @@ export async function GET(request: NextRequest) {
       serviceClient,
       pageTours.map((t) => t.id)
     );
+    await repairStaleTourStatuses(serviceClient, pageTours, sessionsByTourId);
     const tours = attachEffectiveTourStatus(pageTours, sessionsByTourId);
 
     return NextResponse.json({

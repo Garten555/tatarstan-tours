@@ -49,8 +49,50 @@ export function getEffectiveTourStatus(
   sessions: SessionRow[],
   now: Date = new Date()
 ): string {
+  const realSessions = sessions.filter((s) => s.id !== LEGACY_TOUR_SESSION_ID);
+  const hasUpcoming = realSessions.some((s) => isUpcomingSession(s.start_at, now));
+  const futureStart = hasScheduledFutureStart(tour, now);
+
+  if (
+    (tour.status === 'completed' || tour.status === 'cancelled') &&
+    (hasUpcoming || futureStart)
+  ) {
+    return 'active';
+  }
+
   if (shouldAutoCompleteTour(tour, sessions, now)) return 'completed';
   return tour.status;
+}
+
+/** completed/cancelled в БД, но есть будущие выезды — вернуть active и даты. */
+export async function repairStaleTourStatuses(
+  supabase: SupabaseClient,
+  tours: TourForLifecycle[],
+  sessionsByTourId: Map<string, SessionRow[]>,
+  now: Date = new Date()
+): Promise<number> {
+  const { syncTourCatalogDatesFromSessions } = await import(
+    '@/lib/tour/sync-tour-dates-from-sessions'
+  );
+
+  let repaired = 0;
+  for (const tour of tours) {
+    const sessions = sessionsByTourId.get(tour.id) ?? [];
+    const effective = getEffectiveTourStatus(tour, sessions, now);
+    if (
+      effective === 'active' &&
+      (tour.status === 'completed' || tour.status === 'cancelled')
+    ) {
+      const res = await syncTourCatalogDatesFromSessions(supabase, tour.id);
+      if (res.updated) {
+        tour.status = 'active';
+        if (res.start_date) tour.start_date = res.start_date;
+        if (res.end_date) tour.end_date = res.end_date;
+        repaired += 1;
+      }
+    }
+  }
+  return repaired;
 }
 
 function groupSessionsByTourId(
