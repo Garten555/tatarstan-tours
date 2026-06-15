@@ -9,7 +9,7 @@ import { TourSessionsProvider } from '@/components/tours/TourSessionsProvider';
 import TourDescriptionSection from '@/components/tours/TourDescriptionSection';
 import TourCharacteristicsSectionConnected from '@/components/tours/TourCharacteristicsSectionConnected';
 import { tourDurationLabel } from '@/lib/tour/session-display';
-import { LEGACY_TOUR_SESSION_ID } from '@/lib/tour/legacy-session';
+import { LEGACY_TOUR_SESSION_ID, isLegacyTourSessionId } from '@/lib/tour/legacy-session';
 import TourMediaGallery from '@/components/tours/TourMediaGallery';
 import TourVideoSection from '@/components/tours/TourVideoSection';
 import TourMapSection from '@/components/tours/TourMapSection';
@@ -26,6 +26,7 @@ import {
 import { syncSessionCurrentParticipants } from '@/lib/tour/session-participants';
 import { formatDateTimeShortRu } from '@/lib/date/format-ru';
 import { isBookingDeparturePast } from '@/lib/bookings/booking-completion';
+import { isUserAssignedGuideForBooking } from '@/lib/bookings/guide-own-tour';
 
 interface TourPageProps {
   params: Promise<{ slug: string }>;
@@ -196,7 +197,7 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
 
   const tourSessionsRes = await supabase
     .from('tour_sessions')
-    .select('id, start_at, end_at, max_participants, current_participants')
+    .select('id, start_at, end_at, max_participants, current_participants, guide_id')
     .eq('tour_id', t.id)
     .eq('status', 'active')
     .order('start_at', { ascending: true });
@@ -213,6 +214,7 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
     end_at: string | null;
     max_participants: number;
     current_participants: number | null;
+    guide_id?: string | null;
   }[];
 
   if (tourSessions.length > 0) {
@@ -221,7 +223,7 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
     );
     const refreshed = await supabase
       .from('tour_sessions')
-      .select('id, start_at, end_at, max_participants, current_participants')
+      .select('id, start_at, end_at, max_participants, current_participants, guide_id')
       .eq('tour_id', t.id)
       .eq('status', 'active')
       .order('start_at', { ascending: true });
@@ -461,6 +463,12 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
     ? tourDurationLabel(sidebarStartDate, sidebarEndDate)
     : tourDurationLabel(t.start_date, t.end_date ?? null);
 
+  const hasLegacyBookingSession = tourSessions.some((s) => isLegacyTourSessionId(s.id));
+  const viewerBlockedLegacyTourGuide =
+    user && hasLegacyBookingSession && !showBookingSidebar
+      ? await isUserAssignedGuideForBooking(supabase, user.id, t.id, null)
+      : false;
+
   return (
     <div className="min-h-screen bg-gray-50 relative w-full">
       <div className="relative z-10 container mx-auto px-3 sm:px-4 md:px-6 lg:px-8 pb-6 sm:pb-8 lg:pb-12 max-w-7xl w-full overflow-x-hidden">
@@ -491,6 +499,8 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
                 tourMaxParticipants={t.max_participants}
                 tourCurrentParticipants={t.current_participants || 0}
                 shareTitle={t.title}
+                viewerUserId={user?.id ?? null}
+                viewerBlockedLegacyTourGuide={viewerBlockedLegacyTourGuide}
               />
             )}
           </div>

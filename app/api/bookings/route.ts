@@ -27,6 +27,10 @@ import {
   initialBookingStatus,
   initialPaymentStatus,
 } from '@/lib/bookings/initial-payment';
+import {
+  GUIDE_OWN_TOUR_ERROR,
+  isUserAssignedGuideForBooking,
+} from '@/lib/bookings/guide-own-tour';
 
 export async function POST(request: NextRequest) {
   try {
@@ -134,11 +138,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if ((tour as any).status !== 'active') {
-      return NextResponse.json(
-        { error: 'Тур недоступен для бронирования' },
-        { status: 400 }
-      );
+    if (await isUserAssignedGuideForBooking(serviceClient, user.id, tour_id, session_id)) {
+      return NextResponse.json({ error: GUIDE_OWN_TOUR_ERROR }, { status: 400 });
     }
 
     const { data: userActiveBookingsRaw, error: userBookingsError } = await serviceClient

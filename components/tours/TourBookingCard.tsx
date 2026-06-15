@@ -9,6 +9,8 @@ type TourBookingCardProps = {
   maxParticipants: number;
   isFullyBooked: boolean;
   bookingHref: string;
+  /** Гид не может бронировать свой выезд */
+  bookingBlockedReason?: string | null;
   /** Выбор даты/слота и подсказки — между ценой и блоком мест (несколько выездов) */
   beforeAvailability?: ReactNode;
   /** Текст главной кнопки (например при нескольких датах) */
@@ -25,6 +27,7 @@ export default function TourBookingCard({
   maxParticipants,
   isFullyBooked,
   bookingHref,
+  bookingBlockedReason = null,
   beforeAvailability,
   bookingCtaLabel = 'Забронировать',
   bookingFlowSteps = false,
@@ -91,7 +94,20 @@ export default function TourBookingCard({
         </div>
 
         {/* Кнопка бронирования */}
-        {isFullyBooked ? (
+        {bookingBlockedReason ? (
+          <div className="space-y-2">
+            <button
+              type="button"
+              className="w-full py-3 sm:py-3.5 md:py-4 lg:py-4 xl:py-5 rounded-lg sm:rounded-xl md:rounded-xl lg:rounded-2xl font-black text-base sm:text-lg md:text-lg lg:text-xl xl:text-xl bg-gray-200 text-gray-600 cursor-not-allowed shadow-inner border-2 border-gray-300 leading-snug px-2"
+              disabled
+            >
+              Бронирование недоступно
+            </button>
+            <p className="text-sm font-bold text-amber-800 text-center leading-snug px-1">
+              {bookingBlockedReason}
+            </p>
+          </div>
+        ) : isFullyBooked ? (
           <button
             className="w-full py-3 sm:py-3.5 md:py-4 lg:py-4 xl:py-5 rounded-lg sm:rounded-xl md:rounded-xl lg:rounded-2xl font-black text-base sm:text-lg md:text-lg lg:text-xl xl:text-xl bg-gray-200 text-gray-500 cursor-not-allowed shadow-inner border-2 border-gray-300"
             disabled

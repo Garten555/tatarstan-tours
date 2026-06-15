@@ -9,6 +9,7 @@ import {
   sessionAvailableSpots,
 } from '@/lib/tour/session-display';
 import { isLegacyTourSessionId } from '@/lib/tour/legacy-session';
+import { GUIDE_OWN_TOUR_ERROR } from '@/lib/bookings/guide-own-tour';
 import { Calendar } from 'lucide-react';
 
 export type { TourSessionOption };
@@ -22,6 +23,9 @@ type TourScheduleBookingProps = {
   /** Передаётся, только если компонент не обёрнут в TourSessionsProvider */
   sessions?: TourSessionOption[];
   shareTitle?: string;
+  viewerUserId?: string | null;
+  /** Для тура без слотов в БД — гид назначен на комнату/слот */
+  viewerBlockedLegacyTourGuide?: boolean;
 };
 
 /**
@@ -34,6 +38,8 @@ export default function TourScheduleBooking({
   tourCurrentParticipants,
   sessions: sessionsProp,
   shareTitle,
+  viewerUserId = null,
+  viewerBlockedLegacyTourGuide = false,
 }: TourScheduleBookingProps) {
   const ctx = useTourSessions();
 
@@ -81,6 +87,12 @@ export default function TourScheduleBooking({
   const bookingHref = isLegacyTourSessionId(selected.id)
     ? `/booking?tour=${encodeURIComponent(tourId)}`
     : `/booking?tour=${encodeURIComponent(tourId)}&session=${encodeURIComponent(selected.id)}`;
+
+  const guideOwnTourBlocked =
+    Boolean(viewerUserId) &&
+    (isLegacyTourSessionId(selected.id)
+      ? viewerBlockedLegacyTourGuide
+      : selected.guide_id === viewerUserId);
 
   const dateBlock =
     validSessions.length === 1 ? (
@@ -165,6 +177,7 @@ export default function TourScheduleBooking({
       maxParticipants={maxP}
       isFullyBooked={availableSpots <= 0}
       bookingHref={bookingHref}
+      bookingBlockedReason={guideOwnTourBlocked ? GUIDE_OWN_TOUR_ERROR : null}
       beforeAvailability={dateBlock}
       bookingFlowSteps={validSessions.length > 1}
       bookingCtaLabel={

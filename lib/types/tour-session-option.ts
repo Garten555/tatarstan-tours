@@ -5,4 +5,5 @@ export type TourSessionOption = {
   end_at: string | null;
   max_participants: number;
   current_participants: number | null;
+  guide_id?: string | null;
 };

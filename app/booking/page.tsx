@@ -4,6 +4,7 @@ import type { TourSessionRow } from '@/lib/types/tour-session';
 import { isSessionBookable } from '@/lib/tours/tour-public-visibility';
 import { syncSessionCurrentParticipants } from '@/lib/tour/session-participants';
 import BookingForm from '@/components/booking/BookingForm';
+import { isUserAssignedGuideForBooking } from '@/lib/bookings/guide-own-tour';
 
 export const metadata = {
   title: 'Бронирование тура | Туры по Татарстану',
@@ -116,6 +117,16 @@ export default async function BookingPage({ searchParams }: BookingPageProps) {
     if (availableSpots <= 0) {
       redirect(`/tours/${(tour as any).slug}?error=full`);
     }
+  }
+
+  const guideOwnTour = await isUserAssignedGuideForBooking(
+    serviceClient,
+    user.id,
+    tourId,
+    sessionRow?.id ?? null
+  );
+  if (guideOwnTour) {
+    redirect(`/tours/${(tour as any).slug}?error=guide_own_tour`);
   }
 
   return (

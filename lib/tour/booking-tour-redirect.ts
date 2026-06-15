@@ -4,6 +4,8 @@ export const BOOKING_TOUR_REDIRECT_MESSAGES = {
   session: 'Выбранный слот недоступен. Выберите другой выезд.',
   expired: 'Этот выезд уже прошёл. Выберите актуальную дату.',
   full: 'На этот выезд мест больше нет. Выберите другую дату.',
+  guide_own_tour:
+    'Вы назначены гидом этого тура и не можете забронировать его как участник.',
 } as const;
 
 export type BookingTourRedirectCode = keyof typeof BOOKING_TOUR_REDIRECT_MESSAGES;
