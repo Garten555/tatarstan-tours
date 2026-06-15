@@ -67,18 +67,36 @@ type TourLifecycle = 'ongoing' | 'upcoming' | 'ended';
 
 const ROOMS_PER_PAGE = 6;
 
-function tourStartMonthKey(iso: string): string {
-  return new Intl.DateTimeFormat('en-CA', {
+function moscowDateParts(iso: string) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Europe/Moscow',
     year: 'numeric',
     month: '2-digit',
-  }).format(new Date(iso));
+    day: '2-digit',
+  }).formatToParts(new Date(iso));
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? '';
+  return { year: get('year'), month: get('month'), day: get('day') };
+}
+
+function tourStartDateKey(iso: string): string {
+  const { year, month, day } = moscowDateParts(iso);
+  return `${year}-${month}-${day}`;
+}
+
+function tourStartMonthKey(iso: string): string {
+  const { year, month } = moscowDateParts(iso);
+  return `${year}-${month}`;
 }
 
 function shiftMonthKey(key: string, delta: number): string {
   const [y, m] = key.split('-').map(Number);
   const d = new Date(Date.UTC(y, m - 1 + delta, 1));
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function currentDateKey(): string {
+  return tourStartDateKey(new Date().toISOString());
 }
 
 function currentMonthKey(): string {
@@ -107,21 +125,24 @@ export default function AwardAchievementsList({
   const [filterSearch, setFilterSearch] = useState('');
   const [lifecycleFilter, setLifecycleFilter] = useState<'all' | TourLifecycle>('all');
   const [monthFilter, setMonthFilter] = useState('');
+  const [dateFilter, setDateFilter] = useState('');
   const [page, setPage] = useState(1);
 
   const filteredRooms = useMemo(() => {
     const q = filterSearch.trim().toLowerCase();
     return rooms.filter((room) => {
       if (lifecycleFilter !== 'all' && tourLifecycle(room) !== lifecycleFilter) return false;
-      if (monthFilter && tourStartMonthKey(room.tour.start_date) !== monthFilter) return false;
+      if (dateFilter && tourStartDateKey(room.tour.start_date) !== dateFilter) return false;
+      else if (monthFilter && tourStartMonthKey(room.tour.start_date) !== monthFilter) return false;
       if (!q) return true;
       const title = room.tour.title.toLowerCase();
       const city = (room.tour.city?.name ?? '').toLowerCase();
       return title.includes(q) || city.includes(q);
     });
-  }, [rooms, filterSearch, lifecycleFilter, monthFilter]);
+  }, [rooms, filterSearch, lifecycleFilter, monthFilter, dateFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRooms.length / ROOMS_PER_PAGE));
+  const showPagination = filteredRooms.length > ROOMS_PER_PAGE;
 
   const paginatedRooms = useMemo(() => {
     const safePage = Math.min(Math.max(1, page), totalPages);
@@ -131,20 +152,31 @@ export default function AwardAchievementsList({
 
   useEffect(() => {
     setPage(1);
-  }, [filterSearch, lifecycleFilter, monthFilter]);
+  }, [filterSearch, lifecycleFilter, monthFilter, dateFilter]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
   const hasListFilters =
-    Boolean(filterSearch.trim()) || lifecycleFilter !== 'all' || Boolean(monthFilter);
+    Boolean(filterSearch.trim()) ||
+    lifecycleFilter !== 'all' ||
+    Boolean(monthFilter) ||
+    Boolean(dateFilter);
 
   const resetListFilters = () => {
     setFilterSearch('');
     setLifecycleFilter('all');
     setMonthFilter('');
+    setDateFilter('');
     setPage(1);
+  };
+
+  const monthInputValue = dateFilter ? dateFilter.slice(0, 7) : monthFilter;
+
+  const applyMonthFilter = (month: string) => {
+    setDateFilter('');
+    setMonthFilter(month);
   };
 
   const formatDate = formatDateTimeShortRu;
@@ -288,8 +320,8 @@ export default function AwardAchievementsList({
               <button
                 type="button"
                 onClick={() => {
-                  const base = monthFilter || currentMonthKey();
-                  setMonthFilter(shiftMonthKey(base, -1));
+                  const base = monthInputValue || currentMonthKey();
+                  applyMonthFilter(shiftMonthKey(base, -1));
                 }}
                 className="inline-flex items-center justify-center rounded-xl border-2 border-gray-200 bg-white px-3 py-2.5 text-gray-700 shadow-sm transition hover:border-amber-400 hover:text-amber-800"
                 aria-label="Предыдущий месяц"
@@ -298,16 +330,16 @@ export default function AwardAchievementsList({
               </button>
               <input
                 type="month"
-                value={monthFilter}
-                onChange={(e) => setMonthFilter(e.target.value)}
+                value={monthInputValue}
+                onChange={(e) => applyMonthFilter(e.target.value)}
                 className="min-w-[10.5rem] rounded-xl border-2 border-gray-200 bg-white px-3 py-2.5 text-base font-bold text-gray-900 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
                 aria-label="Месяц тура"
               />
               <button
                 type="button"
                 onClick={() => {
-                  const base = monthFilter || currentMonthKey();
-                  setMonthFilter(shiftMonthKey(base, 1));
+                  const base = monthInputValue || currentMonthKey();
+                  applyMonthFilter(shiftMonthKey(base, 1));
                 }}
                 className="inline-flex items-center justify-center rounded-xl border-2 border-gray-200 bg-white px-3 py-2.5 text-gray-700 shadow-sm transition hover:border-amber-400 hover:text-amber-800"
                 aria-label="Следующий месяц"
@@ -316,19 +348,31 @@ export default function AwardAchievementsList({
               </button>
               <button
                 type="button"
-                onClick={() => setMonthFilter(currentMonthKey())}
-                className="rounded-xl border-2 border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-bold text-amber-900 transition hover:bg-amber-100"
+                onClick={() => {
+                  setDateFilter(currentDateKey());
+                  setMonthFilter('');
+                  setPage(1);
+                }}
+                className={`rounded-xl border-2 px-3 py-2.5 text-sm font-bold transition ${
+                  dateFilter === currentDateKey()
+                    ? 'border-amber-500 bg-amber-500 text-white shadow-md'
+                    : 'border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100'
+                }`}
               >
                 Сегодня
               </button>
-              {monthFilter ? (
+              {monthFilter || dateFilter ? (
                 <button
                   type="button"
-                  onClick={() => setMonthFilter('')}
+                  onClick={() => {
+                    setMonthFilter('');
+                    setDateFilter('');
+                    setPage(1);
+                  }}
                   className="inline-flex items-center gap-1 rounded-xl border-2 border-gray-200 px-3 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50"
                 >
                   <X className="h-4 w-4" />
-                  Все месяцы
+                  Все даты
                 </button>
               ) : null}
             </div>
@@ -342,10 +386,15 @@ export default function AwardAchievementsList({
               {' · '}
             </>
           ) : null}
-          Страница{' '}
-          <span className="tabular-nums font-black text-gray-900">{Math.min(page, totalPages)}</span> /{' '}
-          <span className="tabular-nums font-black text-gray-900">{totalPages}</span>
-          {' · '}
+          {showPagination ? (
+            <>
+              Страница{' '}
+              <span className="tabular-nums font-black text-gray-900">{Math.min(page, totalPages)}</span>{' '}
+              /{' '}
+              <span className="tabular-nums font-black text-gray-900">{totalPages}</span>
+              {' · '}
+            </>
+          ) : null}
           всего комнат:{' '}
           <span className="tabular-nums font-black text-gray-900">{rooms.length}</span>
         </p>
@@ -548,7 +597,7 @@ export default function AwardAchievementsList({
         </div>
       )}
 
-      {filteredRooms.length > 0 && totalPages > 1 ? (
+      {filteredRooms.length > 0 && showPagination ? (
         <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
           <button
             type="button"
