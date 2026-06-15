@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { syncGuideRoomParticipant } from '@/lib/tour-rooms/sync-guide-participant';
+import { canBypassRoomParticipantCheck } from '@/lib/achievements/offline-issue-access';
 
 // GET /api/tour-rooms/[room_id]/participants
 // Получить список участников
@@ -50,14 +51,13 @@ export async function GET(
       .eq('id', user.id)
       .single();
 
-    const isAdmin =
-      profile?.role === 'tour_admin' ||
-      profile?.role === 'super_admin' ||
+    const canViewAllParticipants =
+      canBypassRoomParticipantCheck(profile?.role) ||
       profile?.role === 'support_admin';
     const isGuide = room?.guide_id === user.id;
     const isParticipant = !!participant;
 
-    if (!isParticipant && !isGuide && !isAdmin) {
+    if (!isParticipant && !isGuide && !canViewAllParticipants) {
       return NextResponse.json(
         { error: 'У вас нет доступа к этой комнате' },
         { status: 403 }
@@ -122,6 +122,30 @@ export async function GET(
         if (refetched) {
           participantsList = refetched;
         }
+      }
+    }
+
+    if (
+      canBypassRoomParticipantCheck(profile?.role) &&
+      !participantsList.some((p) => p.user_id === user.id)
+    ) {
+      const { data: selfProfile } = await serviceClient
+        .from('profiles')
+        .select('id, first_name, last_name, avatar_url, email')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (selfProfile) {
+        const selfRow = {
+          id: `admin-viewer-${user.id}`,
+          room_id,
+          user_id: user.id,
+          booking_id: null,
+          joined_at: new Date().toISOString(),
+          user: selfProfile,
+          booking: null,
+        };
+        participantsList = [selfRow, ...participantsList] as typeof participantsList;
       }
     }
 

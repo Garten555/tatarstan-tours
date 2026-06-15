@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import AwardAchievementsList from '@/components/admin/AwardAchievementsList';
 import { Award } from 'lucide-react';
+import { canIssueOfflineAchievementsInAnyRoom } from '@/lib/achievements/offline-issue-access';
 
 export const metadata = {
   title: 'Выдача достижений - Админ панель',
@@ -33,7 +34,9 @@ export default async function AwardAchievementsPage() {
     redirect('/');
   }
 
-  const { data: roomsData } = await serviceClient
+  const canBrowseAllRooms = canIssueOfflineAchievementsInAnyRoom(userRole);
+
+  let roomsQuery = serviceClient
     .from('tour_rooms')
     .select(`
       id,
@@ -50,8 +53,13 @@ export default async function AwardAchievementsPage() {
       ),
       participants:tour_room_participants(count)
     `)
-    .eq('guide_id', user.id)
     .order('created_at', { ascending: false });
+
+  if (!canBrowseAllRooms) {
+    roomsQuery = roomsQuery.eq('guide_id', user.id);
+  }
+
+  const { data: roomsData } = await roomsQuery.limit(canBrowseAllRooms ? 200 : 100);
 
   interface RoomData {
     id: unknown;
@@ -138,12 +146,14 @@ export default async function AwardAchievementsPage() {
           Выдача достижений
         </h1>
         <p className="text-lg md:text-xl font-bold text-gray-700">
-          Выдавайте достижения участникам ваших туров за активность и заслуги
+          {canBrowseAllRooms
+            ? 'Все комнаты туров — можно выдать офлайн-достижение любому участнику или себе'
+            : 'Выдавайте достижения участникам ваших туров за активность и заслуги'}
         </p>
       </div>
 
       {/* Список туров с участниками */}
-      <AwardAchievementsList rooms={rooms} />
+      <AwardAchievementsList rooms={rooms} adminCanBrowseAllRooms={canBrowseAllRooms} />
     </div>
   );
 }

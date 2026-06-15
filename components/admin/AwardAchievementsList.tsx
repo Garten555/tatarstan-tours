@@ -48,6 +48,8 @@ interface Participant {
 
 interface AwardAchievementsListProps {
   rooms: Room[];
+  /** super_admin / tour_admin видят все комнаты */
+  adminCanBrowseAllRooms?: boolean;
 }
 
 type TourLifecycle = 'ongoing' | 'upcoming' | 'ended';
@@ -60,7 +62,10 @@ function tourLifecycle(room: Room): TourLifecycle {
   return 'ongoing';
 }
 
-export default function AwardAchievementsList({ rooms }: AwardAchievementsListProps) {
+export default function AwardAchievementsList({
+  rooms,
+  adminCanBrowseAllRooms = false,
+}: AwardAchievementsListProps) {
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
   const [participants, setParticipants] = useState<Record<string, Participant[]>>({});
   const [loadingParticipants, setLoadingParticipants] = useState<Record<string, boolean>>({});
@@ -175,10 +180,12 @@ export default function AwardAchievementsList({ rooms }: AwardAchievementsListPr
       <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-lg p-12 text-center">
         <Award className="w-20 h-20 text-gray-300 mx-auto mb-6" />
         <h2 className="text-2xl md:text-3xl font-black text-gray-900 mb-4">
-          У вас пока нет назначенных туров
+          {adminCanBrowseAllRooms ? 'Нет комнат туров' : 'У вас пока нет назначенных туров'}
         </h2>
         <p className="text-lg md:text-xl font-bold text-gray-700">
-          Администратор может назначить вас гидом для тура в разделе "Комнаты туров"
+          {adminCanBrowseAllRooms
+            ? 'Создайте комнату тура в разделе «Комнаты туров» или дождитесь бронирований'
+            : 'Администратор может назначить вас гидом для тура в разделе "Комнаты туров"'}
         </p>
       </div>
     );

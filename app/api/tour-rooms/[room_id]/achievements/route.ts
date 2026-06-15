@@ -5,6 +5,36 @@ import { rateLimit } from '@/lib/security/rate-limit';
 import { notifyAchievementEarned } from '@/lib/achievements/achievement-notification';
 import { syncUserReputationFromAchievements } from '@/lib/reputation/experience';
 import { syncTourParticipationAchievements } from '@/lib/achievements/auto-award';
+import {
+  canBypassRoomParticipantCheck,
+  canIssueOfflineAchievements,
+} from '@/lib/achievements/offline-issue-access';
+
+async function ensureRoomParticipant(
+  serviceClient: Awaited<ReturnType<typeof createServiceClient>>,
+  roomId: string,
+  userId: string
+): Promise<boolean> {
+  const { data: existing } = await serviceClient
+    .from('tour_room_participants')
+    .select('id')
+    .eq('room_id', roomId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (existing?.id) return true;
+
+  const { error } = await serviceClient.from('tour_room_participants').insert({
+    room_id: roomId,
+    user_id: userId,
+    booking_id: null,
+  });
+
+  if (!error) return true;
+  if (error.code === '23505') return true;
+  console.error('[achievements] ensureRoomParticipant', error);
+  return false;
+}
 
 // POST /api/tour-rooms/[room_id]/achievements - выдача достижения участнику
 export async function POST(
@@ -40,10 +70,11 @@ export async function POST(
       .eq('id', user.id)
       .single();
 
-    const isAdmin = profile?.role === 'tour_admin' || profile?.role === 'super_admin';
-    const isGuide = (room as any).guide_id === user.id;
+    const userRole = profile?.role ?? null;
+    const isAdmin = canBypassRoomParticipantCheck(userRole);
+    const isGuide = (room as { guide_id?: string | null }).guide_id === user.id;
 
-    if (!isAdmin && !isGuide) {
+    if (!canIssueOfflineAchievements(userRole) || (!isAdmin && !isGuide)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -63,13 +94,23 @@ export async function POST(
       .select('id')
       .eq('room_id', room_id)
       .eq('user_id', user_id)
-      .single();
+      .maybeSingle();
 
     if (!participant) {
-      return NextResponse.json(
-        { error: 'Пользователь не является участником этого тура' },
-        { status: 403 }
-      );
+      if (isAdmin) {
+        const ensured = await ensureRoomParticipant(serviceClient, room_id, user_id);
+        if (!ensured) {
+          return NextResponse.json(
+            { error: 'Не удалось добавить участника в комнату для выдачи достижения' },
+            { status: 500 }
+          );
+        }
+      } else {
+        return NextResponse.json(
+          { error: 'Пользователь не является участником этого тура' },
+          { status: 403 }
+        );
+      }
     }
 
     // Выдаем достижение
@@ -184,10 +225,11 @@ export async function GET(
       .eq('id', user.id)
       .single();
 
-    const isAdmin = profile?.role === 'tour_admin' || profile?.role === 'super_admin';
-    const isGuide = (room as any).guide_id === user.id;
+    const userRole = profile?.role ?? null;
+    const isAdmin = canBypassRoomParticipantCheck(userRole);
+    const isGuide = (room as { guide_id?: string | null }).guide_id === user.id;
 
-    if (!isAdmin && !isGuide) {
+    if (!canIssueOfflineAchievements(userRole) || (!isAdmin && !isGuide)) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
