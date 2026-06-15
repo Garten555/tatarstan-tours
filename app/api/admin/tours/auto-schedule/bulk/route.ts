@@ -86,6 +86,8 @@ export async function POST(request: NextRequest) {
       typeof body?.targetMonth === 'string' ? body.targetMonth : undefined;
     const monthMode =
       body?.monthMode === 'regenerate' ? 'regenerate' : 'fill';
+    const monthScope =
+      body?.monthScope === 'all_scheduled' ? 'all_scheduled' : 'single';
 
     const { data: tours, error } = await loadBulkTourRows(serviceClient);
 
@@ -115,6 +117,7 @@ export async function POST(request: NextRequest) {
         apply,
         targetMonth,
         monthMode,
+        monthScope,
       });
 
       if (!result.ok) {

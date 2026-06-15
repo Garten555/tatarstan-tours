@@ -1,6 +1,7 @@
 'use client';
 
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
+import type { MonthScheduleScope } from '@/lib/tour/month-schedule-scope';
 import { Calendar, Loader2, X } from 'lucide-react';
 
 export type BulkMonthMode = 'fill' | 'regenerate';
@@ -8,7 +9,7 @@ export type BulkMonthMode = 'fill' | 'regenerate';
 type Props = {
   open: boolean;
   onClose: () => void;
-  onConfirm: (targetMonth: string, mode: BulkMonthMode) => void;
+  onConfirm: (targetMonth: string, mode: BulkMonthMode, scope: MonthScheduleScope) => void;
   running: boolean;
   defaultMonth: string;
 };
@@ -39,7 +40,7 @@ export function BulkScheduleMonthModal({
               Заполнить расписание
             </h2>
             <p className="text-sm text-gray-600 mt-1">
-              Выберите месяц и режим для всех туров
+              Месяц или все месяцы с выездами — для каждого тура отдельно
             </p>
           </div>
           <button
@@ -60,12 +61,52 @@ export function BulkScheduleMonthModal({
             const fd = new FormData(e.currentTarget);
             const month = String(fd.get('targetMonth') || defaultMonth);
             const mode = String(fd.get('monthMode')) === 'regenerate' ? 'regenerate' : 'fill';
-            onConfirm(month, mode);
+            const scope =
+              String(fd.get('monthScope')) === 'all_scheduled' ? 'all_scheduled' : 'single';
+            onConfirm(month, mode, scope);
           }}
         >
+          <fieldset className="space-y-3">
+            <legend className="text-sm font-medium text-gray-700 mb-2">Охват</legend>
+            <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-gray-200 p-4 hover:border-emerald-300 has-[:checked]:border-emerald-500 has-[:checked]:bg-emerald-50/40">
+              <input
+                type="radio"
+                name="monthScope"
+                value="single"
+                defaultChecked
+                disabled={running}
+                className="mt-1"
+              />
+              <span>
+                <span className="block text-sm font-semibold text-gray-900">Один месяц</span>
+                <span className="block text-xs text-gray-600 mt-0.5">
+                  Только выбранный календарный месяц
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-3 cursor-pointer rounded-xl border border-gray-200 p-4 hover:border-violet-300 has-[:checked]:border-violet-500 has-[:checked]:bg-violet-50/40">
+              <input
+                type="radio"
+                name="monthScope"
+                value="all_scheduled"
+                disabled={running}
+                className="mt-1"
+              />
+              <span>
+                <span className="block text-sm font-semibold text-gray-900">
+                  Все месяцы с выездами
+                </span>
+                <span className="block text-xs text-gray-600 mt-0.5">
+                  По каждому туру — все месяцы, где уже есть слоты (или горизонт шаблона, если тур
+                  завершён и выездов нет). Даты тура и статус обновятся автоматически.
+                </span>
+              </span>
+            </label>
+          </fieldset>
+
           <div>
             <label htmlFor="targetMonth" className="block text-sm font-medium text-gray-700 mb-2">
-              Месяц
+              Опорный месяц
             </label>
             <input
               id="targetMonth"
@@ -76,6 +117,10 @@ export function BulkScheduleMonthModal({
               disabled={running}
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
+            <p className="text-xs text-gray-500 mt-1.5">
+              Для «одного месяца» — этот месяц. Для «всех с выездами» — добавляется, если у тура ещё
+              нет расписания.
+            </p>
           </div>
 
           <fieldset className="space-y-3">

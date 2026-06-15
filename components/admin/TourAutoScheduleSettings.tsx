@@ -9,6 +9,7 @@ import {
   useDefaultScheduleMonth,
   type BulkMonthMode,
 } from '@/components/admin/BulkScheduleMonthModal';
+import type { MonthScheduleScope } from '@/lib/tour/month-schedule-scope';
 import type { TourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
 import {
   complementTourWeekdays,
@@ -154,7 +155,11 @@ export default function TourAutoScheduleSettings() {
     }
   };
 
-  const runBulk = async (targetMonth: string, monthMode: BulkMonthMode) => {
+  const runBulk = async (
+    targetMonth: string,
+    monthMode: BulkMonthMode,
+    monthScope: MonthScheduleScope
+  ) => {
     setBulkModalOpen(false);
     setBulkRunning(true);
     setBulkResult(null);
@@ -188,7 +193,7 @@ export default function TourAutoScheduleSettings() {
         const res = await fetch(`/api/admin/tours/${tour.id}/auto-schedule`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apply: true, targetMonth, monthMode }),
+          body: JSON.stringify({ apply: true, targetMonth, monthMode, monthScope }),
         });
         const data = await res.json();
 
@@ -220,6 +225,14 @@ export default function TourAutoScheduleSettings() {
           }
           if (removed > 0) {
             note = note ? `${note}; удалено пустых: ${removed}` : `удалено пустых: ${removed}`;
+          }
+          if (Array.isArray(data.monthsProcessed) && data.monthsProcessed.length > 1) {
+            note = note
+              ? `${note}; месяцы: ${data.monthsProcessed.join(', ')}`
+              : `месяцы: ${data.monthsProcessed.join(', ')}`;
+          }
+          if (data.catalogDatesUpdated) {
+            note = note ? `${note}; даты тура обновлены` : 'даты тура обновлены';
           }
           results.push({
             title: data.tourTitle || tour.title,
@@ -570,7 +583,7 @@ export default function TourAutoScheduleSettings() {
       <BulkScheduleMonthModal
         open={bulkModalOpen}
         onClose={() => setBulkModalOpen(false)}
-        onConfirm={(month, mode) => void runBulk(month, mode)}
+        onConfirm={(month, mode, scope) => void runBulk(month, mode, scope)}
         running={bulkRunning}
         defaultMonth={defaultScheduleMonth}
       />

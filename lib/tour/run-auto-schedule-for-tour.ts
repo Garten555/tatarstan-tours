@@ -13,8 +13,14 @@ import {
   sessionInTargetMonth,
   type MonthScheduleMode,
 } from '@/lib/tour/month-schedule';
+import {
+  currentMonthKey,
+  resolveMonthsForAutoSchedule,
+  type MonthScheduleScope,
+} from '@/lib/tour/month-schedule-scope';
 import { loadBusyGuideSessions } from '@/lib/tour/guide-schedule-conflict';
 import { syncTourSessions, type IncomingSession } from '@/lib/tour/sync-tour-sessions';
+import { syncTourCatalogDatesFromSessions } from '@/lib/tour/sync-tour-dates-from-sessions';
 
 export type RunAutoScheduleResult =
   | {
@@ -23,10 +29,66 @@ export type RunAutoScheduleResult =
       generated: ReturnType<typeof generateTourScheduleSlots> & {
         rescheduledBooked?: number;
         removedEmpty?: number;
+        monthsProcessed?: string[];
       };
       tourTitle: string;
+      catalogDatesUpdated?: boolean;
     }
   | { ok: false; status: number; error: string; details?: string };
+
+async function loadTourSessions(
+  serviceClient: SupabaseClient,
+  tourId: string
+) {
+  const { data: existing, error: sessErr } = await serviceClient
+    .from('tour_sessions')
+    .select('id, start_at, end_at, guide_id, status')
+    .eq('tour_id', tourId)
+    .order('start_at', { ascending: true });
+
+  if (sessErr) {
+    return { ok: false as const, error: sessErr.message };
+  }
+
+  const existingSessions = (existing ?? [])
+    .filter((r) => (r as { status?: string }).status !== 'cancelled')
+    .map((r) => ({
+      id: (r as { id: string }).id,
+      start_at: (r as { start_at: string }).start_at,
+      end_at: (r as { end_at: string | null }).end_at ?? null,
+      guide_id: (r as { guide_id?: string | null }).guide_id ?? null,
+      status: (r as { status?: string }).status,
+    }));
+
+  return { ok: true as const, existingSessions };
+}
+
+async function loadBookedSessionIdsInMonth(
+  serviceClient: SupabaseClient,
+  existingSessions: Array<{ id?: string; start_at: string }>,
+  year: number,
+  month: number
+): Promise<Set<string>> {
+  const bookedSessionIds = new Set<string>();
+  const inMonthIds = existingSessions
+    .filter((s) => s.id && sessionInTargetMonth(s.start_at, year, month))
+    .map((s) => s.id as string);
+
+  if (inMonthIds.length === 0) return bookedSessionIds;
+
+  const { data: bookedRows } = await serviceClient
+    .from('bookings')
+    .select('session_id')
+    .in('session_id', inMonthIds)
+    .in('status', ['pending', 'confirmed']);
+
+  for (const row of bookedRows ?? []) {
+    const sid = (row as { session_id: string }).session_id;
+    if (sid) bookedSessionIds.add(sid);
+  }
+
+  return bookedSessionIds;
+}
 
 export async function runAutoScheduleForTour(
   serviceClient: SupabaseClient,
@@ -37,9 +99,18 @@ export async function runAutoScheduleForTour(
     configOverride?: Partial<TourAutoScheduleConfig>;
     targetMonth?: string;
     monthMode?: MonthScheduleMode;
+    monthScope?: MonthScheduleScope;
   }
 ): Promise<RunAutoScheduleResult> {
-  const { tourId, actor, apply, configOverride, targetMonth, monthMode = 'fill' } = params;
+  const {
+    tourId,
+    actor,
+    apply,
+    configOverride,
+    targetMonth,
+    monthMode = 'fill',
+    monthScope = 'single',
+  } = params;
 
   const { data: tour, error: tourErr } = await serviceClient
     .from('tours')
@@ -50,8 +121,6 @@ export async function runAutoScheduleForTour(
   if (tourErr || !tour) {
     return { ok: false, status: 404, error: 'Тур не найден' };
   }
-
-  const status = (tour as { status?: string }).status;
 
   const baseConfig = await loadTourAutoScheduleConfig(serviceClient);
   const config: TourAutoScheduleConfig = {
@@ -70,83 +139,123 @@ export async function runAutoScheduleForTour(
     }
   }
 
-  const { data: existing, error: sessErr } = await serviceClient
-    .from('tour_sessions')
-    .select('id, start_at, end_at, guide_id, status')
-    .eq('tour_id', tourId)
-    .order('start_at', { ascending: true });
-
-  if (sessErr) {
+  const loaded = await loadTourSessions(serviceClient, tourId);
+  if (!loaded.ok) {
     return {
       ok: false,
       status: 500,
       error: 'Не удалось прочитать слоты тура',
-      details: sessErr.message,
+      details: loaded.error,
     };
   }
 
-  const existingSessions = (existing ?? [])
-    .filter((r) => (r as { status?: string }).status !== 'cancelled')
-    .map((r) => ({
-      id: (r as { id: string }).id,
-      start_at: (r as { start_at: string }).start_at,
-      end_at: (r as { end_at: string | null }).end_at ?? null,
-      guide_id: (r as { guide_id?: string | null }).guide_id ?? null,
-      status: (r as { status?: string }).status,
-    }));
-
+  let existingSessions = loaded.existingSessions;
   const guideIds = await loadActiveGuideIds(serviceClient);
-  const busySessions = await loadBusyGuideSessions(
+  let busySessions = await loadBusyGuideSessions(
     serviceClient,
     new Date().toISOString()
   );
 
-  const monthParsed = targetMonth ? parseTargetMonth(targetMonth) : null;
+  const anchorMonth = targetMonth?.trim() || currentMonthKey();
+  const monthsToProcess =
+    monthScope === 'all_scheduled' || targetMonth
+      ? resolveMonthsForAutoSchedule({
+          scope: monthScope,
+          anchorMonth,
+          existingSessions,
+          horizonDays: config.horizon_days,
+        })
+      : [];
 
-  if (monthParsed) {
-    const bookedSessionIds = new Set<string>();
-    if (monthMode === 'regenerate') {
-      const inMonthIds = existingSessions
-        .filter((s) => s.id && sessionInTargetMonth(s.start_at, monthParsed.year, monthParsed.month))
-        .map((s) => s.id as string);
+  if (monthsToProcess.length > 0) {
+    let totalNewSlots: ReturnType<typeof generateMonthTourScheduleSlots>['newSlots'] = [];
+    let rescheduledBooked = 0;
+    let removedEmpty = 0;
+    let appliedAny = false;
 
-      if (inMonthIds.length > 0) {
-        const { data: bookedRows } = await serviceClient
-          .from('bookings')
-          .select('session_id')
-          .in('session_id', inMonthIds)
-          .in('status', ['pending', 'confirmed']);
+    for (const monthKey of monthsToProcess) {
+      const monthParsed = parseTargetMonth(monthKey);
+      if (!monthParsed) continue;
 
-        for (const row of bookedRows ?? []) {
-          const sid = (row as { session_id: string }).session_id;
-          if (sid) bookedSessionIds.add(sid);
-        }
+      const bookedSessionIds =
+        monthMode === 'regenerate'
+          ? await loadBookedSessionIdsInMonth(
+              serviceClient,
+              existingSessions,
+              monthParsed.year,
+              monthParsed.month
+            )
+          : new Set<string>();
+
+      const monthResult = generateMonthTourScheduleSlots({
+        config,
+        existingSessions,
+        guideIds,
+        busySessions,
+        year: monthParsed.year,
+        month: monthParsed.month,
+        mode: monthMode,
+        bookedSessionIds,
+      });
+
+      totalNewSlots = [...totalNewSlots, ...monthResult.newSlots];
+      rescheduledBooked += monthResult.rescheduledBooked;
+      removedEmpty += monthResult.removedEmpty;
+
+      if (!apply) continue;
+
+      const monthUnchanged =
+        monthResult.newSlots.length === 0 &&
+        monthResult.rescheduledBooked === 0 &&
+        monthResult.removedEmpty === 0 &&
+        monthMode === 'fill';
+
+      if (monthUnchanged) continue;
+
+      const sync = await syncTourSessions(serviceClient, {
+        tourId,
+        sessions: monthResult.mergedSessions,
+        actor,
+        durationMinutesForConflict: config.duration_minutes,
+      });
+
+      if (!sync.ok) {
+        return {
+          ok: false,
+          status: sync.status,
+          error: sync.error,
+          details: sync.details,
+        };
       }
+
+      appliedAny = true;
+
+      const reloaded = await loadTourSessions(serviceClient, tourId);
+      if (reloaded.ok) {
+        existingSessions = reloaded.existingSessions;
+      }
+      busySessions = await loadBusyGuideSessions(
+        serviceClient,
+        new Date().toISOString()
+      );
     }
 
-    const monthResult = generateMonthTourScheduleSlots({
-      config,
-      existingSessions,
-      guideIds,
-      busySessions,
-      year: monthParsed.year,
-      month: monthParsed.month,
-      mode: monthMode,
-      bookedSessionIds,
-    });
-
     const generated = {
-      newSlots: monthResult.newSlots,
+      newSlots: totalNewSlots,
       existingFutureCount: existingSessions.filter(
         (s) => new Date(s.start_at).getTime() > Date.now()
       ).length,
       targetSlots: config.slots_ahead,
       skippedNoGuide: 0,
       skippedDuplicate: 0,
-      rescheduledBooked: monthResult.rescheduledBooked,
-      removedEmpty: monthResult.removedEmpty,
+      rescheduledBooked,
+      removedEmpty,
+      monthsProcessed: monthsToProcess,
       zeroReason:
-        monthResult.newSlots.length === 0 && monthMode === 'fill'
+        totalNewSlots.length === 0 &&
+        rescheduledBooked === 0 &&
+        removedEmpty === 0 &&
+        monthMode === 'fill'
           ? ('no_free_days' as const)
           : undefined,
     };
@@ -160,12 +269,7 @@ export async function runAutoScheduleForTour(
       };
     }
 
-    if (
-      monthResult.newSlots.length === 0 &&
-      monthResult.rescheduledBooked === 0 &&
-      monthResult.removedEmpty === 0 &&
-      monthMode === 'fill'
-    ) {
+    if (!appliedAny) {
       return {
         ok: true,
         applied: false,
@@ -174,31 +278,14 @@ export async function runAutoScheduleForTour(
       };
     }
 
-    const sync = await syncTourSessions(serviceClient, {
-      tourId,
-      sessions: monthResult.mergedSessions,
-      actor,
-      durationMinutesForConflict: config.duration_minutes,
-    });
-
-    if (!sync.ok) {
-      return {
-        ok: false,
-        status: sync.status,
-        error: sync.error,
-        details: sync.details,
-      };
-    }
-
-    if (status === 'completed' || status === 'cancelled') {
-      await serviceClient.from('tours').update({ status: 'active' }).eq('id', tourId);
-    }
+    const datesSync = await syncTourCatalogDatesFromSessions(serviceClient, tourId);
 
     return {
       ok: true,
       applied: true,
       generated,
       tourTitle: String((tour as { title?: string }).title || 'Тур'),
+      catalogDatesUpdated: datesSync.updated,
     };
   }
 
@@ -257,14 +344,13 @@ export async function runAutoScheduleForTour(
     };
   }
 
-  if (status === 'completed' || status === 'cancelled') {
-    await serviceClient.from('tours').update({ status: 'active' }).eq('id', tourId);
-  }
+  const datesSync = await syncTourCatalogDatesFromSessions(serviceClient, tourId);
 
   return {
     ok: true,
     applied: true,
     generated,
     tourTitle: String((tour as { title?: string }).title || 'Тур'),
+    catalogDatesUpdated: datesSync.updated,
   };
 }

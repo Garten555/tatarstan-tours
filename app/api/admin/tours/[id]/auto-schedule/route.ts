@@ -31,6 +31,8 @@ export async function POST(
       typeof body?.targetMonth === 'string' ? body.targetMonth : undefined;
     const monthMode =
       body?.monthMode === 'regenerate' ? 'regenerate' : 'fill';
+    const monthScope =
+      body?.monthScope === 'all_scheduled' ? 'all_scheduled' : 'single';
 
     const result = await runAutoScheduleForTour(serviceClient, {
       tourId,
@@ -39,6 +41,7 @@ export async function POST(
       configOverride,
       targetMonth,
       monthMode,
+      monthScope,
     });
 
     if (!result.ok) {
@@ -52,6 +55,7 @@ export async function POST(
       success: true,
       applied: result.applied,
       tourTitle: result.tourTitle,
+      catalogDatesUpdated: result.catalogDatesUpdated,
       ...result.generated,
     });
   } catch (e) {
