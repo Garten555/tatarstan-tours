@@ -1,10 +1,9 @@
 // Страница управления комнатами туров и назначения гидов
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
 import { 
-  Search, 
   Users, 
   Calendar, 
   MapPin, 
@@ -16,14 +15,17 @@ import {
   DoorOpen,
   Info,
   Timer,
-  ChevronLeft,
-  ChevronRight,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import { useBodyScrollLock } from '@/lib/useBodyScrollLock';
 import ConfirmModal from '@/components/common/ConfirmModal';
 import { formatDateTimeShortRu } from '@/lib/date/format-ru';
+import { shiftMonthKey } from '@/lib/admin/guide-tour-rooms-filters';
+import { useGuideTourRoomsFilters } from '@/hooks/useGuideTourRoomsFilters';
+import GuideTourRoomsFiltersBar, {
+  GuideTourRoomsPagination,
+} from '@/components/admin/GuideTourRoomsFiltersBar';
 
 type TourRoomsConfirm = null | {
   title: string;
@@ -56,6 +58,8 @@ interface TourRoom {
     start_at: string;
     end_at: string | null;
   } | null;
+  session_start_at?: string | null;
+  session_end_at?: string | null;
   guide?: {
     id: string;
     first_name: string;
@@ -84,7 +88,6 @@ function tourPublicViewHref(room: TourRoom): string {
 export default function TourRoomsPage() {
   const [rooms, setRooms] = useState<TourRoom[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
   const [guideFilter, setGuideFilter] = useState<'all' | 'assigned' | 'none'>('all');
   const [participantsFilter, setParticipantsFilter] = useState<'all' | 'with' | 'empty'>('all');
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
@@ -111,7 +114,47 @@ export default function TourRoomsPage() {
   const [deleteAllLoading, setDeleteAllLoading] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<TourRoomsConfirm>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
-  const [page, setPage] = useState(1);
+
+  const roomsForFilters = useMemo(
+    () =>
+      rooms.map((room) => ({
+        ...room,
+        session_start_at: room.session?.start_at ?? null,
+        session_end_at: room.session?.end_at ?? null,
+      })),
+    [rooms]
+  );
+
+  const postFilter = useCallback(
+    (list: typeof roomsForFilters) =>
+      list.filter((room) => {
+        const count = room.participants_count ?? 0;
+        if (guideFilter === 'assigned' && !room.guide_id) return false;
+        if (guideFilter === 'none' && room.guide_id) return false;
+        if (participantsFilter === 'with' && count === 0) return false;
+        if (participantsFilter === 'empty' && count > 0) return false;
+        return true;
+      }),
+    [guideFilter, participantsFilter]
+  );
+
+  const searchExtra = useCallback((room: TourRoom, q: string) => {
+    const guideEmail = room.guide?.email?.toLowerCase() ?? '';
+    return (
+      (room.guide?.first_name.toLowerCase().includes(q) ?? false) ||
+      (room.guide?.last_name.toLowerCase().includes(q) ?? false) ||
+      guideEmail.includes(q)
+    );
+  }, []);
+
+  const filters = useGuideTourRoomsFilters(roomsForFilters, ROOMS_PER_PAGE, {
+    postFilter,
+    searchExtra,
+  });
+
+  useEffect(() => {
+    filters.setPage(1);
+  }, [guideFilter, participantsFilter, filters.setPage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -393,24 +436,16 @@ export default function TourRoomsPage() {
     });
   };
 
-  const filteredRooms = rooms.filter((room) => {
-    const count = room.participants_count ?? 0;
-    if (guideFilter === 'assigned' && !room.guide_id) return false;
-    if (guideFilter === 'none' && room.guide_id) return false;
-    if (participantsFilter === 'with' && count === 0) return false;
-    if (participantsFilter === 'empty' && count > 0) return false;
+  const filteredRooms = filters.filteredRooms;
+  const paginatedRooms = filters.paginatedRooms;
+  const totalFiltered = filteredRooms.length;
+  const hasModeratorFilters = guideFilter !== 'all' || participantsFilter !== 'all';
 
-    if (!searchQuery.trim()) return true;
-    const query = searchQuery.toLowerCase();
-    const guideEmail = room.guide?.email?.toLowerCase() ?? '';
-    return (
-      room.tour.title.toLowerCase().includes(query) ||
-      (room.tour.city?.name.toLowerCase().includes(query) ?? false) ||
-      room.guide?.first_name.toLowerCase().includes(query) ||
-      room.guide?.last_name.toLowerCase().includes(query) ||
-      guideEmail.includes(query)
-    );
-  });
+  const resetAllFilters = () => {
+    filters.resetListFilters();
+    setGuideFilter('all');
+    setParticipantsFilter('all');
+  };
 
   const formatDate = formatDateTimeShortRu;
 
@@ -426,24 +461,6 @@ export default function TourRoomsPage() {
   };
 
   const listBusy = loading;
-
-  const totalFiltered = filteredRooms.length;
-  const totalPages = Math.max(1, Math.ceil(totalFiltered / ROOMS_PER_PAGE));
-
-  const paginatedRooms = useMemo(() => {
-    const start = (page - 1) * ROOMS_PER_PAGE;
-    return filteredRooms.slice(start, start + ROOMS_PER_PAGE);
-  }, [filteredRooms, page]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [searchQuery, guideFilter, participantsFilter]);
-
-  useEffect(() => {
-    if (page > totalPages) {
-      setPage(totalPages);
-    }
-  }, [page, totalPages]);
 
   return (
     <div>
@@ -521,20 +538,33 @@ export default function TourRoomsPage() {
         </div>
       </div>
 
-      {/* Поиск */}
-      <div className="bg-white border-b border-gray-100 mb-8 py-6 px-4 md:px-6 lg:px-8 -mx-4 md:-mx-6 lg:-mx-8 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] lg:w-[calc(100%+4rem)]">
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-6 h-6" />
-          <input
-            type="search"
-            placeholder="Поиск по названию тура, городу, имени гида или email…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            autoComplete="off"
-            className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-base"
-          />
-        </div>
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+      <GuideTourRoomsFiltersBar
+        accent="emerald"
+        filterSearch={filters.filterSearch}
+        onFilterSearchChange={filters.setFilterSearch}
+        lifecycleFilter={filters.lifecycleFilter}
+        onLifecycleFilterChange={filters.setLifecycleFilter}
+        monthInputValue={filters.monthInputValue}
+        onMonthChange={filters.applyMonthFilter}
+        onMonthShift={(delta) => {
+          const base = filters.monthInputValue || filters.currentMonthKey();
+          filters.applyMonthFilter(shiftMonthKey(base, delta));
+        }}
+        onTodayClick={filters.applyTodayFilter}
+        isTodayActive={filters.dateFilter === filters.currentDateKey()}
+        showClearDates={Boolean(filters.monthFilter || filters.dateFilter)}
+        onClearDates={filters.clearDateFilters}
+        hasListFilters={filters.hasListFilters || hasModeratorFilters}
+        onResetFilters={resetAllFilters}
+        filteredCount={filteredRooms.length}
+        totalCount={rooms.length}
+        page={filters.page}
+        totalPages={filters.totalPages}
+        showPagination={filters.showPagination}
+        countLabel="комнат"
+      />
+      <div className="bg-white border-b border-gray-100 mb-8 py-4 px-4 md:px-6 lg:px-8 -mx-4 md:-mx-6 lg:-mx-8 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] lg:w-[calc(100%+4rem)]">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <span className="text-xs font-bold uppercase tracking-wide text-gray-500">Гид:</span>
           <div className="flex flex-wrap gap-2">
             {(
@@ -599,7 +629,7 @@ export default function TourRoomsPage() {
           <div className="text-center py-12">
             <DoorOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-xl font-black text-gray-900">
-              {searchQuery || guideFilter !== 'all' || participantsFilter !== 'all'
+              {filters.hasListFilters || hasModeratorFilters
                 ? 'Комнаты не найдены по фильтрам'
                 : 'Пока нет комнат туров'}
             </p>
@@ -713,67 +743,16 @@ export default function TourRoomsPage() {
             ))}
           </div>
 
-          {totalFiltered > 0 && (
-            <div className="bg-white border border-gray-200 rounded-2xl mt-8 py-6 px-4 sm:px-6 shadow-sm">
-              <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
-                <button
-                  type="button"
-                  onClick={() => setPage(Math.max(1, page - 1))}
-                  disabled={page === 1}
-                  className="w-full sm:w-auto px-6 py-3 border-2 border-gray-300 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 hover:border-emerald-500 transition-all flex items-center justify-center gap-2 font-bold text-base"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                  Назад
-                </button>
-
-                {totalPages > 1 && (
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      let pageNum: number;
-                      if (totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (page <= 3) {
-                        pageNum = i + 1;
-                      } else if (page >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i;
-                      } else {
-                        pageNum = page - 2 + i;
-                      }
-
-                      return (
-                        <button
-                          type="button"
-                          key={pageNum}
-                          onClick={() => setPage(pageNum)}
-                          className={`w-12 h-12 rounded-xl font-black text-base transition-all ${
-                            page === pageNum
-                              ? 'bg-emerald-600 text-white shadow-lg'
-                              : 'bg-white border-2 border-gray-300 text-gray-700 hover:border-emerald-500 hover:text-emerald-600'
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-
-                <span className="text-base font-bold text-gray-700 px-2 text-center">
-                  Страница {page} из {totalPages} · комнат: {totalFiltered}
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => setPage(Math.min(totalPages, page + 1))}
-                  disabled={page === totalPages}
-                  className="w-full sm:w-auto px-6 py-3 border-2 border-gray-300 rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 hover:border-emerald-500 transition-all flex items-center justify-center gap-2 font-bold text-base"
-                >
-                  Вперёд
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
+          {totalFiltered > 0 && filters.showPagination ? (
+            <div className="mt-8">
+              <GuideTourRoomsPagination
+                accent="emerald"
+                page={filters.page}
+                totalPages={filters.totalPages}
+                onPageChange={filters.setPage}
+              />
             </div>
-          )}
+          ) : null}
           </>
         )}
       </div>

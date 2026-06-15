@@ -61,6 +61,7 @@ export function filterGuideTourRooms<T extends FilterableRoom>(
     monthFilter: string;
     dateFilter: string;
     departureStart?: (room: T) => string;
+    searchExtra?: (room: T, q: string) => boolean;
   }
 ): T[] {
   const q = opts.search.trim().toLowerCase();
@@ -76,6 +77,7 @@ export function filterGuideTourRooms<T extends FilterableRoom>(
     if (!q) return true;
     const title = room.tour.title.toLowerCase();
     const city = room.tour.city?.name?.toLowerCase() ?? '';
-    return title.includes(q) || city.includes(q);
+    if (title.includes(q) || city.includes(q)) return true;
+    return opts.searchExtra?.(room, q) ?? false;
   });
 }

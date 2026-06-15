@@ -12,6 +12,10 @@ import { User, LogOut, Settings, Calendar, Shield, Crown, MessageSquare, BookOpe
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 import { useDialog } from '@/hooks/useDialog';
 import { isSoundEnabled, setSoundEnabled, playNotificationSound } from '@/lib/sound/notifications';
+import {
+  userMenuAdminPanelLink,
+  userMenuShowsAdminPanel,
+} from '@/lib/admin/admin-panel-nav';
 
 export default function UserMenu() {
   const { alert, DialogComponents } = useDialog();
@@ -552,9 +556,11 @@ export default function UserMenu() {
   }
 
   const isAuthorizedByCache = !!profile?.role;
-  const isAdmin = isAdminRole(profile?.role) || !!(user?.email && adminEmails.includes(user.email.toLowerCase()));
-  // Определяем, показывать ли панель гида: либо по роли, либо по наличию комнат
-  const showGuidePanel = (profile?.role === 'guide' || profile?.role === 'tour_admin') || isGuide;
+  const isAdminByEmail = !!(user?.email && adminEmails.includes(user.email.toLowerCase()));
+  const isAdmin = isAdminRole(profile?.role) || isAdminByEmail;
+  const adminPanelNav = userMenuAdminPanelLink(profile?.role);
+  const showsAdminPanel =
+    isAdminByEmail || userMenuShowsAdminPanel(profile?.role, isGuide);
   // Если пользователь не авторизован и нет кэша роли — показываем Вход
   if (!user && !isAuthorizedByCache) {
     return (
@@ -748,11 +754,11 @@ export default function UserMenu() {
             </div>
             
             {/* Админ-панель (отдельно от «Мои комнаты» в разделе Социальные) */}
-            {(isAdmin || showGuidePanel) && (
+            {(showsAdminPanel) && (
               <div className="header-user-dropdown-section">
                 <div className="header-user-dropdown-section-title">Администрирование</div>
                 <Link
-                  href="/admin"
+                  href={adminPanelNav.href}
                   prefetch={false}
                   onClick={() => setIsOpen(false)}
                   className="header-user-dropdown-item header-user-dropdown-item-admin"
@@ -760,9 +766,7 @@ export default function UserMenu() {
                   <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
                     <Shield className="header-user-dropdown-icon header-user-dropdown-icon-emerald" />
                   </div>
-                  <span className="header-user-dropdown-text">
-                    {showGuidePanel && !isAdmin ? 'Панель гида' : 'Админ-панель'}
-                  </span>
+                  <span className="header-user-dropdown-text">{adminPanelNav.label}</span>
                 </Link>
               </div>
             )}

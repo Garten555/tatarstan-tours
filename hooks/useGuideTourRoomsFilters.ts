@@ -19,23 +19,41 @@ export function useGuideTourRoomsFilters<
     session_start_at?: string | null;
     session_end_at?: string | null;
   },
->(rooms: T[], perPage = 6) {
+>(
+  rooms: T[],
+  perPage = 6,
+  options?: {
+    departureStart?: (room: T) => string;
+    searchExtra?: (room: T, q: string) => boolean;
+    postFilter?: (rooms: T[]) => T[];
+  }
+) {
   const [filterSearch, setFilterSearch] = useState('');
   const [lifecycleFilter, setLifecycleFilter] = useState<GuideTourLifecycleFilter>('all');
   const [monthFilter, setMonthFilter] = useState('');
   const [dateFilter, setDateFilter] = useState('');
   const [page, setPage] = useState(1);
 
-  const filteredRooms = useMemo(
-    () =>
-      filterGuideTourRooms(rooms, {
-        search: filterSearch,
-        lifecycle: lifecycleFilter,
-        monthFilter,
-        dateFilter,
-      }),
-    [rooms, filterSearch, lifecycleFilter, monthFilter, dateFilter]
-  );
+  const filteredRooms = useMemo(() => {
+    const base = filterGuideTourRooms(rooms, {
+      search: filterSearch,
+      lifecycle: lifecycleFilter,
+      monthFilter,
+      dateFilter,
+      departureStart: options?.departureStart,
+      searchExtra: options?.searchExtra,
+    });
+    return options?.postFilter ? options.postFilter(base) : base;
+  }, [
+    rooms,
+    filterSearch,
+    lifecycleFilter,
+    monthFilter,
+    dateFilter,
+    options?.departureStart,
+    options?.searchExtra,
+    options?.postFilter,
+  ]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRooms.length / perPage));
   const showPagination = filteredRooms.length > perPage;
