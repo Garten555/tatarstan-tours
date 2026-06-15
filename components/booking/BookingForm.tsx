@@ -356,7 +356,7 @@ export default function BookingForm({ tour, session = null, user }: BookingFormP
       {/* Навигация */}
       <Link
         href={`/tours/${tour.slug}`}
-        className="group inline-flex items-center gap-2.5 text-gray-600 hover:text-emerald-600 transition-all duration-200 mb-8 px-4 py-2.5 rounded-xl hover:bg-white/80 hover:shadow-sm backdrop-blur-sm"
+        className="group inline-flex items-center gap-2.5 text-gray-900 hover:text-black no-underline transition-all duration-200 mb-8 px-4 py-2.5 rounded-xl hover:bg-white/80 hover:shadow-sm backdrop-blur-sm"
       >
         <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform duration-200" />
         <span className="font-medium">Назад к туру</span>

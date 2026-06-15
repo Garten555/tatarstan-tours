@@ -1240,11 +1240,10 @@ body {
   opacity: 1 !important;
 }
 
-/* Улучшение видимости ссылок */
-/* Исключаем навигацию в хедере, меню пользователя и футер из глобального правила */
-a:not(.text-white):not(.admin-tour-card-btn):not(.text-emerald-600):not(.text-blue-600):not(.text-gray-900):not(.text-gray-800):not(.text-gray-700):not(.header-user-dropdown-item):not(.header-user-dropdown-item-emerald):not(.header-user-dropdown-item-admin):not(.header-user-dropdown-item-danger):not(.header-nav-link):not(.footer-link):not(.footer-social-link):not(.about-back-link):not(.header-auth-button),
+/* Базовый цвет ссылок — тёмный, без принудительного синего */
+a:not(.text-white):not(.admin-tour-card-btn):not(.text-emerald-600):not(.text-emerald-700):not(.text-blue-600):not(.text-gray-900):not(.text-gray-800):not(.text-gray-700):not(.text-gray-600):not(.header-user-dropdown-item):not(.header-user-dropdown-item-emerald):not(.header-user-dropdown-item-admin):not(.header-user-dropdown-item-danger):not(.header-nav-link):not(.footer-link):not(.footer-social-link):not(.about-back-link):not(.header-auth-button):not(.tour-room-title-link),
 button:not(.text-white):not(.admin-tour-card-btn):not([class*="text-white"]) {
-  color: rgb(37 99 235) !important; /* Более яркий синий */
+  color: rgb(17 24 39) !important; /* gray-900 */
 }
 
 /* Исключаем кнопки с белым текстом из глобального правила */
