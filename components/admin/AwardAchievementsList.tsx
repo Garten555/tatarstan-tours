@@ -18,6 +18,12 @@ import { escapeHtml } from '@/lib/utils/sanitize';
 import { formatDateTimeShortRu } from '@/lib/date/format-ru';
 import IssueAchievementFormModal from '@/components/achievements/IssueAchievementFormModal';
 import type { GuideIssueAchievement } from '@/lib/achievements/guide-issue-metadata';
+import {
+  roomDepartureEnd,
+  roomDepartureStart,
+  roomTourLifecycle,
+  type RoomTourLifecycle,
+} from '@/lib/achievements/dedupe-award-rooms';
 
 interface Room {
   id: string;
@@ -80,9 +86,11 @@ function participantRoleLabel(role: string | null | undefined): string | null {
   return labels[role] ?? null;
 }
 
-type TourLifecycle = 'ongoing' | 'upcoming' | 'ended';
+type TourLifecycle = RoomTourLifecycle;
 
-const ROOMS_PER_PAGE = 6;
+function tourLifecycle(room: Room): TourLifecycle {
+  return roomTourLifecycle(room);
+}
 
 function moscowDateParts(iso: string) {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -120,13 +128,7 @@ function currentMonthKey(): string {
   return tourStartMonthKey(new Date().toISOString());
 }
 
-function tourLifecycle(room: Room): TourLifecycle {
-  const ended = room.tour.end_date ? new Date(room.tour.end_date) < new Date() : false;
-  const started = new Date(room.tour.start_date) <= new Date();
-  if (ended) return 'ended';
-  if (!started) return 'upcoming';
-  return 'ongoing';
-}
+const ROOMS_PER_PAGE = 6;
 
 export default function AwardAchievementsList({
   rooms,
@@ -152,8 +154,8 @@ export default function AwardAchievementsList({
     const q = filterSearch.trim().toLowerCase();
     return rooms.filter((room) => {
       if (lifecycleFilter !== 'all' && tourLifecycle(room) !== lifecycleFilter) return false;
-      if (dateFilter && tourStartDateKey(room.session_start_at ?? room.tour.start_date) !== dateFilter) return false;
-      else if (monthFilter && tourStartMonthKey(room.session_start_at ?? room.tour.start_date) !== monthFilter) return false;
+      if (dateFilter && tourStartDateKey(roomDepartureStart(room)) !== dateFilter) return false;
+      else if (monthFilter && tourStartMonthKey(roomDepartureStart(room)) !== monthFilter) return false;
       if (!q) return true;
       const title = room.tour.title.toLowerCase();
       const city = (room.tour.city?.name ?? '').toLowerCase();
@@ -426,10 +428,9 @@ export default function AwardAchievementsList({
 
       {paginatedRooms.map((room) => {
         const isExpanded = expandedRooms.has(room.id);
-        const isTourEnded = room.tour.end_date 
-          ? new Date(room.tour.end_date) < new Date()
-          : false;
-        const isTourStarted = new Date(room.tour.start_date) <= new Date();
+        const lifecycle = tourLifecycle(room);
+        const isTourEnded = lifecycle === 'ended';
+        const isTourStarted = lifecycle === 'ongoing' || lifecycle === 'ended';
         const roomParticipants = participants[room.id] || [];
 
         return (
@@ -464,6 +465,11 @@ export default function AwardAchievementsList({
                     <h2 className="text-xl md:text-2xl font-black text-gray-900">
                       {escapeHtml(room.tour.title)}
                     </h2>
+                    {!isTourStarted && (
+                      <span className="px-3 py-1.5 bg-blue-100 text-blue-800 rounded-xl text-sm font-bold">
+                        Предстоит
+                      </span>
+                    )}
                     {isTourStarted && !isTourEnded && (
                       <span className="px-3 py-1.5 bg-green-100 text-green-800 rounded-xl text-sm font-bold">
                         Идет сейчас
@@ -474,34 +480,20 @@ export default function AwardAchievementsList({
                         Завершен
                       </span>
                     )}
-                    {!isTourStarted && (
-                      <span className="px-3 py-1.5 bg-blue-100 text-blue-800 rounded-xl text-sm font-bold">
-                        Предстоит
-                      </span>
-                    )}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-6 text-base text-gray-700">
                     <div className="flex items-center gap-2">
                       <Calendar className="w-5 h-5 text-emerald-600" />
-                      {room.session_start_at ? (
-                        <>
-                          <span className="font-semibold">{formatDate(room.session_start_at)}</span>
-                          {room.session_end_at && (
-                            <span className="text-gray-500"> - {formatDate(room.session_end_at)}</span>
-                          )}
-                          <span className="rounded-lg bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-800">
-                            Выезд
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <span className="font-semibold">{formatDate(room.tour.start_date)}</span>
-                          {room.tour.end_date && (
-                            <span className="text-gray-500"> - {formatDate(room.tour.end_date)}</span>
-                          )}
-                        </>
+                      <span className="font-semibold">{formatDate(roomDepartureStart(room))}</span>
+                      {roomDepartureEnd(room) && (
+                        <span className="text-gray-500"> - {formatDate(roomDepartureEnd(room)!)}</span>
                       )}
+                      {room.session_start_at ? (
+                        <span className="rounded-lg bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-800">
+                          Выезд
+                        </span>
+                      ) : null}
                     </div>
                     {room.tour.city && (
                       <div className="flex items-center gap-2">

@@ -13,25 +13,15 @@ import {
 } from 'lucide-react';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import { formatDateTimeShortRu } from '@/lib/date/format-ru';
+import {
+  roomDepartureEnd,
+  roomDepartureStart,
+  roomTourLifecycle,
+} from '@/lib/achievements/dedupe-award-rooms';
+import type { MappedGuideTourRoom } from '@/lib/admin/guide-tour-room-rows';
 
 interface GuideToursListProps {
-  rooms: Array<{
-    id: string;
-    tour_id: string;
-    is_active: boolean;
-    created_at: string;
-    tour: {
-      id: string;
-      title: string;
-      start_date: string;
-      end_date: string | null;
-      cover_image: string | null;
-      city?: {
-        name: string;
-      };
-    };
-    participants_count: number;
-  }>;
+  rooms: MappedGuideTourRoom[];
 }
 
 type TourStatusFilter = 'all' | 'active' | 'upcoming' | 'ended';
@@ -43,14 +33,11 @@ export default function GuideToursList({ rooms }: GuideToursListProps) {
   const filteredRooms = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return rooms.filter((room) => {
-      const ended = room.tour.end_date ? new Date(room.tour.end_date) < new Date() : false;
-      const started = new Date(room.tour.start_date) <= new Date();
-      const active = started && !ended;
-      const upcoming = !started;
+      const lifecycle = roomTourLifecycle(room);
 
-      if (statusFilter === 'active' && !active) return false;
-      if (statusFilter === 'upcoming' && !upcoming) return false;
-      if (statusFilter === 'ended' && !ended) return false;
+      if (statusFilter === 'active' && lifecycle !== 'ongoing') return false;
+      if (statusFilter === 'upcoming' && lifecycle !== 'upcoming') return false;
+      if (statusFilter === 'ended' && lifecycle !== 'ended') return false;
 
       if (!q) return true;
       const title = room.tour.title.toLowerCase();
@@ -122,8 +109,7 @@ export default function GuideToursList({ rooms }: GuideToursListProps) {
       ) : null}
 
       {filteredRooms.map((room) => {
-        const isTourEnded = room.tour.end_date ? new Date(room.tour.end_date) < new Date() : false;
-        const isTourStarted = new Date(room.tour.start_date) <= new Date();
+        const lifecycle = roomTourLifecycle(room);
 
         return (
           <div
@@ -151,17 +137,17 @@ export default function GuideToursList({ rooms }: GuideToursListProps) {
                     <h2 className="text-xl font-bold text-gray-900 md:text-2xl">
                       {escapeHtml(room.tour.title)}
                     </h2>
-                    {isTourStarted && !isTourEnded && (
+                    {lifecycle === 'ongoing' && (
                       <span className="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-800">
                         Идет сейчас
                       </span>
                     )}
-                    {isTourEnded && (
+                    {lifecycle === 'ended' && (
                       <span className="rounded-full bg-gray-100 px-3 py-1 text-sm font-medium text-gray-800">
                         Завершен
                       </span>
                     )}
-                    {!isTourStarted && (
+                    {lifecycle === 'upcoming' && (
                       <span className="rounded-full bg-blue-100 px-3 py-1 text-sm font-medium text-blue-800">
                         Предстоит
                       </span>
@@ -171,8 +157,17 @@ export default function GuideToursList({ rooms }: GuideToursListProps) {
                   <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-gray-600">
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4 shrink-0" />
-                      <span>{formatDate(room.tour.start_date)}</span>
-                      {room.tour.end_date && <span> — {formatDate(room.tour.end_date)}</span>}
+                      <span className="font-semibold text-gray-800">
+                        {formatDate(roomDepartureStart(room))}
+                      </span>
+                      {roomDepartureEnd(room) && (
+                        <span> — {formatDate(roomDepartureEnd(room)!)}</span>
+                      )}
+                      {room.session_start_at ? (
+                        <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-800">
+                          Выезд
+                        </span>
+                      ) : null}
                     </div>
                     {room.tour.city && (
                       <div className="flex items-center gap-2">

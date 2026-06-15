@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import Link from 'next/link';
 import { Calendar, Users, MessageSquare, MapPin, Clock } from 'lucide-react';
+import { loadGuideTourRooms } from '@/lib/admin/guide-tour-room-rows';
+import { roomTourLifecycle } from '@/lib/achievements/dedupe-award-rooms';
 
 export const metadata = {
   title: 'Панель гида - Админ панель',
@@ -29,72 +31,13 @@ export default async function GuideDashboard() {
     redirect('/admin');
   }
 
-  // Получаем комнаты гида
-  const { data: rooms } = await supabase
-    .from('tour_rooms')
-    .select(`
-      id,
-      created_at,
-      tour:tours(
-        id,
-        title,
-        start_date,
-        end_date,
-        max_participants
-      )
-    `)
-    .eq('guide_id', user.id)
-    .order('created_at', { ascending: false });
+  const rooms = await loadGuideTourRooms(supabase, { guideId: user.id });
 
-  // Подсчитываем статистику
-  interface RoomData {
-    id: unknown;
-    created_at: unknown;
-    tour?: {
-      id: unknown;
-      title: unknown;
-      start_date: unknown;
-      end_date: unknown;
-      max_participants: unknown;
-    } | {
-      id: unknown;
-      title: unknown;
-      start_date: unknown;
-      end_date: unknown;
-      max_participants: unknown;
-    }[] | null;
-  }
-  const getTour = (room: RoomData) => {
-    if (!room.tour) return null;
-    return Array.isArray(room.tour) && room.tour.length > 0 
-      ? room.tour[0] 
-      : (!Array.isArray(room.tour) ? room.tour : null);
-  };
-  const now = new Date();
-  const activeRooms = (rooms || []).filter((room: RoomData) => {
-    const tour = getTour(room);
-    const startDate = tour?.start_date ? new Date(String(tour.start_date)) : null;
-    const endDate = tour?.end_date ? new Date(String(tour.end_date)) : null;
-    if (!startDate) return false;
-    return startDate <= now && (!endDate || endDate >= now);
-  });
+  const activeRooms = rooms.filter((room) => roomTourLifecycle(room) === 'ongoing');
+  const upcomingRooms = rooms.filter((room) => roomTourLifecycle(room) === 'upcoming');
+  const completedRooms = rooms.filter((room) => roomTourLifecycle(room) === 'ended');
 
-  const upcomingRooms = (rooms || []).filter((room: RoomData) => {
-    const tour = getTour(room);
-    const startDate = tour?.start_date ? new Date(String(tour.start_date)) : null;
-    if (!startDate) return false;
-    return startDate > now;
-  });
-
-  const completedRooms = (rooms || []).filter((room: RoomData) => {
-    const tour = getTour(room);
-    const endDate = tour?.end_date ? new Date(String(tour.end_date)) : null;
-    if (!endDate) return false;
-    return endDate < now;
-  });
-
-  // Получаем количество участников
-  const roomIds = (rooms || []).map((r: RoomData) => String(r.id));
+  const roomIds = rooms.map((r) => r.id);
   let totalParticipants = 0;
   if (roomIds.length > 0) {
     const { count } = await supabase
@@ -117,7 +60,7 @@ export default async function GuideDashboard() {
   }
 
   const stats = {
-    totalRooms: rooms?.length || 0,
+    totalRooms: rooms.length,
     activeRooms: activeRooms.length,
     upcomingRooms: upcomingRooms.length,
     completedRooms: completedRooms.length,
