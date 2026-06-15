@@ -49,6 +49,11 @@ export function parseTimeHHmm(value: string): { h: number; m: number } | null {
   return { h: Number(m[1]), m: Number(m[2]) };
 }
 
+/** Время начала для сохранения / авторасписания (без пустых и дубликатов). */
+export function normalizeStartTimesList(times: string[]): string[] {
+  return [...new Set(times.map((t) => t.trim()).filter((t) => parseTimeHHmm(t)))].sort();
+}
+
 export function normalizeTourAutoScheduleConfig(
   raw: unknown
 ): TourAutoScheduleConfig {

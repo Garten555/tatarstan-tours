@@ -10,11 +10,12 @@ import {
   type BulkMonthMode,
 } from '@/components/admin/BulkScheduleMonthModal';
 import type { MonthScheduleScope } from '@/lib/tour/month-schedule-scope';
-import type { TourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
 import {
   complementTourWeekdays,
   durationMinutesToParts,
   durationPartsToMinutes,
+  normalizeStartTimesList,
+  type TourAutoScheduleConfig,
 } from '@/lib/tour/auto-schedule-config';
 import { GUIDE_REST } from '@/lib/tour/rest-day-ui';
 
@@ -132,7 +133,7 @@ export default function TourAutoScheduleSettings() {
 
   const handleSave = async () => {
     if (!config) return;
-    const start_times = [...new Set(config.start_times.map((t) => t.trim()).filter(Boolean))].sort();
+    const start_times = normalizeStartTimesList(config.start_times);
     if (start_times.length === 0) {
       toast.error('Добавьте хотя бы одно время начала');
       return;
@@ -148,10 +149,37 @@ export default function TourAutoScheduleSettings() {
       if (!res.ok) throw new Error(data.error || 'Ошибка сохранения');
       setConfig(data.config);
       toast.success('Шаблон расписания сохранён');
+      return data.config as TourAutoScheduleConfig;
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Не удалось сохранить');
+      return null;
     } finally {
       setSaving(false);
+    }
+  };
+
+  /** Перед массовым прогоном — сохранить текущий шаблон с экрана (в т.ч. новое время). */
+  const persistConfigBeforeRun = async (): Promise<TourAutoScheduleConfig | null> => {
+    if (!config) return null;
+    const start_times = normalizeStartTimesList(config.start_times);
+    if (start_times.length === 0) {
+      toast.error('Добавьте хотя бы одно время начала в шаблоне');
+      return null;
+    }
+    const payload = { ...config, start_times };
+    try {
+      const res = await fetch('/api/admin/tour-auto-schedule/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ config: payload }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Ошибка сохранения шаблона');
+      setConfig(data.config);
+      return data.config as TourAutoScheduleConfig;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Не удалось сохранить шаблон');
+      return null;
     }
   };
 
@@ -164,8 +192,16 @@ export default function TourAutoScheduleSettings() {
     setBulkRunning(true);
     setBulkResult(null);
     setBulkProgress(null);
-    setBulkProgressLabel('Загрузка списка туров…');
+    setBulkProgressLabel('Сохранение шаблона…');
     setBulkProgressSubtitle(undefined);
+
+    const runConfig = await persistConfigBeforeRun();
+    if (!runConfig) {
+      setBulkRunning(false);
+      return;
+    }
+
+    setBulkProgressLabel('Загрузка списка туров…');
 
     try {
       const listRes = await fetch('/api/admin/tours/auto-schedule/bulk', { cache: 'no-store' });
@@ -193,7 +229,13 @@ export default function TourAutoScheduleSettings() {
         const res = await fetch(`/api/admin/tours/${tour.id}/auto-schedule`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apply: true, targetMonth, monthMode, monthScope }),
+          body: JSON.stringify({
+            apply: true,
+            targetMonth,
+            monthMode,
+            monthScope,
+            config: runConfig,
+          }),
         });
         const data = await res.json();
 
@@ -470,7 +512,7 @@ export default function TourAutoScheduleSettings() {
             </div>
             <p className="text-xs text-gray-500 mt-2">
               Если на первое время все гиды заняты — скрипт попробует следующее в списке, затем
-              другие дни по шаблону.
+              другие дни по шаблону. Перед «Пересоставить месяц» шаблон сохраняется автоматически.
             </p>
           </div>
           <div>

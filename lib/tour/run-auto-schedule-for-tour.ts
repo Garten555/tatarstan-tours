@@ -6,6 +6,7 @@ import {
   loadTourAutoScheduleConfig,
 } from '@/lib/tour/auto-schedule-settings';
 import type { TourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
+import { normalizeTourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
 import { generateTourScheduleSlots } from '@/lib/tour/generate-auto-schedule';
 import {
   generateMonthTourScheduleSlots,
@@ -138,12 +139,16 @@ export async function runAutoScheduleForTour(
   }
 
   const baseConfig = await loadTourAutoScheduleConfig(serviceClient);
-  const config: TourAutoScheduleConfig = {
+  const config: TourAutoScheduleConfig = normalizeTourAutoScheduleConfig({
     ...baseConfig,
     ...configOverride,
-  };
+  });
 
-  if (tour.start_date && tour.end_date && !configOverride?.duration_minutes) {
+  const templateFromClient =
+    Boolean(configOverride?.start_times?.length) ||
+    Boolean(configOverride?.duration_minutes);
+
+  if (tour.start_date && tour.end_date && !templateFromClient) {
     const startMs = new Date(tour.start_date as string).getTime();
     const endMs = new Date(tour.end_date as string).getTime();
     if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs > startMs) {

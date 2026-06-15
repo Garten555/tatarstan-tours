@@ -38,6 +38,31 @@ function tourHasSlotAt(sessions: ExistingTourSession[], startIso: string): boole
   });
 }
 
+/** День слота + первое время из шаблона → start/end (МСК). */
+export function applyTemplateStartTimeToSessionDay(
+  sessionStartIso: string,
+  config: TourAutoScheduleConfig
+): { start_at: string; end_at: string } {
+  const parts = moscowNowParts(new Date(sessionStartIso));
+  const tm = parseTimeHHmm(config.start_times[0] ?? '10:00');
+  if (!tm) {
+    const start_at = sessionStartIso;
+    return {
+      start_at,
+      end_at: new Date(
+        new Date(start_at).getTime() + config.duration_minutes * 60_000
+      ).toISOString(),
+    };
+  }
+  const start_at = moscowWallClockToIso(parts.year, parts.month, parts.day, tm.h, tm.m);
+  return {
+    start_at,
+    end_at: new Date(
+      new Date(start_at).getTime() + config.duration_minutes * 60_000
+    ).toISOString(),
+  };
+}
+
 /** Слоты по шаблону только в выбранном календарном месяце (МСК). */
 export function generateMonthTourScheduleSlots(params: {
   config: TourAutoScheduleConfig;
@@ -82,6 +107,7 @@ export function generateMonthTourScheduleSlots(params: {
   );
 
   let removedEmpty = 0;
+  let rescheduledBooked = 0;
   let keptInMonth = inMonth;
 
   if (mode === 'regenerate') {
@@ -92,7 +118,27 @@ export function generateMonthTourScheduleSlots(params: {
     });
   }
 
-  const allSessions = [...outsideMonth, ...keptInMonth];
+  const keptForPlanning =
+    mode === 'regenerate'
+      ? keptInMonth.map((s) => {
+          const { start_at, end_at } = applyTemplateStartTimeToSessionDay(
+            s.start_at,
+            config
+          );
+          if (!sameInstant(s.start_at, start_at)) rescheduledBooked += 1;
+          return { ...s, start_at, end_at };
+        })
+      : keptInMonth;
+
+  const allSessions: ExistingTourSession[] = [
+    ...outsideMonth,
+    ...keptForPlanning.map((s) => ({
+      ...s,
+      end_at:
+        s.end_at ??
+        applyTemplateStartTimeToSessionDay(s.start_at, config).end_at,
+    })),
+  ];
   const newSlots: GeneratedSlot[] = [];
   const mutableBusy = [...busySessions];
   let roundRobinIndex = 0;
@@ -166,47 +212,26 @@ export function generateMonthTourScheduleSlots(params: {
     }
   }
 
-  let rescheduledBooked = 0;
   const mergedSessions = [
     ...outsideMonth.map((s) => ({
       id: s.id,
       start_at: s.start_at,
-      end_at: s.end_at ?? new Date(new Date(s.start_at).getTime() + config.duration_minutes * 60_000).toISOString(),
+      end_at:
+        s.end_at ??
+        new Date(
+          new Date(s.start_at).getTime() + config.duration_minutes * 60_000
+        ).toISOString(),
+      guide_id: s.guide_id ?? null,
+    })),
+    ...keptForPlanning.map((s) => ({
+      id: s.id,
+      start_at: s.start_at,
+      end_at:
+        s.end_at ??
+        applyTemplateStartTimeToSessionDay(s.start_at, config).end_at,
       guide_id: s.guide_id ?? null,
     })),
   ];
-
-  if (mode === 'regenerate') {
-    for (const s of keptInMonth) {
-      const parts = moscowNowParts(new Date(s.start_at));
-      const tm = parseTimeHHmm(config.start_times[0] ?? '10:00');
-      const newStart =
-        tm != null
-          ? moscowWallClockToIso(parts.year, parts.month, parts.day, tm.h, tm.m)
-          : s.start_at;
-      const newEnd = new Date(
-        new Date(newStart).getTime() + config.duration_minutes * 60_000
-      ).toISOString();
-      if (!sameInstant(s.start_at, newStart)) rescheduledBooked += 1;
-      mergedSessions.push({
-        id: s.id,
-        start_at: newStart,
-        end_at: newEnd,
-        guide_id: s.guide_id ?? null,
-      });
-    }
-  } else {
-    for (const s of keptInMonth) {
-      mergedSessions.push({
-        id: s.id,
-        start_at: s.start_at,
-        end_at:
-          s.end_at ??
-          new Date(new Date(s.start_at).getTime() + config.duration_minutes * 60_000).toISOString(),
-        guide_id: s.guide_id ?? null,
-      });
-    }
-  }
 
   for (const slot of newSlots) {
     mergedSessions.push({

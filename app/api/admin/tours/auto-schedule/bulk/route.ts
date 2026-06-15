@@ -4,6 +4,7 @@ import { requireTourManager } from '@/lib/admin/require-tour-manager';
 import { loadActiveGuideIds } from '@/lib/tour/auto-schedule-settings';
 import { runAutoScheduleForTour } from '@/lib/tour/run-auto-schedule-for-tour';
 import { prunePastTourSessionsWithoutBookings } from '@/lib/tour/prune-past-tour-sessions';
+import { normalizeTourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
 
 async function loadBulkTourRows(serviceClient: Awaited<ReturnType<typeof createServiceClient>>) {
   return serviceClient
@@ -89,6 +90,8 @@ export async function POST(request: NextRequest) {
       body?.monthMode === 'regenerate' ? 'regenerate' : 'fill';
     const monthScope =
       body?.monthScope === 'all_scheduled' ? 'all_scheduled' : 'single';
+    const configOverride =
+      body?.config != null ? normalizeTourAutoScheduleConfig(body.config) : undefined;
 
     const { data: tours, error } = await loadBulkTourRows(serviceClient);
 
@@ -119,6 +122,7 @@ export async function POST(request: NextRequest) {
         targetMonth,
         monthMode,
         monthScope,
+        configOverride,
       });
 
       if (!result.ok) {
