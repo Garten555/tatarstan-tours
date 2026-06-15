@@ -9,7 +9,12 @@ import {
   attachActiveTourLinksToAchievements,
   attachActiveTourLinksToParticipatedRows,
 } from '@/lib/tours/resolve-active-tour-link';
-import { getSubscriberFollows, canViewPrivateProfile } from '@/lib/social/friend-subscribers';
+import {
+  getSubscriberFollows,
+  canViewPrivateProfile,
+  canViewUserGallery,
+  type GalleryVisibility,
+} from '@/lib/social/friend-subscribers';
 
 interface PublicProfilePageProps {
   params: Promise<{ username: string }>;
@@ -209,9 +214,12 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
   // Получаем настройки приватности целевого пользователя
   const { data: privacySettings } = await serviceClient
     .from('user_message_privacy')
-    .select('who_can_follow, who_can_add_friend')
+    .select('who_can_follow, who_can_add_friend, who_can_view_gallery')
     .eq('user_id', profileData.id)
     .maybeSingle();
+
+  const whoCanViewGallery =
+    (privacySettings?.who_can_view_gallery as GalleryVisibility | undefined) || 'everyone';
 
   // Проверяем, являемся ли мы друзьями (если есть текущий пользователь)
   let areFriends = false;
@@ -488,15 +496,26 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
   const completedTours = participatedTours;
   const upcomingTours = allToursForBlog.filter((b: any) => b.status === 'confirmed');
   
-  const allUserMedia = isPrivateLimitedView
-    ? []
-    : (Array.isArray(userGalleryResult?.data) ? userGalleryResult.data : []).map((media: any) => ({
+  const canViewGallery =
+    !isPrivateLimitedView &&
+    (await canViewUserGallery(
+      serviceClient,
+      profileData.id,
+      currentUser?.id ?? null,
+      isCurrentUserAdmin,
+      whoCanViewGallery
+    ));
+
+  const rawGalleryMedia = Array.isArray(userGalleryResult?.data) ? userGalleryResult.data : [];
+  const allUserMedia = canViewGallery
+    ? rawGalleryMedia.map((media: any) => ({
         id: media.id,
         media_url: media.media_url,
         media_type: media.media_type,
         thumbnail_url: media.thumbnail_url,
         created_at: media.created_at,
-      }));
+      }))
+    : [];
 
   // Подписчики — только не-друзья (после принятия заявки отображаются в друзьях)
   const followersList = subscriberData.rows
@@ -615,6 +634,9 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
       areFriends={areFriends}
       isFollowing={isFollowing}
       isPrivateLimitedView={isPrivateLimitedView}
+      canViewGallery={canViewGallery}
+      whoCanViewGallery={whoCanViewGallery}
+      galleryMediaCount={rawGalleryMedia.length}
       friendsList={friendsList}
       followersList={followersList}
       followingList={followingList}

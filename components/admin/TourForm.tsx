@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import RichTextEditor from './RichTextEditor';
 import AutoResizeTextarea from './AutoResizeTextarea';
-import { Upload, Loader2, Save, AlertCircle, CheckCircle2, MapPin, Search, X, Copy, Calendar } from 'lucide-react';
+import { Upload, Loader2, Save, AlertCircle, CheckCircle2, MapPin, X, Copy, Calendar } from 'lucide-react';
 import Image from 'next/image';
 import toast from 'react-hot-toast';
 import { useDialog } from '@/hooks/useDialog';
@@ -16,6 +16,7 @@ import {
 } from '@/lib/http/upload-form-progress';
 import { isDepartureStillInFuture } from '@/lib/tour/session-bookable';
 import TourAutoScheduleButton from '@/components/admin/TourAutoScheduleButton';
+import CatalogCityCombobox from '@/components/tours/CatalogCityCombobox';
 import { DEFAULT_TOUR_AUTO_SCHEDULE_CONFIG } from '@/lib/tour/auto-schedule-config';
 
 import {
@@ -170,6 +171,7 @@ export default function TourForm({
   // Состояние для поиска города
   const [citySearch, setCitySearch] = useState('');
   const [cities, setCities] = useState<Array<{ id: string; name: string }>>([]);
+  const [citiesLoading, setCitiesLoading] = useState(true);
   const [selectedCity, setSelectedCity] = useState<{ id: string; name: string } | null>(null);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
 
@@ -228,30 +230,23 @@ export default function TourForm({
     }
   }, [mode, initialData?.city_id]);
 
-  // Поиск городов
+  // Полный список городов для выпадающего меню (как в фильтре каталога)
   useEffect(() => {
-    if (citySearch.length < 2) {
-      setCities([]);
-      setShowCityDropdown(false);
-      return;
-    }
-
-    const timeoutId = setTimeout(() => {
-      fetch(`/api/admin/cities?search=${encodeURIComponent(citySearch)}`)
-        .then(res => res.json())
-        .then(data => {
-          const foundCities = data.cities || [];
-          setCities(foundCities);
-          // Показываем dropdown сразу после получения результатов
-          if (foundCities.length > 0) {
-            setShowCityDropdown(true);
-          }
-        })
-        .catch(console.error);
-    }, 200); // Уменьшена задержка с 300 до 200мс для более быстрого отклика
-
-    return () => clearTimeout(timeoutId);
-  }, [citySearch]);
+    let cancelled = false;
+    setCitiesLoading(true);
+    fetch('/api/admin/cities')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setCities(data.cities || []);
+      })
+      .catch(console.error)
+      .finally(() => {
+        if (!cancelled) setCitiesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Выбор города
   const handleCitySelect = (city: { id: string; name: string }) => {
@@ -268,8 +263,15 @@ export default function TourForm({
     setSelectedCity(null);
     setCitySearch('');
     setFormData(prev => ({ ...prev, city_id: null }));
-    setCities([]);
     setShowCityDropdown(false);
+  };
+
+  const handleCitySearchChange = (value: string) => {
+    setCitySearch(value);
+    if (selectedCity && value !== selectedCity.name) {
+      setSelectedCity(null);
+      setFormData((prev) => ({ ...prev, city_id: null }));
+    }
   };
 
   // Закрытие dropdown при клике вне
@@ -1238,78 +1240,30 @@ export default function TourForm({
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Город <span className="text-red-500">*</span>
           </label>
-          <div className="relative">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                value={citySearch}
-                onChange={(e) => {
-                  setCitySearch(e.target.value);
-                  if (selectedCity && e.target.value !== selectedCity.name) {
-                    setSelectedCity(null);
-                    setFormData(prev => ({ ...prev, city_id: null }));
-                  }
-                }}
-                onFocus={() => {
-                  // Показываем dropdown если есть результаты поиска или если уже введен текст
-                  if (cities.length > 0 || citySearch.length >= 2) {
-                    setShowCityDropdown(true);
-                  }
-                }}
-                onInput={(e) => {
-                  // Показываем dropdown при вводе, если есть результаты
-                  if (cities.length > 0) {
-                    setShowCityDropdown(true);
-                  }
-                }}
-                onBlur={() => {
-                  setTouched((prev) => ({ ...prev, city_id: true }));
-                  const error = validateField('city_id', formData.city_id);
-                  setErrors((prev) => ({ ...prev, city_id: error }));
-                }}
-                className={`w-full pl-10 pr-10 py-3 border rounded-xl focus:outline-none focus:ring-2 transition-all ${
-                  errors.city_id && touched.city_id
-                    ? 'border-red-300 focus:ring-red-200 bg-red-50'
-                    : 'border-gray-300 focus:ring-emerald-200 focus:border-emerald-500'
-                }`}
-                placeholder="Начните вводить название города..."
-              />
-              {selectedCity && (
-                <button
-                  type="button"
-                  onClick={handleCityClear}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              )}
-            </div>
-            
-            {/* Dropdown с результатами поиска */}
-            {showCityDropdown && cities.length > 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
-                {cities.map((city) => (
-                  <button
-                    key={city.id}
-                    type="button"
-                    onClick={() => handleCitySelect(city)}
-                    className="w-full px-4 py-3 text-left hover:bg-emerald-50 transition-colors flex items-center gap-2"
-                  >
-                    <MapPin className="w-4 h-4 text-emerald-500" />
-                    <span className="text-gray-900">{city.name}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-            
-            {/* Сообщение если ничего не найдено */}
-            {showCityDropdown && citySearch.length >= 2 && cities.length === 0 && (
-              <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg p-4 text-sm text-gray-500">
-                Город не найден
-              </div>
-            )}
-          </div>
+          <CatalogCityCombobox
+            catalogCities={cities}
+            loading={citiesLoading}
+            citySearch={citySearch}
+            onCitySearchChange={handleCitySearchChange}
+            selectedCity={selectedCity}
+            onSelect={handleCitySelect}
+            onClear={handleCityClear}
+            showDropdown={showCityDropdown}
+            onShowDropdown={setShowCityDropdown}
+            dropdownClassName="z-50"
+            inputClassName={
+              errors.city_id && touched.city_id
+                ? 'border-red-300 bg-red-50 focus:border-red-400 focus:ring-red-200'
+                : 'bg-white'
+            }
+            placeholder="Выберите или введите город…"
+            emptyListMessage="Список городов пуст"
+            onBlur={() => {
+              setTouched((prev) => ({ ...prev, city_id: true }));
+              const error = validateField('city_id', formData.city_id);
+              setErrors((prev) => ({ ...prev, city_id: error }));
+            }}
+          />
           <ErrorMessage message={errors.city_id && touched.city_id ? errors.city_id : undefined} />
           {selectedCity && !errors.city_id && (
             <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1">

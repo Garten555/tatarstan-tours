@@ -4,8 +4,9 @@ import type { User } from '@supabase/supabase-js';
 import { assertGuideAvailable } from '@/lib/tour/guide-schedule-conflict';
 import { ensureTourRoomForSession } from '@/lib/tour/ensure-session-room';
 import { syncSessionCurrentParticipants } from '@/lib/tour/session-participants';
-import { sendTourRescheduleEmail } from '@/lib/email/tour-notifications';
+import { sendTourRescheduleEmail, formatRuDateTime } from '@/lib/email/tour-notifications';
 import { publishCatalogChanged } from '@/lib/pusher/data-sync';
+import { publishUserNotification } from '@/lib/pusher/user-notification';
 import { normalizeTourTimestampForStorage } from '@/lib/date/tour-timestamp';
 
 export type IncomingSession = {
@@ -45,6 +46,34 @@ function scheduleRescheduleEmails(
           .in('status', ['pending', 'confirmed']);
         const userIds = [...new Set((bookings ?? []).map((b: { user_id: string }) => b.user_id))];
         if (userIds.length === 0) continue;
+
+        const oldLabel = formatRuDateTime(item.oldStart);
+        const newLabel = formatRuDateTime(item.newStart);
+        const notifBody = `Тур «${tourTitle}»: выезд перенесён с ${oldLabel} на ${newLabel}`;
+
+        for (const userId of userIds) {
+          try {
+            const { data: notifRow, error: notifErr } = await serviceClient
+              .from('notifications')
+              .insert({
+                user_id: userId,
+                title: 'Перенос тура',
+                body: notifBody,
+                type: 'tour_reschedule',
+              })
+              .select('id, user_id, title, body, type, created_at')
+              .single();
+
+            if (notifErr) {
+              console.error('[sessions/sync] reschedule notification', notifErr);
+            } else if (notifRow) {
+              await publishUserNotification(userId, notifRow);
+            }
+          } catch (notifEx) {
+            console.error('[sessions/sync] reschedule notification user', userId, notifEx);
+          }
+        }
+
         const { data: profiles } = await serviceClient.from('profiles').select('email').in('id', userIds);
         const emails = [...new Set((profiles ?? []).map((p: { email: string }) => p.email).filter(Boolean))];
         await Promise.allSettled(

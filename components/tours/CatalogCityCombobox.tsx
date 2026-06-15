@@ -18,6 +18,8 @@ type Props = {
   dropdownClassName?: string;
   inputClassName?: string;
   placeholder?: string;
+  emptyListMessage?: string;
+  onBlur?: () => void;
 };
 
 export default function CatalogCityCombobox({
@@ -33,6 +35,8 @@ export default function CatalogCityCombobox({
   dropdownClassName = 'z-[60]',
   inputClassName = '',
   placeholder = 'Выберите или введите город…',
+  emptyListMessage = 'Нет городов с турами',
+  onBlur,
 }: Props) {
   const q = citySearch.trim().toLowerCase();
   const filtered = q
@@ -55,6 +59,7 @@ export default function CatalogCityCombobox({
             onShowDropdown(true);
           }}
           onFocus={() => onShowDropdown(true)}
+          onBlur={onBlur}
           placeholder={placeholder}
           className={`w-full rounded-xl border-2 border-gray-300 bg-gray-50 py-3 pl-10 pr-9 text-sm font-medium shadow-sm transition-all hover:bg-white focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 ${inputClassName}`}
         />
@@ -95,7 +100,7 @@ export default function CatalogCityCombobox({
               </button>
             ))
           ) : catalogCities.length === 0 ? (
-            <div className="px-3 py-4 text-center text-sm text-gray-500">Нет городов с турами</div>
+            <div className="px-3 py-4 text-center text-sm text-gray-500">{emptyListMessage}</div>
           ) : (
             <div className="px-3 py-4 text-center text-sm text-gray-500">Не найден</div>
           )}

@@ -116,6 +116,60 @@ export async function canViewPrivateProfile(
   return !!friendship || !!follow;
 }
 
+export type GalleryVisibility = 'everyone' | 'followers' | 'friends' | 'nobody';
+
+/** Единая проверка доступа к галерее (страница /gallery и превью на профиле). */
+export async function canViewUserGallery(
+  serviceClient: SupabaseClient,
+  profileUserId: string,
+  viewerId: string | null,
+  isAdmin: boolean,
+  whoCanViewGallery: GalleryVisibility = 'everyone'
+): Promise<boolean> {
+  if (whoCanViewGallery === 'everyone') return true;
+  if (viewerId === profileUserId || isAdmin) return true;
+  if (!viewerId) return false;
+  if (whoCanViewGallery === 'nobody') return false;
+
+  if (whoCanViewGallery === 'friends') {
+    const user1 = viewerId < profileUserId ? viewerId : profileUserId;
+    const user2 = viewerId < profileUserId ? profileUserId : viewerId;
+    const { data: friendship } = await serviceClient
+      .from('user_friends')
+      .select('status')
+      .or(`and(user_id.eq.${user1},friend_id.eq.${user2}),and(user_id.eq.${user2},friend_id.eq.${user1})`)
+      .eq('status', 'accepted')
+      .maybeSingle();
+    return !!friendship;
+  }
+
+  if (whoCanViewGallery === 'followers') {
+    return hasGalleryFollowerAccess(serviceClient, profileUserId, viewerId);
+  }
+
+  return false;
+}
+
+export function galleryAccessHint(
+  whoCanViewGallery: GalleryVisibility,
+  isLoggedIn: boolean
+): string {
+  if (whoCanViewGallery === 'nobody') {
+    return 'Автор скрыл галерею. Она доступна только ему.';
+  }
+  if (whoCanViewGallery === 'friends') {
+    return isLoggedIn
+      ? 'Галерея доступна только друзьям автора. Подайте заявку в друзья, чтобы увидеть фото.'
+      : 'Войдите в аккаунт и станьте другом автора, чтобы просмотреть галерею.';
+  }
+  if (whoCanViewGallery === 'followers') {
+    return isLoggedIn
+      ? 'Галерея доступна подписчикам и друзьям. Подайте заявку в друзья — после принятия откроется доступ.'
+      : 'Войдите в аккаунт и подайте заявку в друзья, чтобы просмотреть галерею.';
+  }
+  return '';
+}
+
 /** Проверка доступа к галереи: подписчик или друг. */
 export async function hasGalleryFollowerAccess(
   serviceClient: SupabaseClient,

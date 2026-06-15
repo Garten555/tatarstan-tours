@@ -7,6 +7,12 @@ import {
 } from '@/lib/tour/auto-schedule-settings';
 import type { TourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
 import { generateTourScheduleSlots } from '@/lib/tour/generate-auto-schedule';
+import {
+  generateMonthTourScheduleSlots,
+  parseTargetMonth,
+  sessionInTargetMonth,
+  type MonthScheduleMode,
+} from '@/lib/tour/month-schedule';
 import { loadBusyGuideSessions } from '@/lib/tour/guide-schedule-conflict';
 import { syncTourSessions, type IncomingSession } from '@/lib/tour/sync-tour-sessions';
 
@@ -14,7 +20,10 @@ export type RunAutoScheduleResult =
   | {
       ok: true;
       applied: boolean;
-      generated: ReturnType<typeof generateTourScheduleSlots>;
+      generated: ReturnType<typeof generateTourScheduleSlots> & {
+        rescheduledBooked?: number;
+        removedEmpty?: number;
+      };
       tourTitle: string;
     }
   | { ok: false; status: number; error: string; details?: string };
@@ -26,9 +35,11 @@ export async function runAutoScheduleForTour(
     actor: User;
     apply: boolean;
     configOverride?: Partial<TourAutoScheduleConfig>;
+    targetMonth?: string;
+    monthMode?: MonthScheduleMode;
   }
 ): Promise<RunAutoScheduleResult> {
-  const { tourId, actor, apply, configOverride } = params;
+  const { tourId, actor, apply, configOverride, targetMonth, monthMode = 'fill' } = params;
 
   const { data: tour, error: tourErr } = await serviceClient
     .from('tours')
@@ -89,6 +100,107 @@ export async function runAutoScheduleForTour(
     serviceClient,
     new Date().toISOString()
   );
+
+  const monthParsed = targetMonth ? parseTargetMonth(targetMonth) : null;
+
+  if (monthParsed) {
+    const bookedSessionIds = new Set<string>();
+    if (monthMode === 'regenerate') {
+      const inMonthIds = existingSessions
+        .filter((s) => s.id && sessionInTargetMonth(s.start_at, monthParsed.year, monthParsed.month))
+        .map((s) => s.id as string);
+
+      if (inMonthIds.length > 0) {
+        const { data: bookedRows } = await serviceClient
+          .from('bookings')
+          .select('session_id')
+          .in('session_id', inMonthIds)
+          .in('status', ['pending', 'confirmed']);
+
+        for (const row of bookedRows ?? []) {
+          const sid = (row as { session_id: string }).session_id;
+          if (sid) bookedSessionIds.add(sid);
+        }
+      }
+    }
+
+    const monthResult = generateMonthTourScheduleSlots({
+      config,
+      existingSessions,
+      guideIds,
+      busySessions,
+      year: monthParsed.year,
+      month: monthParsed.month,
+      mode: monthMode,
+      bookedSessionIds,
+    });
+
+    const generated = {
+      newSlots: monthResult.newSlots,
+      existingFutureCount: existingSessions.filter(
+        (s) => new Date(s.start_at).getTime() > Date.now()
+      ).length,
+      targetSlots: config.slots_ahead,
+      skippedNoGuide: 0,
+      skippedDuplicate: 0,
+      rescheduledBooked: monthResult.rescheduledBooked,
+      removedEmpty: monthResult.removedEmpty,
+      zeroReason:
+        monthResult.newSlots.length === 0 && monthMode === 'fill'
+          ? ('no_free_days' as const)
+          : undefined,
+    };
+
+    if (!apply) {
+      return {
+        ok: true,
+        applied: false,
+        generated,
+        tourTitle: String((tour as { title?: string }).title || 'Тур'),
+      };
+    }
+
+    if (
+      monthResult.newSlots.length === 0 &&
+      monthResult.rescheduledBooked === 0 &&
+      monthResult.removedEmpty === 0 &&
+      monthMode === 'fill'
+    ) {
+      return {
+        ok: true,
+        applied: false,
+        generated,
+        tourTitle: String((tour as { title?: string }).title || 'Тур'),
+      };
+    }
+
+    const sync = await syncTourSessions(serviceClient, {
+      tourId,
+      sessions: monthResult.mergedSessions,
+      actor,
+      durationMinutesForConflict: config.duration_minutes,
+    });
+
+    if (!sync.ok) {
+      return {
+        ok: false,
+        status: sync.status,
+        error: sync.error,
+        details: sync.details,
+      };
+    }
+
+    if (status === 'completed' || status === 'cancelled') {
+      await serviceClient.from('tours').update({ status: 'active' }).eq('id', tourId);
+    }
+
+    return {
+      ok: true,
+      applied: true,
+      generated,
+      tourTitle: String((tour as { title?: string }).title || 'Тур'),
+    };
+  }
 
   const generated = generateTourScheduleSlots({
     config,

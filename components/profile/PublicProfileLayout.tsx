@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { Lock, Compass, Globe, BookOpen, ImageIcon, ExternalLink } from 'lucide-react';
 import { escapeHtml } from '@/lib/utils/sanitize';
+import { galleryAccessHint, type GalleryVisibility } from '@/lib/social/friend-subscribers';
 import BlogPostsList from '@/components/blog/BlogPostsList';
 import UserGallery from '@/components/passport/UserGallery';
 import PublicPassportSection from '@/components/passport/PublicPassportSection';
@@ -20,6 +21,9 @@ interface PublicProfileLayoutProps {
   areFriends: boolean;
   isFollowing: boolean;
   isPrivateLimitedView?: boolean;
+  canViewGallery?: boolean;
+  whoCanViewGallery?: GalleryVisibility;
+  galleryMediaCount?: number;
   friendsList: any[];
   followersList: any[];
   followingList: any[];
@@ -47,6 +51,9 @@ export default function PublicProfileLayout({
   areFriends,
   isFollowing,
   isPrivateLimitedView = false,
+  canViewGallery = true,
+  whoCanViewGallery = 'everyone',
+  galleryMediaCount = 0,
   friendsList,
   followersList,
   followingList,
@@ -185,7 +192,7 @@ export default function PublicProfileLayout({
                       <ImageIcon className="w-5 h-5 text-emerald-600" />
                       Галерея путешествий
                     </h3>
-                    {allUserMedia.length > 0 && (
+                    {canViewGallery && allUserMedia.length > 0 && (
                       <Link
                         href={`/users/${profileData.username || profileData.id}/gallery`}
                         className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-800 text-sm font-semibold"
@@ -195,13 +202,34 @@ export default function PublicProfileLayout({
                       </Link>
                     )}
                   </div>
-                  <UserGallery
-                    media={allUserMedia.slice(0, 12)}
-                    userId={profileData.id}
-                    isOwner={currentUser?.id === profileData.id}
-                    username={profileData.username || profileData.id}
-                    showViewAll={true}
-                  />
+                  {canViewGallery ? (
+                    <UserGallery
+                      media={allUserMedia.slice(0, 12)}
+                      userId={profileData.id}
+                      isOwner={currentUser?.id === profileData.id}
+                      username={profileData.username || profileData.id}
+                      showViewAll={true}
+                    />
+                  ) : (
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-8 text-center">
+                      <Lock className="w-10 h-10 mx-auto text-gray-400 mb-3" />
+                      <p className="text-sm font-semibold text-gray-800 mb-1">Галерея закрыта</p>
+                      <p className="text-sm text-gray-600 max-w-md mx-auto">
+                        {galleryAccessHint(whoCanViewGallery, !!currentUser)}
+                      </p>
+                      {galleryMediaCount > 0 && (
+                        <p className="text-xs text-gray-500 mt-3">
+                          {galleryMediaCount}{' '}
+                          {galleryMediaCount === 1
+                            ? 'фото или видео скрыто'
+                            : galleryMediaCount < 5
+                              ? 'фото или видео скрыты'
+                              : 'фото и видео скрыты'}{' '}
+                          настройками приватности
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </section>
               </>
             )}

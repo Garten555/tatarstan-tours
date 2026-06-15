@@ -6,7 +6,10 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowLeft, ImageIcon, Video } from 'lucide-react';
 import UserGallery from '@/components/passport/UserGallery';
-import { hasGalleryFollowerAccess } from '@/lib/social/friend-subscribers';
+import {
+  canViewUserGallery,
+  type GalleryVisibility,
+} from '@/lib/social/friend-subscribers';
 
 interface UserGalleryPageProps {
   params: Promise<{ username: string }>;
@@ -59,65 +62,25 @@ export default async function UserGalleryPage({ params }: UserGalleryPageProps) 
     notFound();
   }
 
-  // Проверяем доступ к галерее:
-  // - это свой профиль ИЛИ
-  // - текущий пользователь является админом ИЛИ
-  // - проверяем настройки приватности галереи
-  if (profile.id === currentUser?.id || isCurrentUserAdmin) {
-    // Владелец и админ всегда могут видеть галерею
-  } else if (!currentUser) {
-    // Неавторизованные пользователи могут видеть только если настройка "everyone"
-    const { data: privacySettings } = await serviceClient
-      .from('user_message_privacy')
-      .select('who_can_view_gallery')
-      .eq('user_id', profile.id)
-      .maybeSingle();
+  const { data: privacySettings } = await serviceClient
+    .from('user_message_privacy')
+    .select('who_can_view_gallery')
+    .eq('user_id', profile.id)
+    .maybeSingle();
 
-    const whoCanViewGallery = privacySettings?.who_can_view_gallery || 'everyone';
+  const whoCanViewGallery =
+    (privacySettings?.who_can_view_gallery as GalleryVisibility | undefined) || 'everyone';
 
-    if (whoCanViewGallery !== 'everyone') {
-      notFound();
-    }
-  } else {
-    // Получаем настройки приватности галереи
-    const { data: privacySettings } = await serviceClient
-      .from('user_message_privacy')
-      .select('who_can_view_gallery')
-      .eq('user_id', profile.id)
-      .maybeSingle();
+  const hasGalleryAccess = await canViewUserGallery(
+    serviceClient,
+    profile.id,
+    currentUser?.id ?? null,
+    isCurrentUserAdmin,
+    whoCanViewGallery
+  );
 
-    const whoCanViewGallery = privacySettings?.who_can_view_gallery || 'everyone';
-
-    if (whoCanViewGallery === 'nobody') {
-      notFound();
-    }
-
-    if (whoCanViewGallery === 'friends') {
-      // Проверяем, являемся ли мы друзьями
-      const user1_id = currentUser.id < profile.id ? currentUser.id : profile.id;
-      const user2_id = currentUser.id < profile.id ? profile.id : currentUser.id;
-      
-      const { data: friendship } = await serviceClient
-        .from('user_friends')
-        .select('status')
-        .or(`and(user_id.eq.${user1_id},friend_id.eq.${user2_id}),and(user_id.eq.${user2_id},friend_id.eq.${user1_id})`)
-        .eq('status', 'accepted')
-        .maybeSingle();
-      
-      if (!friendship) {
-        notFound();
-      }
-    } else if (whoCanViewGallery === 'followers') {
-      const hasAccess = await hasGalleryFollowerAccess(
-        serviceClient,
-        profile.id,
-        currentUser.id
-      );
-      if (!hasAccess) {
-        notFound();
-      }
-    }
-    // Если whoCanViewGallery === 'everyone', доступ разрешен
+  if (!hasGalleryAccess) {
+    notFound();
   }
 
   // Получаем медиа из галереи

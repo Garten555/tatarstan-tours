@@ -581,6 +581,11 @@ export default function TeamScheduleBoard({
                 const hasTours = (marker?.count ?? 0) > 0;
                 const hasIssue = marker?.has_overlap || marker?.has_buffer;
                 const accent = dayMarkerAccent(marker);
+                const isPastDay = cell.key < todayKey;
+                const effectiveAccent =
+                  isPastDay && hasTours && !marker?.has_ongoing
+                    ? 'ended'
+                    : accent;
                 const resting = restingByDay.get(cell.key) ?? [];
                 const guideOnRestDay =
                   isAdmin &&
@@ -600,41 +605,51 @@ export default function TeamScheduleBoard({
                       ? 'border-emerald-500 bg-emerald-50 shadow-md ring-2 ring-emerald-200'
                       : showRestCell
                         ? GUIDE_REST.calendarCell
-                        : accent === 'overlap'
+                        : effectiveAccent === 'overlap'
                           ? 'border-red-300 bg-red-50/50 hover:border-red-400'
-                          : accent === 'buffer'
+                          : effectiveAccent === 'buffer'
                             ? 'border-amber-300 bg-amber-50/50 hover:border-amber-400'
-                            : accent === 'ongoing'
+                            : effectiveAccent === 'ongoing'
                               ? 'border-blue-400 bg-blue-50/50 hover:border-blue-500 ring-1 ring-blue-200/80'
-                              : accent === 'ended'
-                                ? 'border-slate-300 bg-slate-100/70 hover:border-slate-400'
-                                : accent === 'upcoming'
+                              : effectiveAccent === 'ended'
+                                ? isPastDay
+                                  ? 'border-slate-400 bg-slate-200/80 hover:border-slate-500 opacity-90'
+                                  : 'border-slate-300 bg-slate-100/70 hover:border-slate-400'
+                                : effectiveAccent === 'upcoming'
                                   ? 'border-emerald-200 bg-emerald-50/40 hover:border-emerald-300'
-                                  : 'border-transparent bg-gray-50/80 hover:border-gray-200 hover:bg-white';
+                                  : isPastDay
+                                    ? 'border-transparent bg-slate-100/60 hover:border-slate-200'
+                                    : 'border-transparent bg-gray-50/80 hover:border-gray-200 hover:bg-white';
 
                 const dotClass =
-                  accent === 'overlap'
+                  effectiveAccent === 'overlap'
                     ? 'bg-red-500'
-                    : accent === 'buffer'
+                    : effectiveAccent === 'buffer'
                       ? 'bg-amber-500'
-                      : accent === 'ongoing'
+                      : effectiveAccent === 'ongoing'
                         ? 'bg-blue-500'
-                        : accent === 'ended'
-                          ? 'bg-slate-500'
-                          : accent === 'upcoming'
+                        : effectiveAccent === 'ended'
+                          ? 'bg-slate-600'
+                          : effectiveAccent === 'upcoming'
                             ? 'bg-emerald-500'
-                            : 'bg-emerald-500';
+                            : isPastDay
+                              ? 'bg-slate-400'
+                              : 'bg-emerald-500';
 
                 const countClass =
-                  accent === 'overlap'
+                  effectiveAccent === 'overlap'
                     ? 'text-red-700'
-                    : accent === 'buffer'
+                    : effectiveAccent === 'buffer'
                       ? 'text-amber-800'
-                      : accent === 'ongoing'
+                      : effectiveAccent === 'ongoing'
                         ? 'text-blue-800'
-                        : accent === 'ended'
-                          ? 'text-slate-700'
-                          : 'text-emerald-700';
+                        : effectiveAccent === 'ended'
+                          ? 'text-slate-800'
+                          : effectiveAccent === 'upcoming'
+                            ? 'text-emerald-700'
+                            : isPastDay
+                              ? 'text-slate-600'
+                              : 'text-emerald-700';
 
                 return (
                   <button
@@ -647,7 +662,7 @@ export default function TeamScheduleBoard({
                         setViewMonth(`${y}-${m}`);
                       }
                     }}
-                    className={`relative flex min-h-[4.25rem] flex-col rounded-xl border-2 p-1.5 text-left transition-all sm:min-h-[4.75rem] ${cellClass} ${!cell.in_month ? 'opacity-45' : ''} ${marker?.has_ongoing && accent !== 'ongoing' ? 'ring-2 ring-blue-200/70' : ''}`}
+                    className={`relative flex min-h-[4.25rem] flex-col rounded-xl border-2 p-1.5 text-left transition-all sm:min-h-[4.75rem] ${cellClass} ${!cell.in_month ? 'opacity-45' : ''} ${marker?.has_ongoing && effectiveAccent !== 'ongoing' ? 'ring-2 ring-blue-200/70' : ''}`}
                   >
                     <span
                       className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-black ${
@@ -673,9 +688,9 @@ export default function TeamScheduleBoard({
                           <span className="text-[9px] font-bold leading-tight text-amber-800">
                             {marker?.has_overlap ? 'пересечение' : 'мало времени'}
                           </span>
-                        ) : accent === 'ended' && !marker?.has_ongoing && !marker?.has_upcoming ? (
-                          <span className="text-[9px] font-bold leading-tight text-slate-600">
-                            завершено
+                        ) : effectiveAccent === 'ended' && !marker?.has_ongoing && !marker?.has_upcoming ? (
+                          <span className="text-[9px] font-bold leading-tight text-slate-700">
+                            {isPastDay ? 'прошло' : 'завершено'}
                           </span>
                         ) : null}
                         {marker?.has_ongoing ? (

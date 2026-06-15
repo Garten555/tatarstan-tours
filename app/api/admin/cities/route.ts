@@ -17,13 +17,12 @@ export async function GET(request: NextRequest) {
       .select('id, name')
       .order('name', { ascending: true });
 
-    // Если есть поисковый запрос, фильтруем
+    // Без поиска — полный список для выпадающего меню; с поиском — фильтр на сервере
     if (search.length >= 2) {
-      query = query.ilike('name_lower', `%${search}%`);
+      query = query.ilike('name_lower', `%${search}%`).limit(50);
+    } else {
+      query = query.limit(500);
     }
-
-    // Ограничиваем количество результатов
-    query = query.limit(20);
 
     const { data: cities, error } = await query;
 

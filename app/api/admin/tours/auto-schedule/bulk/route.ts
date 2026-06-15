@@ -82,6 +82,10 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json().catch(() => ({}));
     const apply = body?.apply !== false;
+    const targetMonth =
+      typeof body?.targetMonth === 'string' ? body.targetMonth : undefined;
+    const monthMode =
+      body?.monthMode === 'regenerate' ? 'regenerate' : 'fill';
 
     const { data: tours, error } = await loadBulkTourRows(serviceClient);
 
@@ -109,6 +113,8 @@ export async function POST(request: NextRequest) {
         tourId,
         actor: auth.user,
         apply,
+        targetMonth,
+        monthMode,
       });
 
       if (!result.ok) {

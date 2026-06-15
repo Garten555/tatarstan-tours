@@ -4,6 +4,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Play, Plus, Save, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import UploadProgressBar from '@/components/common/UploadProgressBar';
+import {
+  BulkScheduleMonthModal,
+  useDefaultScheduleMonth,
+  type BulkMonthMode,
+} from '@/components/admin/BulkScheduleMonthModal';
 import type { TourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
 import {
   complementTourWeekdays,
@@ -47,6 +52,8 @@ export default function TourAutoScheduleSettings() {
   const [bulkProgressLabel, setBulkProgressLabel] = useState('Авторасписание');
   const [bulkProgressSubtitle, setBulkProgressSubtitle] = useState<string | undefined>();
   const [bulkResult, setBulkResult] = useState<BulkResult | null>(null);
+  const [bulkModalOpen, setBulkModalOpen] = useState(false);
+  const defaultScheduleMonth = useDefaultScheduleMonth();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -147,7 +154,8 @@ export default function TourAutoScheduleSettings() {
     }
   };
 
-  const runBulk = async () => {
+  const runBulk = async (targetMonth: string, monthMode: BulkMonthMode) => {
+    setBulkModalOpen(false);
     setBulkRunning(true);
     setBulkResult(null);
     setBulkProgress(null);
@@ -180,7 +188,7 @@ export default function TourAutoScheduleSettings() {
         const res = await fetch(`/api/admin/tours/${tour.id}/auto-schedule`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apply: true }),
+          body: JSON.stringify({ apply: true, targetMonth, monthMode }),
         });
         const data = await res.json();
 
@@ -192,9 +200,11 @@ export default function TourAutoScheduleSettings() {
           });
         } else {
           const added = Array.isArray(data.newSlots) ? data.newSlots.length : 0;
+          const rescheduled = Number(data.rescheduledBooked ?? 0);
+          const removed = Number(data.removedEmpty ?? 0);
           totalAdded += added;
           let note: string | undefined;
-          if (added === 0) {
+          if (added === 0 && rescheduled === 0 && removed === 0) {
             if (data.zeroReason === 'already_full') {
               note = `уже ${data.existingFutureCount} будущих слотов (лимит ${data.targetSlots})`;
             } else if (data.zeroReason === 'no_guides') {
@@ -204,6 +214,12 @@ export default function TourAutoScheduleSettings() {
             } else {
               note = 'нет свободных дат в горизонте';
             }
+          }
+          if (rescheduled > 0) {
+            note = note ? `${note}; перенесено с бронью: ${rescheduled}` : `перенесено с бронью: ${rescheduled}`;
+          }
+          if (removed > 0) {
+            note = note ? `${note}; удалено пустых: ${removed}` : `удалено пустых: ${removed}`;
           }
           results.push({
             title: data.tourTitle || tour.title,
@@ -230,7 +246,10 @@ export default function TourAutoScheduleSettings() {
       setBulkResult(bulk);
 
       if (totalAdded === 0) {
-        if (alreadyFull === total) {
+        const anyReschedule = results.some((r) => r.note?.includes('перенесено'));
+        if (anyReschedule) {
+          toast.success('Расписание пересоставлено, участникам с бронью отправлены уведомления');
+        } else if (alreadyFull === total) {
           toast(
             `Слотов не добавлено: у всех туров уже есть будущие выезды (лимит «слотов вперёд»). Гидов: ${activeGuides}.`,
             { icon: 'ℹ️' }
@@ -538,7 +557,7 @@ export default function TourAutoScheduleSettings() {
           </button>
           <button
             type="button"
-            onClick={() => void runBulk()}
+            onClick={() => setBulkModalOpen(true)}
             disabled={bulkRunning}
             className="inline-flex items-center gap-2 px-5 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 disabled:opacity-60"
           >
@@ -547,6 +566,14 @@ export default function TourAutoScheduleSettings() {
           </button>
         </div>
       </div>
+
+      <BulkScheduleMonthModal
+        open={bulkModalOpen}
+        onClose={() => setBulkModalOpen(false)}
+        onConfirm={(month, mode) => void runBulk(month, mode)}
+        running={bulkRunning}
+        defaultMonth={defaultScheduleMonth}
+      />
 
       {bulkResult && (
         <div className="rounded-2xl border border-gray-200 bg-gray-50 p-5 text-sm">

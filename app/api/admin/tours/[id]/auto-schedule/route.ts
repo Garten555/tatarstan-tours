@@ -27,12 +27,18 @@ export async function POST(
     const configOverride = body?.config
       ? normalizeTourAutoScheduleConfig(body.config)
       : undefined;
+    const targetMonth =
+      typeof body?.targetMonth === 'string' ? body.targetMonth : undefined;
+    const monthMode =
+      body?.monthMode === 'regenerate' ? 'regenerate' : 'fill';
 
     const result = await runAutoScheduleForTour(serviceClient, {
       tourId,
       actor: auth.user,
       apply,
       configOverride,
+      targetMonth,
+      monthMode,
     });
 
     if (!result.ok) {
