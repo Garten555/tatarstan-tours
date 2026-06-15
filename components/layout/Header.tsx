@@ -90,10 +90,8 @@ export function Header() {
               </div>
             )}
 
-            {/* Меню пользователя */}
-            <div className="hidden xl:block">
-              <UserMenu />
-            </div>
+            {/* Меню пользователя — одна инстанция на всех экранах */}
+            <UserMenu />
 
             {/* Кнопка мобильного меню */}
             <button
@@ -152,11 +150,6 @@ export function Header() {
                   );
                 })}
               </nav>
-
-              {/* Меню пользователя для мобилки */}
-              <div className="pt-3 border-t border-gray-200">
-                <UserMenu />
-              </div>
 
               {/* Кнопка бронирования */}
               <Button

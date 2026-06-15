@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter, usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { getUserFromSession } from '@/lib/supabase/auth-quick-client';
 import {
@@ -19,6 +20,9 @@ import {
 
 export default function UserMenu() {
   const { alert, DialogComponents } = useDialog();
+  const router = useRouter();
+  const pathname = usePathname();
+  const menuRef = useRef<HTMLDivElement>(null);
   
   const PROFILE_CACHE_KEY = 'tt_profile';
 
@@ -145,23 +149,35 @@ export default function UserMenu() {
     return () => window.removeEventListener('ui:dropdown', handler as EventListener);
   }, []);
 
-  // Закрытие при клике вне компонента
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
+
+  // Закрытие при клике вне меню (click, не mousedown — иначе Link не успевает сработать)
   useEffect(() => {
     if (!isOpen) return;
-    
+
     const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      const userMenuButton = target.closest('[data-user-menu-button]');
-      const userMenuDropdown = target.closest('[data-user-menu]');
-      
-      if (!userMenuButton && !userMenuDropdown) {
-        setIsOpen(false);
-      }
+      const root = menuRef.current;
+      if (!root) return;
+      if (event.target instanceof Node && root.contains(event.target)) return;
+      setIsOpen(false);
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
   }, [isOpen]);
+
+  const handleMenuNavigate = useCallback(
+    (href: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
+      event.preventDefault();
+      setIsOpen(false);
+      if (href !== pathname) {
+        router.push(href);
+      }
+    },
+    [pathname, router]
+  );
 
   useEffect(() => {
     const hydrateProfileFromDb = (u: SupabaseUser) => {
@@ -561,6 +577,10 @@ export default function UserMenu() {
   const adminPanelNav = userMenuAdminPanelLink(profile?.role);
   const showsAdminPanel =
     isAdminByEmail || userMenuShowsAdminPanel(profile?.role, isGuide);
+  const passportHref = profile?.username?.trim()
+    ? `/users/${profile.username}`
+    : `/set-username?redirect=${encodeURIComponent('/passport')}`;
+
   // Если пользователь не авторизован и нет кэша роли — показываем Вход
   if (!user && !isAuthorizedByCache) {
     return (
@@ -575,17 +595,22 @@ export default function UserMenu() {
 
   // Если пользователь авторизован
   return (
-    <div className="header-user-menu">
-      {/* Кнопка профиля */}
+    <div className="header-user-menu" ref={menuRef}>
       <button
+        type="button"
         data-user-menu-button
         onMouseDown={() => {
           window.dispatchEvent(
             new CustomEvent('ui:dropdown', { detail: { source: 'user-menu' } })
           );
         }}
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen((prev) => !prev);
+        }}
         className="header-user-button"
+        aria-expanded={isOpen}
+        aria-haspopup="menu"
       >
         {profile?.avatar_url ? (
           <img
@@ -605,22 +630,15 @@ export default function UserMenu() {
       </button>
 
       {/* Выпадающее меню */}
-      {isOpen && (
-        <>
-          {/* Overlay для закрытия */}
-          <div
-            className="header-user-overlay"
-            onClick={() => setIsOpen(false)}
-          />
-          
-          {/* Меню */}
-          <div className="header-user-dropdown" data-user-menu>
+      {isOpen ? (
+        <div className="header-user-dropdown" data-user-menu role="menu">
             {/* Профиль */}
             <div className="header-user-dropdown-section">
               <Link
                 href="/profile"
                 prefetch={true}
-                onClick={() => setIsOpen(false)}
+                role="menuitem"
+                onClick={handleMenuNavigate('/profile')}
                 className="header-user-dropdown-item"
               >
                 <div className="header-user-dropdown-icon-wrapper">
@@ -634,13 +652,10 @@ export default function UserMenu() {
             <div className="header-user-dropdown-section">
               <div className="header-user-dropdown-section-title">Социальные</div>
               <Link
-                href={
-                  profile?.username?.trim()
-                    ? `/users/${profile.username}`
-                    : `/set-username?redirect=${encodeURIComponent('/passport')}`
-                }
+                href={passportHref}
                 prefetch={true}
-                onClick={() => setIsOpen(false)}
+                role="menuitem"
+                onClick={handleMenuNavigate(passportHref)}
                 className="header-user-dropdown-item header-user-dropdown-item-emerald"
               >
                 <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
@@ -652,7 +667,8 @@ export default function UserMenu() {
               <Link
                 href="/feed"
                 prefetch={true}
-                onClick={() => setIsOpen(false)}
+                role="menuitem"
+                onClick={handleMenuNavigate('/feed')}
                 className="header-user-dropdown-item header-user-dropdown-item-emerald"
               >
                 <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
@@ -664,7 +680,8 @@ export default function UserMenu() {
               <Link
                 href="/messenger"
                 prefetch={true}
-                onClick={() => setIsOpen(false)}
+                role="menuitem"
+                onClick={handleMenuNavigate('/messenger')}
                 className="header-user-dropdown-item header-user-dropdown-item-emerald"
               >
                 <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
@@ -681,7 +698,8 @@ export default function UserMenu() {
               <Link
                 href="/friends"
                 prefetch={true}
-                onClick={() => setIsOpen(false)}
+                role="menuitem"
+                onClick={handleMenuNavigate('/friends')}
                 className="header-user-dropdown-item header-user-dropdown-item-emerald"
               >
                 <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
@@ -693,7 +711,8 @@ export default function UserMenu() {
               <Link
                 href="/my-rooms"
                 prefetch={true}
-                onClick={() => setIsOpen(false)}
+                role="menuitem"
+                onClick={handleMenuNavigate('/my-rooms')}
                 className="header-user-dropdown-item header-user-dropdown-item-emerald"
               >
                 <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
@@ -731,7 +750,8 @@ export default function UserMenu() {
               <Link
                 href="/profile/bookings"
                 prefetch={true}
-                onClick={() => setIsOpen(false)}
+                role="menuitem"
+                onClick={handleMenuNavigate('/profile/bookings')}
                 className="header-user-dropdown-item"
               >
                 <div className="header-user-dropdown-icon-wrapper">
@@ -743,7 +763,8 @@ export default function UserMenu() {
               <Link
                 href="/profile/settings"
                 prefetch={true}
-                onClick={() => setIsOpen(false)}
+                role="menuitem"
+                onClick={handleMenuNavigate('/profile/settings')}
                 className="header-user-dropdown-item"
               >
                 <div className="header-user-dropdown-icon-wrapper">
@@ -760,7 +781,8 @@ export default function UserMenu() {
                 <Link
                   href={adminPanelNav.href}
                   prefetch={false}
-                  onClick={() => setIsOpen(false)}
+                  role="menuitem"
+                  onClick={handleMenuNavigate(adminPanelNav.href)}
                   className="header-user-dropdown-item header-user-dropdown-item-admin"
                 >
                   <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
@@ -789,8 +811,7 @@ export default function UserMenu() {
               </button>
             </div>
           </div>
-        </>
-      )}
+      ) : null}
 
       {/* Диалоги */}
       {DialogComponents}
