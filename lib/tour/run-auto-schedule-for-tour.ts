@@ -6,7 +6,7 @@ import {
   loadTourAutoScheduleConfig,
 } from '@/lib/tour/auto-schedule-settings';
 import type { TourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
-import { normalizeTourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
+import { toStoredTourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
 import { generateTourScheduleSlots } from '@/lib/tour/generate-auto-schedule';
 import {
   generateMonthTourScheduleSlots,
@@ -138,17 +138,11 @@ export async function runAutoScheduleForTour(
     return { ok: false, status: 404, error: 'Тур не найден' };
   }
 
-  const baseConfig = await loadTourAutoScheduleConfig(serviceClient);
-  const config: TourAutoScheduleConfig = normalizeTourAutoScheduleConfig({
-    ...baseConfig,
-    ...configOverride,
-  });
+  const config: TourAutoScheduleConfig = configOverride
+    ? toStoredTourAutoScheduleConfig(configOverride)
+    : await loadTourAutoScheduleConfig(serviceClient);
 
-  const templateFromClient =
-    Boolean(configOverride?.start_times?.length) ||
-    Boolean(configOverride?.duration_minutes);
-
-  if (tour.start_date && tour.end_date && !templateFromClient) {
+  if (!configOverride && tour.start_date && tour.end_date) {
     const startMs = new Date(tour.start_date as string).getTime();
     const endMs = new Date(tour.end_date as string).getTime();
     if (!Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs > startMs) {

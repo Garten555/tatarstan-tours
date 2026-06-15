@@ -139,3 +139,21 @@ export function durationPartsToMinutes(days: number, hours: number): number {
   if (total > 30 * 24 * 60) return 30 * 24 * 60;
   return total;
 }
+
+/** Только актуальные поля шаблона — без legacy-ключей и без merge со старым JSON. */
+export function toStoredTourAutoScheduleConfig(
+  raw: unknown
+): TourAutoScheduleConfig {
+  const n = normalizeTourAutoScheduleConfig(raw);
+  return {
+    weekdays: [...n.weekdays],
+    guide_rest_auto: n.guide_rest_auto,
+    guide_rest_weekdays: [...n.guide_rest_weekdays],
+    guide_rotate_rest_on_tour_days: n.guide_rotate_rest_on_tour_days,
+    start_times: normalizeStartTimesList(n.start_times),
+    duration_minutes: n.duration_minutes,
+    slots_ahead: n.slots_ahead,
+    horizon_days: n.horizon_days,
+    guide_strategy: n.guide_strategy,
+  };
+}

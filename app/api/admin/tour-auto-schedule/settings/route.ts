@@ -3,7 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { requireTourManager } from '@/lib/admin/require-tour-manager';
 import {
   DEFAULT_TOUR_AUTO_SCHEDULE_CONFIG,
-  normalizeTourAutoScheduleConfig,
+  toStoredTourAutoScheduleConfig,
 } from '@/lib/tour/auto-schedule-config';
 import {
   loadTourAutoScheduleConfig,
@@ -39,10 +39,10 @@ export async function PUT(request: NextRequest) {
     }
 
     const body = await request.json();
-    const config = normalizeTourAutoScheduleConfig(body?.config ?? body);
-    await saveTourAutoScheduleConfig(serviceClient, config);
+    const config = toStoredTourAutoScheduleConfig(body?.config ?? body);
+    const saved = await saveTourAutoScheduleConfig(serviceClient, config);
 
-    return NextResponse.json({ success: true, config });
+    return NextResponse.json({ success: true, config: saved });
   } catch (e) {
     console.error('PUT tour-auto-schedule settings', e);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

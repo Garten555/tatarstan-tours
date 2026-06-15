@@ -2,10 +2,24 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import {
   DEFAULT_TOUR_AUTO_SCHEDULE_CONFIG,
-  normalizeTourAutoScheduleConfig,
+  toStoredTourAutoScheduleConfig,
   TOUR_AUTO_SCHEDULE_SETTINGS_KEY,
   type TourAutoScheduleConfig,
 } from '@/lib/tour/auto-schedule-config';
+
+function readConfigFromValueJson(valueJson: unknown): TourAutoScheduleConfig {
+  if (!valueJson || typeof valueJson !== 'object') {
+    return { ...DEFAULT_TOUR_AUTO_SCHEDULE_CONFIG };
+  }
+
+  const envelope = valueJson as Record<string, unknown>;
+  const raw =
+    envelope.defaults != null && typeof envelope.defaults === 'object'
+      ? envelope.defaults
+      : valueJson;
+
+  return toStoredTourAutoScheduleConfig(raw);
+}
 
 export async function loadTourAutoScheduleConfig(
   serviceClient: SupabaseClient
@@ -20,22 +34,18 @@ export async function loadTourAutoScheduleConfig(
     return { ...DEFAULT_TOUR_AUTO_SCHEDULE_CONFIG };
   }
 
-  const json = (data as { value_json?: unknown }).value_json;
-  if (json && typeof json === 'object' && 'defaults' in (json as object)) {
-    return normalizeTourAutoScheduleConfig((json as { defaults: unknown }).defaults);
-  }
-
-  return normalizeTourAutoScheduleConfig(json);
+  return readConfigFromValueJson((data as { value_json?: unknown }).value_json);
 }
 
+/** Полная замена шаблона в БД — в value_json только defaults + updated_at. */
 export async function saveTourAutoScheduleConfig(
   serviceClient: SupabaseClient,
   config: TourAutoScheduleConfig
-): Promise<void> {
-  const normalized = normalizeTourAutoScheduleConfig(config);
-  const payload = {
-    key: TOUR_AUTO_SCHEDULE_SETTINGS_KEY,
-    value_json: { defaults: normalized, updated_at: new Date().toISOString() },
+): Promise<TourAutoScheduleConfig> {
+  const stored = toStoredTourAutoScheduleConfig(config);
+  const value_json = {
+    defaults: stored,
+    updated_at: new Date().toISOString(),
   };
 
   const { data: existing } = await serviceClient
@@ -47,13 +57,18 @@ export async function saveTourAutoScheduleConfig(
   if (existing) {
     const { error } = await serviceClient
       .from('site_settings')
-      .update({ value_json: payload.value_json })
+      .update({ value_json })
       .eq('key', TOUR_AUTO_SCHEDULE_SETTINGS_KEY);
     if (error) throw error;
   } else {
-    const { error } = await serviceClient.from('site_settings').insert(payload);
+    const { error } = await serviceClient.from('site_settings').insert({
+      key: TOUR_AUTO_SCHEDULE_SETTINGS_KEY,
+      value_json,
+    });
     if (error) throw error;
   }
+
+  return stored;
 }
 
 export async function loadActiveGuideIds(

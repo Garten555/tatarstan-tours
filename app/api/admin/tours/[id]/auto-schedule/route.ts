@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { requireTourManager } from '@/lib/admin/require-tour-manager';
-import { normalizeTourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
+import { toStoredTourAutoScheduleConfig } from '@/lib/tour/auto-schedule-config';
 import { runAutoScheduleForTour } from '@/lib/tour/run-auto-schedule-for-tour';
 
 /**
@@ -25,7 +25,7 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const apply = Boolean(body?.apply);
     const configOverride = body?.config
-      ? normalizeTourAutoScheduleConfig(body.config)
+      ? toStoredTourAutoScheduleConfig(body.config)
       : undefined;
     const targetMonth =
       typeof body?.targetMonth === 'string' ? body.targetMonth : undefined;
