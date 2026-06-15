@@ -342,9 +342,9 @@ export default function GuideDashboardClient() {
             href="/admin/my-tours"
             className="flex items-center gap-3 rounded-lg border-2 border-gray-200 p-4 transition-all hover:border-emerald-500 hover:bg-emerald-50"
           >
-            <MapPin className="h-6 w-6 text-emerald-600" />
+            <DoorOpen className="h-6 w-6 text-emerald-600" />
             <div>
-              <p className="font-semibold text-gray-900">Мои туры</p>
+              <p className="font-semibold text-gray-900">Комнаты туров</p>
               <p className="text-sm text-gray-600">Все комнаты и фильтры</p>
             </div>
           </Link>

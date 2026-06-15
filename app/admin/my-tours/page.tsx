@@ -30,6 +30,8 @@ export default async function MyToursPage() {
     redirect('/');
   }
 
+  const isGuideOnly = userRole === 'guide';
+
   const rooms = await loadGuideTourRooms(serviceClient, {
     guideId: user.id,
     resolveCanonical: false,
@@ -39,9 +41,13 @@ export default async function MyToursPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Мои туры</h1>
+        <h1 className="text-3xl font-bold text-gray-900">
+          {isGuideOnly ? 'Комнаты туров' : 'Мои туры'}
+        </h1>
         <p className="mt-2 text-gray-600">
-          Управление комнатами туров, где вы назначены гидом
+          {isGuideOnly
+            ? 'Ваши комнаты выездов — общение с участниками и управление турами'
+            : 'Управление комнатами туров, где вы назначены гидом'}
         </p>
       </div>
 

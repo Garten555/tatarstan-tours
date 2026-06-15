@@ -16,7 +16,6 @@ import {
   ChevronLeft,
   ChevronRight,
   DoorOpen,
-  Crown,
   Award,
   AlertCircle,
   Flag,
@@ -65,14 +64,8 @@ export default function AdminSidebar({ userRole, userName, avatarUrl }: AdminSid
       roles: ['super_admin', 'tour_admin', 'support_admin', 'guide'],
     },
     {
-      name: 'Мои туры',
-      href: '/admin/my-tours',
-      icon: Crown,
-      roles: ['guide'],
-    },
-    {
       name: 'Комнаты туров',
-      href: '/admin/guide-dashboard#rooms',
+      href: '/admin/my-tours',
       icon: DoorOpen,
       roles: ['guide'],
     },
@@ -281,7 +274,8 @@ export default function AdminSidebar({ userRole, userName, avatarUrl }: AdminSid
       {/* Navigation */}
       <nav className={`flex-1 p-2 sm:p-3 md:p-4 space-y-1.5 sm:space-y-2 admin-sidebar-nav overflow-y-auto overflow-x-hidden relative z-0 ${isCollapsed ? 'px-2 sm:px-2.5' : ''}`}>
         {filteredNavigation.map((item) => {
-          const isActive = pathname === item.href;
+          const hrefPath = item.href.split('#')[0];
+          const isActive = pathname === item.href || pathname === hrefPath;
           const linkColor = isActive ? '#ffffff' : '#d1d5db';
           return (
             <Link
