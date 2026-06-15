@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Bell, Loader2, UserCheck, UserX } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Bell, Loader2, UserCheck, UserX, ExternalLink } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { createClient } from '@/lib/supabase/client';
 import { playNotificationSound } from '@/lib/sound/notifications';
@@ -11,6 +12,11 @@ import {
   PUSHER_BRIDGE_EVENT,
   type PusherBridgeDetail,
 } from '@/lib/pusher/user-bridge-events';
+import { parseNotificationBodyMeta } from '@/lib/notifications/parse-notification-body';
+import {
+  getNotificationHref,
+  isNotificationClickable,
+} from '@/lib/notifications/notification-navigation';
 
 type Notification = {
   id: string;
@@ -20,85 +26,23 @@ type Notification = {
   created_at: string;
 };
 
-function parseNotificationBodyMeta(body: string | null): {
-  displayText: string;
-  senderId: string | null;
-  senderUsername: string | null;
-  senderAvatar: string | null;
-  roomId: string | null;
-  badgeType: string | null;
-  achievementId: string | null;
-} {
-  if (!body) {
-    return {
-      displayText: '',
-      senderId: null,
-      senderUsername: null,
-      senderAvatar: null,
-      roomId: null,
-      badgeType: null,
-      achievementId: null,
-    };
-  }
-  const lines = body.split('\n');
-  const meta = new Map<string, string>();
-  const textLines: string[] = [];
-  for (const rawLine of lines) {
-    const line = rawLine.trim();
-    if (line.startsWith('sender_id:')) {
-      meta.set('sender_id', line.slice('sender_id:'.length).trim());
-      continue;
-    }
-    if (line.startsWith('sender_username:')) {
-      meta.set('sender_username', line.slice('sender_username:'.length).trim());
-      continue;
-    }
-    if (line.startsWith('sender_avatar:')) {
-      meta.set('sender_avatar', line.slice('sender_avatar:'.length).trim());
-      continue;
-    }
-    if (line.startsWith('room_id:')) {
-      meta.set('room_id', line.slice('room_id:'.length).trim());
-      continue;
-    }
-    if (line.startsWith('badge_type:')) {
-      meta.set('badge_type', line.slice('badge_type:'.length).trim());
-      continue;
-    }
-    if (line.startsWith('achievement_id:')) {
-      meta.set('achievement_id', line.slice('achievement_id:'.length).trim());
-      continue;
-    }
-    textLines.push(rawLine);
-  }
-  return {
-    displayText: textLines.join('\n').trim(),
-    senderId: meta.get('sender_id') || null,
-    senderUsername: meta.get('sender_username') || null,
-    senderAvatar: meta.get('sender_avatar') || null,
-    roomId: meta.get('room_id') || null,
-    badgeType: meta.get('badge_type') || null,
-    achievementId: meta.get('achievement_id') || null,
-  };
-}
-
 /** Строка вида «…текст» + «\nsender_id:<uuid>» из API дружбы */
 function parseFriendRequestMeta(body: string | null): {
   displayText: string;
   senderId: string | null;
 } {
   const parsed = parseNotificationBodyMeta(body);
-  const displayText = parsed.displayText;
-  const senderId = parsed.senderId;
-  return { displayText, senderId };
+  return { displayText: parsed.displayText, senderId: parsed.senderId };
 }
 
 export default function NotificationBell() {
+  const router = useRouter();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [friendActionId, setFriendActionId] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null);
 
   const loadNotifications = useCallback(async () => {
     try {
@@ -168,6 +112,26 @@ export default function NotificationBell() {
 
   const deleteNotificationRemote = async (id: string) => {
     await fetch(`/api/notifications/${id}`, { method: 'DELETE', credentials: 'include' });
+  };
+
+  const openNotification = async (notification: Notification) => {
+    const parsedMeta = parseNotificationBodyMeta(notification.body);
+    const href = getNotificationHref(notification.type, parsedMeta);
+    if (!href) return;
+
+    setOpeningId(notification.id);
+    try {
+      await deleteNotificationRemote(notification.id);
+      removeNotificationLocal(notification.id);
+      setIsOpen(false);
+      window.dispatchEvent(new CustomEvent('notifications:update'));
+      router.push(href);
+    } catch (error) {
+      console.error('Ошибка открытия уведомления:', error);
+      toast.error('Не удалось открыть уведомление');
+    } finally {
+      setOpeningId(null);
+    }
   };
 
   const handleFriendAccept = async (notification: Notification, senderId: string) => {
@@ -275,6 +239,7 @@ export default function NotificationBell() {
                       ? parseFriendRequestMeta(notification.body)
                       : { displayText: parsedMeta.displayText, senderId: null };
                     const busy = friendActionId === notification.id;
+                    const opening = openingId === notification.id;
                     const senderName = parsedMeta.senderUsername || 'Пользователь';
                     const senderInitial = senderName.charAt(0).toUpperCase();
                     const safeAvatar = sanitizeImageUrl(parsedMeta.senderAvatar);
@@ -282,12 +247,16 @@ export default function NotificationBell() {
                     const achievementIcon = isAchievement
                       ? getAchievementBadgeIcon(parsedMeta.badgeType)
                       : null;
+                    const clickable =
+                      !isFriendReq && isNotificationClickable(notification.type, parsedMeta);
+                    const bodyPreview = isFriendReq
+                      ? displayText
+                      : isAchievement
+                        ? displayText
+                        : parsedMeta.displayText || notification.body;
 
-                    return (
-                      <div
-                        key={notification.id}
-                        className="p-4 hover:bg-gray-50 transition-colors"
-                      >
+                    const rowInner = (
+                      <>
                         <div className="flex items-start gap-2.5">
                           {isAchievement ? (
                             <div
@@ -308,66 +277,110 @@ export default function NotificationBell() {
                             </div>
                           )}
                           <div className="min-w-0 flex-1">
-                        <div className="font-medium text-gray-900 text-sm">
-                          {notification.title}
-                        </div>
-                        {(isFriendReq ? displayText : isAchievement ? displayText : notification.body) ? (
-                          <div className="text-xs text-gray-600 mt-1 whitespace-pre-wrap">
-                            {isFriendReq
-                              ? displayText
-                              : isAchievement
-                                ? displayText
-                                : parsedMeta.displayText || notification.body}
-                          </div>
-                        ) : null}
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-medium text-gray-900 text-sm">
+                                {notification.title}
+                              </div>
+                              {clickable ? (
+                                <ExternalLink
+                                  className="h-3.5 w-3.5 shrink-0 text-emerald-500 mt-0.5"
+                                  aria-hidden
+                                />
+                              ) : null}
+                            </div>
+                            {bodyPreview ? (
+                              <div className="text-xs text-gray-600 mt-1 whitespace-pre-wrap line-clamp-3">
+                                {bodyPreview}
+                              </div>
+                            ) : null}
 
-                        {isFriendReq && senderId && (
-                          <div className="flex flex-wrap gap-2 mt-3">
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => handleFriendAccept(notification, senderId)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
-                            >
-                              {busy ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <UserCheck className="w-3.5 h-3.5" />
-                              )}
-                              Принять
-                            </button>
-                            <button
-                              type="button"
-                              disabled={busy}
-                              onClick={() => handleFriendReject(notification, senderId)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-                            >
-                              <UserX className="w-3.5 h-3.5" />
-                              Отклонить
-                            </button>
-                          </div>
-                        )}
+                            {clickable ? (
+                              <p className="mt-1.5 text-[11px] font-semibold text-emerald-600">
+                                {opening ? 'Открываем…' : 'Нажмите, чтобы открыть'}
+                              </p>
+                            ) : null}
 
-                        {isFriendReq && !senderId && (
-                          <p className="text-[11px] text-gray-400 mt-2">
-                            Откройте раздел{' '}
-                            <a href="/friends" className="text-emerald-700 font-semibold underline">
-                              Друзья
-                            </a>
-                            , чтобы ответить на запрос.
-                          </p>
-                        )}
+                            {isFriendReq && senderId && (
+                              <div className="flex flex-wrap gap-2 mt-3" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => handleFriendAccept(notification, senderId)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                                >
+                                  {busy ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <UserCheck className="w-3.5 h-3.5" />
+                                  )}
+                                  Принять
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => handleFriendReject(notification, senderId)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-300 text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                                >
+                                  <UserX className="w-3.5 h-3.5" />
+                                  Отклонить
+                                </button>
+                                {getNotificationHref(notification.type, parsedMeta) ? (
+                                  <button
+                                    type="button"
+                                    disabled={opening}
+                                    onClick={() => void openNotification(notification)}
+                                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                    Открыть
+                                  </button>
+                                ) : null}
+                              </div>
+                            )}
 
-                        <div className="text-xs text-gray-400 mt-2">
-                          {new Date(notification.created_at).toLocaleString('ru-RU', {
-                            day: 'numeric',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                        </div>
+                            {isFriendReq && !senderId && (
+                              <p className="text-[11px] text-gray-400 mt-2">
+                                Откройте раздел{' '}
+                                <a href="/friends" className="text-emerald-700 font-semibold underline">
+                                  Друзья
+                                </a>
+                                , чтобы ответить на запрос.
+                              </p>
+                            )}
+
+                            <div className="text-xs text-gray-400 mt-2">
+                              {new Date(notification.created_at).toLocaleString('ru-RU', {
+                                day: 'numeric',
+                                month: 'short',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </div>
                           </div>
                         </div>
+                      </>
+                    );
+
+                    if (clickable) {
+                      return (
+                        <button
+                          key={notification.id}
+                          type="button"
+                          disabled={opening}
+                          onClick={() => void openNotification(notification)}
+                          className="w-full p-4 text-left hover:bg-emerald-50/80 transition-colors disabled:opacity-60 cursor-pointer"
+                        >
+                          {rowInner}
+                        </button>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={notification.id}
+                        className="p-4 hover:bg-gray-50 transition-colors"
+                      >
+                        {rowInner}
                       </div>
                     );
                   })}
