@@ -9,6 +9,7 @@ import {
   attachActiveTourLinksToAchievements,
   attachActiveTourLinksToParticipatedRows,
 } from '@/lib/tours/resolve-active-tour-link';
+import { getSubscriberFollows, canViewPrivateProfile } from '@/lib/social/friend-subscribers';
 
 interface PublicProfilePageProps {
   params: Promise<{ username: string }>;
@@ -114,12 +115,22 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
     notFound();
   }
 
-  // Если профиль не публичный, проверяем доступ:
-  // - это профиль текущего пользователя ИЛИ
-  // - текущий пользователь является админом
-  if (!profile.public_profile_enabled && (!currentUser || (currentUser.id !== profile.id && !isCurrentUserAdmin))) {
+  // Закрытый профиль: гостям — 404; авторизованным без доступа — ограниченный просмотр
+  const isOwner = currentUser?.id === profile.id;
+  let hasPrivateAccess = profile.public_profile_enabled || isOwner || isCurrentUserAdmin;
+  if (!hasPrivateAccess && currentUser) {
+    hasPrivateAccess = await canViewPrivateProfile(
+      serviceClient,
+      profile.id,
+      currentUser.id,
+      isCurrentUserAdmin
+    );
+  }
+  if (!profile.public_profile_enabled && !currentUser) {
     notFound();
   }
+  const isPrivateLimitedView =
+    !profile.public_profile_enabled && !isOwner && !isCurrentUserAdmin && !hasPrivateAccess;
 
   // TypeScript guard
   const profileData = profile as {
@@ -229,20 +240,15 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
     achievementsCountResult,
     reviewsCountResult,
     bookingsCountResult,
-    followersCountResult,
     followingCountResult,
-    recentDiariesResult,
-    recentAchievementsResult,
-    isFollowingResult,
     recentBlogPostsResult,
     recentAchievementsListResult,
     isFollowingCheckResult,
     locationsResult,
     toursWithLocationsResult,
     userGalleryResult,
-    followersListResult,
     followingListResult,
-    friendsListResult
+    friendsListResult,
   ] = await Promise.all([
     // Опубликованные посты блога
     serviceClient
@@ -271,80 +277,12 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
       .eq('user_id', profileData.id)
       .eq('status', 'completed'),
     
-    // Подписчики
-    serviceClient
-      .from('user_follows')
-      .select('follower_id', { count: 'exact', head: true })
-      .eq('followed_id', profileData.id),
-    
-    // Подписки
+    // Подписки (кого пользователь принял в друзья / подписан)
     serviceClient
       .from('user_follows')
       .select('followed_id', { count: 'exact', head: true })
       .eq('follower_id', profileData.id),
-    
-    // Список подписчиков (первые 6)
-    serviceClient
-      .from('user_follows')
-      .select(`
-        follower_id,
-        follower:profiles!user_follows_follower_id_fkey(
-          id,
-          username,
-          first_name,
-          last_name,
-          avatar_url
-        )
-      `)
-      .eq('followed_id', profileData.id)
-      .order('created_at', { ascending: false })
-      .limit(6),
-    
-    // Список подписок (первые 6)
-    serviceClient
-      .from('user_follows')
-      .select(`
-        followed_id,
-        followed:profiles!user_follows_followed_id_fkey(
-          id,
-          username,
-          first_name,
-          last_name,
-          avatar_url
-        )
-      `)
-      .eq('follower_id', profileData.id)
-      .order('created_at', { ascending: false })
-      .limit(6),
-    
-    // Список друзей (первые 6)
-    currentUser && currentUser.id === profileData.id ? serviceClient
-      .from('user_friends')
-      .select(`
-        id,
-        user_id,
-        friend_id,
-        friend:profiles!user_friends_friend_id_fkey(
-          id,
-          username,
-          first_name,
-          last_name,
-          avatar_url
-        ),
-        user:profiles!user_friends_user_id_fkey(
-          id,
-          username,
-          first_name,
-          last_name,
-          avatar_url
-        )
-      `)
-      .or(`user_id.eq.${profileData.id},friend_id.eq.${profileData.id}`)
-      .eq('status', 'accepted')
-      .order('accepted_at', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: false })
-      .limit(6) : Promise.resolve({ data: [], error: null }),
-    
+
     // Последние посты блога
     (() => {
       const isOwner = currentUser?.id === profileData.id;
@@ -463,24 +401,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
       .eq('user_id', profileData.id)
       .order('created_at', { ascending: false })
       .limit(100),
-    
-    // Список подписчиков (первые 6)
-    serviceClient
-      .from('user_follows')
-      .select(`
-        follower_id,
-        follower:profiles!user_follows_follower_id_fkey(
-          id,
-          username,
-          first_name,
-          last_name,
-          avatar_url
-        )
-      `)
-      .eq('followed_id', profileData.id)
-      .order('created_at', { ascending: false })
-      .limit(6),
-    
+
     // Список подписок (первые 6)
     serviceClient
       .from('user_follows')
@@ -497,11 +418,12 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
       .eq('follower_id', profileData.id)
       .order('created_at', { ascending: false })
       .limit(6),
-    
-    // Список друзей (первые 6) - только если это свой профиль или мы друзья
-    (currentUser && (currentUser.id === profileData.id || areFriends)) ? serviceClient
-      .from('user_friends')
-      .select(`
+
+    // Список друзей — свой профиль или друзья
+    currentUser && (currentUser.id === profileData.id || areFriends)
+      ? serviceClient
+          .from('user_friends')
+          .select(`
         id,
         user_id,
         friend_id,
@@ -520,12 +442,15 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
           avatar_url
         )
       `)
-      .or(`user_id.eq.${profileData.id},friend_id.eq.${profileData.id}`)
-      .eq('status', 'accepted')
-      .order('accepted_at', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: false })
-      .limit(6) : Promise.resolve({ data: [], error: null }),
+          .or(`user_id.eq.${profileData.id},friend_id.eq.${profileData.id}`)
+          .eq('status', 'accepted')
+          .order('accepted_at', { ascending: false, nullsFirst: false })
+          .order('created_at', { ascending: false })
+          .limit(6)
+      : Promise.resolve({ data: [], error: null }),
   ]);
+
+  const subscriberData = await getSubscriberFollows(serviceClient, profileData.id, 6);
 
   const participatedToursCount = await countUserParticipatedTours(serviceClient, profileData.id);
   const participatedTours = await attachActiveTourLinksToParticipatedRows(
@@ -539,19 +464,20 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
     achievements_count: achievementsCountResult.count || 0,
     reviews_count: reviewsCountResult.count || 0,
     completed_tours_count: participatedToursCount,
-    followers_count: followersCountResult.count || 0,
+    followers_count: subscriberData.count,
     following_count: followingCountResult.count || 0,
   };
 
-  const recentDiaries = recentDiariesResult.data || [];
-  const recentBlogPosts = recentBlogPostsResult.data || []; // Посты блога
-  const recentAchievements = await attachActiveTourLinksToAchievements(
-    serviceClient,
-    (recentAchievementsListResult.data || []).map((row: any) => ({
-      ...row,
-      tour: Array.isArray(row.tour) ? row.tour[0] ?? null : row.tour ?? null,
-    }))
-  );
+  const recentBlogPosts = isPrivateLimitedView ? [] : recentBlogPostsResult.data || [];
+  const recentAchievements = isPrivateLimitedView
+    ? []
+    : await attachActiveTourLinksToAchievements(
+        serviceClient,
+        (recentAchievementsListResult.data || []).map((row: any) => ({
+          ...row,
+          tour: Array.isArray(row.tour) ? row.tour[0] ?? null : row.tour ?? null,
+        }))
+      );
   // Проверяем подписку: если isFollowingCheckResult существует и data не null и не пустой массив, значит подписан
   const isFollowing = isFollowingCheckResult !== null && 
     isFollowingCheckResult?.data !== null && 
@@ -562,26 +488,29 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
   const completedTours = participatedTours;
   const upcomingTours = allToursForBlog.filter((b: any) => b.status === 'confirmed');
   
-  // Галерея пользователя
-  const allUserMedia = (Array.isArray(userGalleryResult?.data) ? userGalleryResult.data : []).map((media: any) => ({
-    id: media.id,
-    media_url: media.media_url,
-    media_type: media.media_type,
-    thumbnail_url: media.thumbnail_url,
-    created_at: media.created_at,
-  }));
+  const allUserMedia = isPrivateLimitedView
+    ? []
+    : (Array.isArray(userGalleryResult?.data) ? userGalleryResult.data : []).map((media: any) => ({
+        id: media.id,
+        media_url: media.media_url,
+        media_type: media.media_type,
+        thumbnail_url: media.thumbnail_url,
+        created_at: media.created_at,
+      }));
 
-  // Обрабатываем списки друзей и подписчиков
-  const followersList = (followersListResult.data || []).map((f: any) => {
-    const follower = Array.isArray(f.follower) ? f.follower[0] : f.follower;
-    return {
-      id: follower?.id || f.follower_id,
-      username: follower?.username,
-      first_name: follower?.first_name,
-      last_name: follower?.last_name,
-      avatar_url: follower?.avatar_url,
-    };
-  }).filter((f: any) => f.id);
+  // Подписчики — только не-друзья (после принятия заявки отображаются в друзьях)
+  const followersList = subscriberData.rows
+    .map((f: any) => {
+      const follower = Array.isArray(f.follower) ? f.follower[0] : f.follower;
+      return {
+        id: follower?.id || f.follower_id,
+        username: follower?.username,
+        first_name: follower?.first_name,
+        last_name: follower?.last_name,
+        avatar_url: follower?.avatar_url,
+      };
+    })
+    .filter((f: any) => f.id);
 
   const followingList = (followingListResult.data || []).map((f: any) => {
     const followed = Array.isArray(f.followed) ? f.followed[0] : f.followed;
@@ -658,7 +587,9 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
     });
   }
   
-  const locations = Array.from(locationsMap.values()).sort((a, b) => b.visit_count - a.visit_count).slice(0, 10);
+  const locations = isPrivateLimitedView
+    ? []
+    : Array.from(locationsMap.values()).sort((a, b) => b.visit_count - a.visit_count).slice(0, 10);
 
   // Уровень и бейдж — только по реальному опыту (достижения), без привилегий админа
   const statusLevel =
@@ -683,6 +614,7 @@ export default async function PublicProfilePage({ params }: PublicProfilePagePro
       privacySettings={privacySettings}
       areFriends={areFriends}
       isFollowing={isFollowing}
+      isPrivateLimitedView={isPrivateLimitedView}
       friendsList={friendsList}
       followersList={followersList}
       followingList={followingList}

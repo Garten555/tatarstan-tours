@@ -359,10 +359,14 @@ export default function ProfileSettingsPage() {
   const handleSavePrivacy = async () => {
     setSavingPrivacy(true);
     try {
+      const payload = {
+        ...privacySettings,
+        who_can_follow: privacySettings.who_can_add_friend,
+      };
       const response = await fetch('/api/users/privacy', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(privacySettings),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -453,7 +457,8 @@ export default function ProfileSettingsPage() {
               Публичный профиль
             </h2>
             <p className="text-gray-600 mb-4">
-              Включите публичный профиль, чтобы другие пользователи могли видеть ваши дневники и достижения.
+              Включите публичный профиль, чтобы дневник был виден всем. Если выключить — профиль
+              станет закрытым: содержимое увидят только друзья и подписчики (после принятия заявки).
             </p>
             
             <label className="flex items-center gap-3 cursor-pointer">
@@ -752,7 +757,8 @@ export default function ProfileSettingsPage() {
               Настройки приватности
             </h2>
             <p className="text-gray-600 mb-6">
-              Управляйте, кто может подписываться на вас, добавлять в друзья, просматривать вашу галерею и отправлять сообщения.
+              Управляйте, кто может отправлять заявки в друзья (это же подписка на ваш профиль),
+              просматривать галерею и писать сообщения.
             </p>
 
             {loadingPrivacy ? (
@@ -761,35 +767,21 @@ export default function ProfileSettingsPage() {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* Кто может подписаться */}
+                {/* Кто может подать заявку (подписаться через дружбу) */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Кто может подписаться на меня
-                  </label>
-                  <select
-                    value={privacySettings.who_can_follow}
-                    onChange={(e) => setPrivacySettings((prev) => ({ ...prev, who_can_follow: e.target.value as 'everyone' | 'friends' | 'nobody' }))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  >
-                    <option value="everyone">Все пользователи</option>
-                    <option value="friends">Только друзья</option>
-                    <option value="nobody">Никто</option>
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {privacySettings.who_can_follow === 'everyone' && 'Любой пользователь может подписаться на вас'}
-                    {privacySettings.who_can_follow === 'friends' && 'Только ваши друзья могут подписаться на вас'}
-                    {privacySettings.who_can_follow === 'nobody' && 'Подписки отключены'}
-                  </p>
-                </div>
-
-                {/* Кто может добавить в друзья */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Кто может добавить меня в друзья
+                    Кто может подать заявку в друзья
                   </label>
                   <select
                     value={privacySettings.who_can_add_friend}
-                    onChange={(e) => setPrivacySettings((prev) => ({ ...prev, who_can_add_friend: e.target.value as 'everyone' | 'friends' | 'nobody' }))}
+                    onChange={(e) => {
+                      const value = e.target.value as 'everyone' | 'friends' | 'nobody';
+                      setPrivacySettings((prev) => ({
+                        ...prev,
+                        who_can_add_friend: value,
+                        who_can_follow: value,
+                      }));
+                    }}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   >
                     <option value="everyone">Все пользователи</option>
@@ -797,11 +789,16 @@ export default function ProfileSettingsPage() {
                     <option value="nobody">Никто</option>
                   </select>
                   <p className="text-xs text-gray-500 mt-1">
-                    {privacySettings.who_can_add_friend === 'everyone' && 'Любой пользователь может отправить вам запрос на дружбу'}
-                    {privacySettings.who_can_add_friend === 'friends' && 'Только ваши друзья могут отправить вам запрос на дружбу'}
-                    {privacySettings.who_can_add_friend === 'nobody' && 'Запросы на дружбу отключены'}
+                    {privacySettings.who_can_add_friend === 'everyone' &&
+                      'Любой пользователь может отправить заявку. После принятия он станет подписчиком и другом.'}
+                    {privacySettings.who_can_add_friend === 'friends' &&
+                      'Только ваши друзья могут отправить заявку'}
+                    {privacySettings.who_can_add_friend === 'nobody' &&
+                      'Заявки в друзья отключены'}
                   </p>
                 </div>
+
+                {/* Скрыто: who_can_follow синхронизируется с who_can_add_friend */}
 
                 {/* Кто может просматривать галерею */}
                 <div>
@@ -820,7 +817,7 @@ export default function ProfileSettingsPage() {
                   </select>
                   <p className="text-xs text-gray-500 mt-1">
                     {privacySettings.who_can_view_gallery === 'everyone' && 'Любой пользователь может просматривать вашу галерею'}
-                    {privacySettings.who_can_view_gallery === 'followers' && 'Только ваши подписчики могут просматривать вашу галерею'}
+                    {privacySettings.who_can_view_gallery === 'followers' && 'Только подписчики (принявшие заявку в друзья) и друзья могут просматривать галерею'}
                     {privacySettings.who_can_view_gallery === 'friends' && 'Только ваши друзья могут просматривать вашу галерею'}
                     {privacySettings.who_can_view_gallery === 'nobody' && 'Галерея доступна только вам'}
                   </p>

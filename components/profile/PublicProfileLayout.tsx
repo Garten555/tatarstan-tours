@@ -19,6 +19,7 @@ interface PublicProfileLayoutProps {
   privacySettings: any;
   areFriends: boolean;
   isFollowing: boolean;
+  isPrivateLimitedView?: boolean;
   friendsList: any[];
   followersList: any[];
   followingList: any[];
@@ -45,6 +46,7 @@ export default function PublicProfileLayout({
   privacySettings,
   areFriends,
   isFollowing,
+  isPrivateLimitedView = false,
   friendsList,
   followersList,
   followingList,
@@ -148,6 +150,15 @@ export default function PublicProfileLayout({
                   <p className="mt-3 text-red-700 font-medium">{escapeHtml(profileData.ban_reason)}</p>
                 )}
               </div>
+            ) : isPrivateLimitedView ? (
+              <div className="text-center py-16 bg-gradient-to-br from-slate-50 to-gray-100 rounded-2xl border-2 border-gray-200 shadow-sm px-6">
+                <Lock className="w-16 h-16 mx-auto text-gray-500 mb-4" />
+                <h2 className="text-2xl font-black text-gray-900 mb-3">Закрытый профиль</h2>
+                <p className="text-gray-600 max-w-md mx-auto">
+                  Этот туристический паспорт доступен только друзьям и подписчикам. Подайте заявку в
+                  друзья — после принятия вы увидите содержимое профиля.
+                </p>
+              </div>
             ) : (
               <>
                 <section className="rounded-2xl border border-gray-200 bg-white shadow-sm p-4 md:p-5">
@@ -235,7 +246,7 @@ export default function PublicProfileLayout({
         </div>
 
         <div id="passport" className="scroll-mt-site-header mt-4 sm:mt-5 rounded-xl sm:rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-          {(isBanned || profileData.is_banned) ? null : (
+          {(isBanned || profileData.is_banned || isPrivateLimitedView) ? null : (
             <PublicPassportSection
               achievements={recentAchievements}
               completedTours={completedTours}

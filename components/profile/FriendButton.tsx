@@ -68,11 +68,16 @@ export function FriendButton({ userId, username, compact }: FriendButtonProps) {
 
       // Обновляем статус
       if (action === 'request') {
-        setStatus('pending_sent');
-        toast.success('Запрос на дружбу отправлен');
+        if (data.auto_accepted) {
+          setStatus('accepted');
+          toast.success('Заявка принята автоматически! Теперь вы друзья');
+        } else {
+          setStatus('pending_sent');
+          toast.success('Заявка отправлена');
+        }
       } else if (action === 'accept') {
         setStatus('accepted');
-        toast.success('Запрос принят! Теперь вы друзья');
+        toast.success('Заявка принята! Теперь вы друзья и подписчик');
       } else if (action === 'reject' || action === 'remove') {
         setStatus('none');
         toast.success(action === 'reject' ? 'Запрос отклонен' : 'Удален из друзей');
@@ -147,7 +152,7 @@ export function FriendButton({ userId, username, compact }: FriendButtonProps) {
           className={`${b} bg-yellow-100 text-yellow-700 font-bold flex items-center gap-2`}
         >
           <Clock />
-          <span>{compact ? 'Ожидание' : 'Запрос отправлен'}</span>
+          <span>{compact ? 'Ожидание' : 'Заявка отправлена'}</span>
         </div>
       </div>
     );
@@ -200,7 +205,7 @@ export function FriendButton({ userId, username, compact }: FriendButtonProps) {
       ) : (
         <>
           <UserPlus />
-          <span>{compact ? 'В друзья' : 'Добавить в друзья'}</span>
+          <span>{compact ? 'Заявка' : 'Подать заявку в друзья'}</span>
         </>
       )}
     </button>

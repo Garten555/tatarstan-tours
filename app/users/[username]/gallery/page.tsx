@@ -6,6 +6,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowLeft, ImageIcon, Video } from 'lucide-react';
 import UserGallery from '@/components/passport/UserGallery';
+import { hasGalleryFollowerAccess } from '@/lib/social/friend-subscribers';
 
 interface UserGalleryPageProps {
   params: Promise<{ username: string }>;
@@ -107,15 +108,12 @@ export default async function UserGalleryPage({ params }: UserGalleryPageProps) 
         notFound();
       }
     } else if (whoCanViewGallery === 'followers') {
-      // Проверяем, подписан ли текущий пользователь
-      const { data: follow } = await serviceClient
-        .from('user_follows')
-        .select('follower_id')
-        .eq('follower_id', currentUser.id)
-        .eq('followed_id', profile.id)
-        .maybeSingle();
-      
-      if (!follow) {
+      const hasAccess = await hasGalleryFollowerAccess(
+        serviceClient,
+        profile.id,
+        currentUser.id
+      );
+      if (!hasAccess) {
         notFound();
       }
     }

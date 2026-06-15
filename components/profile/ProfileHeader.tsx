@@ -512,22 +512,15 @@ export default function ProfileHeader({
 
             {/* Кнопки действий */}
             {!isBanned && currentUser && currentUser.id !== profileData.id && (() => {
-              const canFollow = isFollowing || (!areFriends && (!privacySettings || 
-                privacySettings.who_can_follow === 'everyone' || 
-                (privacySettings.who_can_follow === 'friends' && areFriends)));
-              
               const canAddFriend = !privacySettings || 
                 privacySettings.who_can_add_friend === 'everyone' || 
                 (privacySettings.who_can_add_friend === 'friends' && areFriends);
 
               return (
                 <ProfileSocialActions
-                  profileUsername={profileData.username || profileData.id}
                   profileUserId={profileData.id}
                   cleanUsername={cleanUsername}
-                  canFollow={canFollow}
                   canAddFriend={canAddFriend}
-                  isFollowing={isFollowing}
                 />
               );
             })()}

@@ -2,6 +2,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { publishUserNotification } from '@/lib/pusher/user-notification';
+import {
+  addSubscriberFollow,
+  removeFollowBetween,
+} from '@/lib/social/friend-subscribers';
 
 // GET /api/users/friends - Получить список друзей
 export async function GET(request: NextRequest) {
@@ -149,11 +153,12 @@ export async function POST(request: NextRequest) {
       // Проверяем настройки приватности целевого пользователя
       const { data: privacySettings } = await serviceClient
         .from('user_message_privacy')
-        .select('who_can_add_friend')
+        .select('who_can_add_friend, auto_accept_friends')
         .eq('user_id', friend_id)
         .maybeSingle();
 
       const whoCanAddFriend = privacySettings?.who_can_add_friend || 'everyone';
+      const autoAcceptFriends = privacySettings?.auto_accept_friends === true;
 
       if (whoCanAddFriend === 'nobody') {
         return NextResponse.json(
@@ -229,6 +234,37 @@ export async function POST(request: NextRequest) {
           { error: 'Не удалось отправить запрос' },
           { status: 500 }
         );
+      }
+
+      if (autoAcceptFriends) {
+        const { data: acceptedFriendship, error: acceptError } = await serviceClient
+          .from('user_friends')
+          .update({
+            status: 'accepted',
+            accepted_at: new Date().toISOString(),
+          })
+          .eq('id', friendship.id)
+          .select(`
+            *,
+            friend:profiles!user_friends_friend_id_fkey(
+              id,
+              username,
+              display_name,
+              avatar_url
+            )
+          `)
+          .single();
+
+        if (acceptError) {
+          console.error('Ошибка автопринятия заявки:', acceptError);
+        } else {
+          await addSubscriberFollow(serviceClient, user.id, friend_id);
+          return NextResponse.json({
+            success: true,
+            friendship: acceptedFriendship,
+            auto_accepted: true,
+          });
+        }
       }
 
       // Уведомление получателю (friend_id — кому пришёл запрос)
@@ -323,6 +359,9 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Заявитель становится подписчиком; в списке друзей отображается как друг, не подписчик
+      await addSubscriberFollow(serviceClient, requesterId, user.id);
+
       // Создаем уведомление для пользователя, который отправил запрос
       if (requesterProfile) {
         const { data: currentUserProfile } = await serviceClient
@@ -378,6 +417,11 @@ export async function POST(request: NextRequest) {
         ? (existingFriendship.requested_by as string)
         : null;
 
+      const otherUserId =
+        existingFriendship.user_id === user.id
+          ? existingFriendship.friend_id
+          : existingFriendship.user_id;
+
       const { error } = await serviceClient
         .from('user_friends')
         .delete()
@@ -390,6 +434,8 @@ export async function POST(request: NextRequest) {
           { status: 500 }
         );
       }
+
+      await removeFollowBetween(serviceClient, user.id, otherUserId as string);
 
       if (declinedRequesterId) {
         try {
