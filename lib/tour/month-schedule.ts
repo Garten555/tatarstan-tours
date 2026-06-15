@@ -117,7 +117,7 @@ export function generateMonthTourScheduleSlots(params: {
 
       const startIso = moscowWallClockToIso(year, month, day, tm.h, tm.m);
       const startMs = new Date(startIso).getTime();
-      if (startMs <= nowMs && mode === 'fill') continue;
+      if (startMs <= nowMs) continue;
 
       if (tourHasSlotAt(allSessions, startIso)) continue;
 

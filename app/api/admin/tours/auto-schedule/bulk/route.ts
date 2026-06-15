@@ -3,6 +3,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { requireTourManager } from '@/lib/admin/require-tour-manager';
 import { loadActiveGuideIds } from '@/lib/tour/auto-schedule-settings';
 import { runAutoScheduleForTour } from '@/lib/tour/run-auto-schedule-for-tour';
+import { prunePastTourSessionsWithoutBookings } from '@/lib/tour/prune-past-tour-sessions';
 
 async function loadBulkTourRows(serviceClient: Awaited<ReturnType<typeof createServiceClient>>) {
   return serviceClient
@@ -149,11 +150,18 @@ export async function POST(request: NextRequest) {
     const failed = results.filter((r) => r.error);
     const alreadyFull = results.filter((r) => r.note?.startsWith('уже')).length;
 
+    let prunedPastSessions = 0;
+    if (apply) {
+      const pruned = await prunePastTourSessionsWithoutBookings(serviceClient);
+      prunedPastSessions = pruned.sessionsRemoved;
+    }
+
     return NextResponse.json({
       success: true,
       applied: apply,
       toursProcessed: results.length,
       totalSlotsAdded: totalAdded,
+      prunedPastSessions,
       failed: failed.length,
       alreadyFull,
       activeGuides: guideIds.length,

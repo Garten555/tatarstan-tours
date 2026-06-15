@@ -24,20 +24,23 @@ import {
   MAX_IMAGE_BYTES,
   MAX_TOUR_ADMIN_VIDEO_BYTES,
 } from '@/lib/upload/file-size-limits';
-import { isoToDatetimeLocalInput, datetimeLocalInputToIso } from '@/lib/date/tour-timestamp';
+import {
+  isoToMoscowDatetimeLocalInput,
+  moscowDatetimeLocalInputToIso,
+  parseTourTimestampMs,
+} from '@/lib/date/tour-timestamp';
+import { resolveTourFormSessionLayout } from '@/lib/tour/tour-form-sessions';
 
 const TOUR_VIDEO_ACCEPT = 'video/mp4,video/webm,video/quicktime,video/x-msvideo';
 
-const isoToDatetimeLocal = isoToDatetimeLocalInput;
-
-/** Сравнение значений из datetime-local: одно мгновение времени (без ложных «изменений» из-за формата строки). */
+/** Сравнение значений datetime-local как московское стенное время. */
 function sameLocalDateTimeField(a: string, b: string): boolean {
   if (!a && !b) return true;
   if (!a || !b) return false;
-  const ta = new Date(a).getTime();
-  const tb = new Date(b).getTime();
-  if (Number.isNaN(ta) || Number.isNaN(tb)) return a === b;
-  return ta === tb;
+  const isoA = moscowDatetimeLocalInputToIso(a);
+  const isoB = moscowDatetimeLocalInputToIso(b);
+  if (isoA && isoB) return isoA === isoB;
+  return a === b;
 }
 
 type SessionDraft = {
@@ -91,22 +94,36 @@ export default function TourForm({
   const [videoPreviews, setVideoPreviews] = useState<string[]>([]);
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<{ [key: string]: boolean }>({});
+
+  const editSessionLayout =
+    mode === 'edit'
+      ? resolveTourFormSessionLayout(
+          initialSessions,
+          initialData?.start_date,
+          initialData?.end_date
+        )
+      : null;
+
   const [primarySessionId] = useState<string | undefined>(() =>
-    mode === 'edit' && initialSessions?.[0]?.id ? initialSessions[0].id : undefined
+    mode === 'edit' && editSessionLayout?.primarySession?.id
+      ? editSessionLayout.primarySession.id
+      : undefined
   );
 
   const [primaryGuideId, setPrimaryGuideId] = useState<string>(() =>
-    mode === 'edit' && initialSessions?.[0]?.guide_id ? String(initialSessions[0].guide_id) : ''
+    mode === 'edit' && editSessionLayout?.primarySession?.guide_id
+      ? String(editSessionLayout.primarySession.guide_id)
+      : ''
   );
 
   const [extraDateRanges, setExtraDateRanges] = useState<
     Array<{ id?: string; start_date: string; end_date: string; guide_id: string }>
   >(() => {
-    if (mode !== 'edit' || !initialSessions || initialSessions.length <= 1) return [];
-    return initialSessions.slice(1).map((s) => ({
+    if (mode !== 'edit' || !editSessionLayout?.extraSessions.length) return [];
+    return editSessionLayout.extraSessions.map((s) => ({
       id: s.id,
-      start_date: isoToDatetimeLocal(s.start_at),
-      end_date: isoToDatetimeLocal(s.end_at),
+      start_date: isoToMoscowDatetimeLocalInput(s.start_at),
+      end_date: isoToMoscowDatetimeLocalInput(s.end_at ?? s.start_at),
       guide_id: s.guide_id ? String(s.guide_id) : '',
     }));
   });
@@ -137,18 +154,8 @@ export default function TourForm({
     };
   }, []);
 
-  const primaryStart =
-    mode === 'edit' && initialSessions?.[0]?.start_at
-      ? isoToDatetimeLocal(initialSessions[0].start_at)
-      : initialData?.start_date
-        ? isoToDatetimeLocal(initialData.start_date)
-        : '';
-  const primaryEnd =
-    mode === 'edit' && initialSessions?.[0]?.end_at
-      ? isoToDatetimeLocal(initialSessions[0].end_at)
-      : initialData?.end_date
-        ? isoToDatetimeLocal(initialData.end_date)
-        : '';
+  const primaryStart = editSessionLayout?.primaryStart ?? '';
+  const primaryEnd = editSessionLayout?.primaryEnd ?? '';
 
   // Form data
   const [formData, setFormData] = useState({
@@ -755,18 +762,8 @@ export default function TourForm({
       if (!proceed) return;
     }
 
-    const initialPrimaryStart =
-      mode === 'edit' && initialSessions?.[0]?.start_at
-        ? isoToDatetimeLocal(initialSessions[0].start_at)
-        : mode === 'edit' && initialData?.start_date
-          ? isoToDatetimeLocal(initialData.start_date)
-          : '';
-    const initialPrimaryEnd =
-      mode === 'edit' && initialSessions?.[0]?.end_at
-        ? isoToDatetimeLocal(initialSessions[0].end_at)
-        : mode === 'edit' && initialData?.end_date
-          ? isoToDatetimeLocal(initialData.end_date)
-          : '';
+    const initialPrimaryStart = editSessionLayout?.primaryStart ?? '';
+    const initialPrimaryEnd = editSessionLayout?.primaryEnd ?? '';
 
     const normExtra = (pairs: { start: string; end: string }[]) =>
       [...pairs]
@@ -774,10 +771,10 @@ export default function TourForm({
         .sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end));
 
     const initialExtraPairs =
-      mode === 'edit' && initialSessions && initialSessions.length > 1
-        ? initialSessions.slice(1).map((s) => ({
-            start: isoToDatetimeLocal(s.start_at),
-            end: isoToDatetimeLocal(s.end_at ?? ''),
+      mode === 'edit' && editSessionLayout?.extraSessions.length
+        ? editSessionLayout.extraSessions.map((s) => ({
+            start: isoToMoscowDatetimeLocalInput(s.start_at),
+            end: isoToMoscowDatetimeLocalInput(s.end_at ?? s.start_at),
           }))
         : [];
     const currentExtraPairs = extraDateRanges.map((r) => ({
@@ -791,7 +788,7 @@ export default function TourForm({
 
     let existingExtraSessionsAffected = false;
     if (mode === 'edit') {
-      const initialExtras = initialSessions?.slice(1) ?? [];
+      const initialExtras = editSessionLayout?.extraSessions ?? [];
       const currentIds = new Set(extraDateRanges.map((r) => r.id).filter(Boolean) as string[]);
       for (const s of initialExtras) {
         if (!s.id) continue;
@@ -802,8 +799,14 @@ export default function TourForm({
         const row = extraDateRanges.find((r) => r.id === s.id);
         if (
           row &&
-          (!sameLocalDateTimeField(row.start_date, isoToDatetimeLocal(s.start_at)) ||
-            !sameLocalDateTimeField(row.end_date, isoToDatetimeLocal(s.end_at ?? '')))
+          (!sameLocalDateTimeField(
+            row.start_date,
+            isoToMoscowDatetimeLocalInput(s.start_at)
+          ) ||
+            !sameLocalDateTimeField(
+              row.end_date,
+              isoToMoscowDatetimeLocalInput(s.end_at ?? s.start_at)
+            ))
         ) {
           existingExtraSessionsAffected = true;
           break;
@@ -892,12 +895,16 @@ export default function TourForm({
       let effectiveStatus = formData.status;
       if (mode === 'edit' && datesChanged && formData.status !== 'cancelled') {
         const nowMs = Date.now();
-        const startMs = formData.start_date
-          ? new Date(formData.start_date).getTime()
-          : NaN;
-        const endMs = formData.end_date
-          ? new Date(formData.end_date).getTime()
-          : NaN;
+        const startMs =
+          (formData.start_date
+            ? parseTourTimestampMs(
+                moscowDatetimeLocalInputToIso(formData.start_date) ?? ''
+              )
+            : null) ?? NaN;
+        const endMs =
+          (formData.end_date
+            ? parseTourTimestampMs(moscowDatetimeLocalInputToIso(formData.end_date) ?? '')
+            : null) ?? NaN;
         const hasFutureDeparture =
           Number.isFinite(startMs) && startMs > nowMs;
         const isOngoing =
@@ -932,12 +939,12 @@ export default function TourForm({
         yandex_map_url: formData.yandex_map_url.trim() || null,
         description: formData.short_desc || formData.full_desc || '',
         start_date: hasPrimaryDates
-          ? datetimeLocalInputToIso(formData.start_date) ?? formData.start_date
+          ? moscowDatetimeLocalInputToIso(formData.start_date) ?? formData.start_date
           : mode === 'edit' && initialData?.start_date
             ? initialData.start_date
             : placeholderTourDates.start,
         end_date: hasPrimaryDates
-          ? datetimeLocalInputToIso(formData.end_date) ?? formData.end_date
+          ? moscowDatetimeLocalInputToIso(formData.end_date) ?? formData.end_date
           : mode === 'edit' && initialData?.end_date
             ? initialData.end_date
             : mode === 'edit' && initialData?.start_date
@@ -1040,16 +1047,18 @@ export default function TourForm({
         const sessionsPayload = [
           {
             id: primarySessionId,
-            start_at: new Date(formData.start_date).toISOString(),
-            end_at: new Date(formData.end_date).toISOString(),
+            start_at:
+              moscowDatetimeLocalInputToIso(formData.start_date) ?? formData.start_date,
+            end_at: moscowDatetimeLocalInputToIso(formData.end_date) ?? formData.end_date,
             guide_id: primaryGuideId.trim() ? primaryGuideId.trim() : null,
           },
           ...extraDateRanges
             .filter((range) => range.start_date?.trim() && range.end_date?.trim())
             .map((range) => ({
               id: range.id,
-              start_at: new Date(range.start_date).toISOString(),
-              end_at: new Date(range.end_date).toISOString(),
+              start_at:
+                moscowDatetimeLocalInputToIso(range.start_date) ?? range.start_date,
+              end_at: moscowDatetimeLocalInputToIso(range.end_date) ?? range.end_date,
               guide_id: range.guide_id?.trim() ? range.guide_id.trim() : null,
             })),
         ];

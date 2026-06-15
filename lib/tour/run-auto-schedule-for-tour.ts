@@ -21,6 +21,7 @@ import {
 import { loadBusyGuideSessions } from '@/lib/tour/guide-schedule-conflict';
 import { syncTourSessions, type IncomingSession } from '@/lib/tour/sync-tour-sessions';
 import { syncTourCatalogDatesFromSessions } from '@/lib/tour/sync-tour-dates-from-sessions';
+import { prunePastTourSessionsWithoutBookings } from '@/lib/tour/prune-past-tour-sessions';
 
 export type RunAutoScheduleResult =
   | {
@@ -88,6 +89,20 @@ async function loadBookedSessionIdsInMonth(
   }
 
   return bookedSessionIds;
+}
+
+async function finalizeAutoScheduleApply(
+  serviceClient: SupabaseClient,
+  tourId: string
+): Promise<{ catalogDatesUpdated: boolean; prunedSessions: number }> {
+  const pruned = await prunePastTourSessionsWithoutBookings(serviceClient, {
+    tourIds: [tourId],
+  });
+  const datesSync = await syncTourCatalogDatesFromSessions(serviceClient, tourId);
+  return {
+    catalogDatesUpdated: datesSync.updated,
+    prunedSessions: pruned.sessionsRemoved,
+  };
 }
 
 export async function runAutoScheduleForTour(
@@ -278,14 +293,14 @@ export async function runAutoScheduleForTour(
       };
     }
 
-    const datesSync = await syncTourCatalogDatesFromSessions(serviceClient, tourId);
+    const datesSync = await finalizeAutoScheduleApply(serviceClient, tourId);
 
     return {
       ok: true,
       applied: true,
       generated,
       tourTitle: String((tour as { title?: string }).title || 'Тур'),
-      catalogDatesUpdated: datesSync.updated,
+      catalogDatesUpdated: datesSync.catalogDatesUpdated,
     };
   }
 
@@ -344,13 +359,13 @@ export async function runAutoScheduleForTour(
     };
   }
 
-  const datesSync = await syncTourCatalogDatesFromSessions(serviceClient, tourId);
+  const datesSync = await finalizeAutoScheduleApply(serviceClient, tourId);
 
   return {
     ok: true,
     applied: true,
     generated,
     tourTitle: String((tour as { title?: string }).title || 'Тур'),
-    catalogDatesUpdated: datesSync.updated,
+    catalogDatesUpdated: datesSync.catalogDatesUpdated,
   };
 }

@@ -165,6 +165,9 @@ function buildScheduleMaps(sessions: EnrichedScheduleSession[]) {
     list.push(session);
     sessionsByDay.set(key, list);
 
+    const countsForCalendar =
+      session.time_phase === 'upcoming' || session.time_phase === 'ongoing';
+
     if (!dayMarkers[key]) {
       dayMarkers[key] = {
         count: 0,
@@ -176,9 +179,11 @@ function buildScheduleMaps(sessions: EnrichedScheduleSession[]) {
       };
     }
     const marker = dayMarkers[key];
-    marker.count += 1;
-    if (session.schedule_issue === 'overlap') marker.has_overlap = true;
-    if (session.schedule_issue === 'buffer') marker.has_buffer = true;
+    if (countsForCalendar) {
+      marker.count += 1;
+      if (session.schedule_issue === 'overlap') marker.has_overlap = true;
+      if (session.schedule_issue === 'buffer') marker.has_buffer = true;
+    }
     if (session.time_phase === 'ended') marker.has_ended = true;
     if (session.time_phase === 'ongoing') marker.has_ongoing = true;
     if (session.time_phase === 'upcoming') marker.has_upcoming = true;
@@ -272,7 +277,7 @@ export default function TeamScheduleBoard({
   const [viewMonth, setViewMonth] = useState(initialMonth);
   const [selectedDay, setSelectedDay] = useState(initialSelectedDay);
   const [guideFilter, setGuideFilter] = useState('all');
-  const [timeFilter, setTimeFilter] = useState<TimeFilter>('all');
+  const [timeFilter, setTimeFilter] = useState<TimeFilter>('upcoming');
   const [data, setData] = useState<ScheduleResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -370,15 +375,38 @@ export default function TeamScheduleBoard({
     }));
   }, [data?.sessions]);
 
+  const activeSessions = useMemo(
+    () =>
+      enrichedSessions.filter(
+        (session) =>
+          session.time_phase === 'upcoming' || session.time_phase === 'ongoing'
+      ),
+    [enrichedSessions]
+  );
+
   const filteredSessions = useMemo(() => {
     if (timeFilter === 'all') return enrichedSessions;
     return enrichedSessions.filter((session) => session.time_phase === timeFilter);
   }, [enrichedSessions, timeFilter]);
 
-  const { sessionsByDay, dayMarkers } = useMemo(
-    () => buildScheduleMaps(filteredSessions),
-    [filteredSessions]
+  const { dayMarkers } = useMemo(
+    () => buildScheduleMaps(activeSessions),
+    [activeSessions]
   );
+
+  const sessionsByDay = useMemo(() => {
+    const map = new Map<string, EnrichedScheduleSession[]>();
+    for (const session of filteredSessions) {
+      const key = sessionMoscowDayKey(session.start_at);
+      const list = map.get(key) ?? [];
+      list.push(session);
+      map.set(key, list);
+    }
+    for (const [, list] of map) {
+      list.sort((a, b) => a.start_at.localeCompare(b.start_at));
+    }
+    return map;
+  }, [filteredSessions]);
 
   const selectedSessions = sessionsByDay.get(selectedDay) ?? [];
   const selectedMarker = dayMarkers[selectedDay];
@@ -578,10 +606,11 @@ export default function TeamScheduleBoard({
                 const marker = dayMarkers[cell.key];
                 const isSelected = cell.key === selectedDay;
                 const isToday = cell.key === todayKey;
-                const hasTours = (marker?.count ?? 0) > 0;
-                const hasIssue = marker?.has_overlap || marker?.has_buffer;
-                const accent = dayMarkerAccent(marker);
                 const isPastDay = cell.key < todayKey;
+                const hasTours = (marker?.count ?? 0) > 0;
+                const hasIssue =
+                  !isPastDay && (marker?.has_overlap || marker?.has_buffer);
+                const accent = dayMarkerAccent(marker);
                 const effectiveAccent =
                   isPastDay && hasTours && !marker?.has_ongoing
                     ? 'ended'
@@ -662,10 +691,10 @@ export default function TeamScheduleBoard({
                         setViewMonth(`${y}-${m}`);
                       }
                     }}
-                    className={`relative flex min-h-[4.25rem] flex-col rounded-xl border-2 p-1.5 text-left transition-all sm:min-h-[4.75rem] ${cellClass} ${!cell.in_month ? 'opacity-45' : ''} ${marker?.has_ongoing && effectiveAccent !== 'ongoing' ? 'ring-2 ring-blue-200/70' : ''}`}
+                    className={`relative flex min-h-[4.5rem] flex-col overflow-hidden rounded-xl border-2 p-1 text-left transition-all sm:min-h-[5rem] sm:p-1.5 ${cellClass} ${!cell.in_month ? 'opacity-45' : ''} ${marker?.has_ongoing && effectiveAccent !== 'ongoing' ? 'ring-2 ring-blue-200/70' : ''}`}
                   >
                     <span
-                      className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-black ${
+                      className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${
                         isToday
                           ? 'bg-emerald-600 text-white'
                           : isSelected
@@ -677,24 +706,20 @@ export default function TeamScheduleBoard({
                     </span>
 
                     {hasTours && (
-                      <div className="mt-auto flex flex-col gap-0.5 pt-1">
-                        <div className="flex items-center gap-1">
-                          <span className={`h-2 w-2 rounded-full ${dotClass}`} />
-                          <span className={`text-[10px] font-bold leading-none ${countClass}`}>
+                      <div className="mt-auto flex min-h-0 flex-col gap-0.5 pt-0.5">
+                        <div className="flex min-w-0 items-center gap-1">
+                          <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClass}`} />
+                          <span className={`truncate text-[9px] font-bold leading-none ${countClass}`}>
                             {tourCountLabel(marker?.count ?? 0)}
                           </span>
                         </div>
                         {hasIssue ? (
-                          <span className="text-[9px] font-bold leading-tight text-amber-800">
-                            {marker?.has_overlap ? 'пересечение' : 'мало времени'}
-                          </span>
-                        ) : effectiveAccent === 'ended' && !marker?.has_ongoing && !marker?.has_upcoming ? (
-                          <span className="text-[9px] font-bold leading-tight text-slate-700">
-                            {isPastDay ? 'прошло' : 'завершено'}
+                          <span className="truncate text-[8px] font-bold leading-none text-amber-800">
+                            {marker?.has_overlap ? 'пересеч.' : 'мало врем.'}
                           </span>
                         ) : null}
                         {marker?.has_ongoing ? (
-                          <span className="text-[9px] font-bold leading-tight text-blue-700">
+                          <span className="truncate text-[8px] font-bold leading-none text-blue-700">
                             идёт сейчас
                           </span>
                         ) : null}
@@ -702,14 +727,14 @@ export default function TeamScheduleBoard({
                     )}
 
                     {showRestCell && (
-                      <span className={`mt-auto ${GUIDE_REST.badge}`}>
+                      <span className={`mt-auto truncate ${GUIDE_REST.badge}`}>
                         <Moon className="h-2.5 w-2.5 shrink-0" aria-hidden />
                         {guideFilter === 'all' ? `отдых · ${resting.length}` : 'отдых'}
                       </span>
                     )}
 
                     {hasTours && isAdmin && guideFilter === 'all' && resting.length > 0 && (
-                      <span className={`mt-1 ${GUIDE_REST.badge}`}>
+                      <span className={`mt-0.5 truncate ${GUIDE_REST.badge}`}>
                         <Moon className="h-2.5 w-2.5 shrink-0" aria-hidden />
                         отдых · {resting.length}
                       </span>
