@@ -4,6 +4,7 @@ import Pusher from 'pusher';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
 import { publishUserNotification } from '@/lib/pusher/user-notification';
+import { resolveTourRoomMessageRecipients } from '@/lib/notifications/tour-room-message-recipients';
 import { rateLimit } from '@/lib/security/rate-limit';
 
 const pusher = new Pusher({
@@ -187,27 +188,11 @@ export async function POST(request: NextRequest) {
       const previewBase = imageUrl ? 'Отправил(а) изображение' : sanitizedMessage || 'Новое сообщение';
       const preview = previewBase.length > 100 ? `${previewBase.slice(0, 100)}...` : previewBase;
 
-      const [participantsResult, roomResult] = await Promise.all([
-        serviceClient
-          .from('tour_room_participants')
-          .select('user_id')
-          .eq('room_id', roomId),
-        serviceClient
-          .from('tour_rooms')
-          .select('guide_id')
-          .eq('id', roomId)
-          .maybeSingle(),
-      ]);
-
-      const recipientIds = new Set<string>();
-      for (const row of participantsResult.data || []) {
-        const uid = (row as { user_id?: string }).user_id;
-        if (uid && uid !== user.id) recipientIds.add(uid);
-      }
-      const guideId = (roomResult.data as { guide_id?: string | null } | null)?.guide_id;
-      if (guideId && guideId !== user.id) recipientIds.add(guideId);
-
-      const recipients = Array.from(recipientIds);
+      const recipients = await resolveTourRoomMessageRecipients(
+        serviceClient,
+        roomId,
+        user.id
+      );
       if (recipients.length > 0) {
         const body = [
           `${senderLabel}: ${preview}`,

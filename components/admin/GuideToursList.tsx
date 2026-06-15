@@ -1,6 +1,5 @@
 'use client';
 
-import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
   MessageSquare,
@@ -9,7 +8,6 @@ import {
   MapPin,
   ArrowRight,
   Award,
-  Search,
 } from 'lucide-react';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import { formatDateTimeShortRu } from '@/lib/date/format-ru';
@@ -19,33 +17,20 @@ import {
   roomTourLifecycle,
 } from '@/lib/achievements/dedupe-award-rooms';
 import type { MappedGuideTourRoom } from '@/lib/admin/guide-tour-room-rows';
+import { shiftMonthKey } from '@/lib/admin/guide-tour-rooms-filters';
+import { useGuideTourRoomsFilters } from '@/hooks/useGuideTourRoomsFilters';
+import GuideTourRoomsFiltersBar, {
+  GuideTourRoomsPagination,
+} from '@/components/admin/GuideTourRoomsFiltersBar';
 
 interface GuideToursListProps {
   rooms: MappedGuideTourRoom[];
 }
 
-type TourStatusFilter = 'all' | 'active' | 'upcoming' | 'ended';
+const ROOMS_PER_PAGE = 6;
 
 export default function GuideToursList({ rooms }: GuideToursListProps) {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<TourStatusFilter>('all');
-
-  const filteredRooms = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
-    return rooms.filter((room) => {
-      const lifecycle = roomTourLifecycle(room);
-
-      if (statusFilter === 'active' && lifecycle !== 'ongoing') return false;
-      if (statusFilter === 'upcoming' && lifecycle !== 'upcoming') return false;
-      if (statusFilter === 'ended' && lifecycle !== 'ended') return false;
-
-      if (!q) return true;
-      const title = room.tour.title.toLowerCase();
-      const city = room.tour.city?.name.toLowerCase() ?? '';
-      return title.includes(q) || city.includes(q);
-    });
-  }, [rooms, searchQuery, statusFilter]);
-
+  const filters = useGuideTourRoomsFilters(rooms, ROOMS_PER_PAGE);
   const formatDate = formatDateTimeShortRu;
 
   if (rooms.length === 0) {
@@ -62,53 +47,48 @@ export default function GuideToursList({ rooms }: GuideToursListProps) {
     );
   }
 
-  const statusPills: { id: TourStatusFilter; label: string }[] = [
-    { id: 'all', label: 'Все' },
-    { id: 'active', label: 'Идёт сейчас' },
-    { id: 'upcoming', label: 'Предстоит' },
-    { id: 'ended', label: 'Завершён' },
-  ];
-
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border-2 border-gray-200 bg-white p-4 shadow-sm md:p-5">
-        <div className="relative mb-3">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Поиск по названию тура или городу…"
-            autoComplete="off"
-            className="w-full rounded-xl border-2 border-gray-200 py-2.5 pl-10 pr-3 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 md:text-base"
-          />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {statusPills.map(({ id, label }) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setStatusFilter(id)}
-              className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition md:text-sm ${
-                statusFilter === id
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <div className="space-y-6">
+      <GuideTourRoomsFiltersBar
+        accent="emerald"
+        filterSearch={filters.filterSearch}
+        onFilterSearchChange={filters.setFilterSearch}
+        lifecycleFilter={filters.lifecycleFilter}
+        onLifecycleFilterChange={filters.setLifecycleFilter}
+        monthInputValue={filters.monthInputValue}
+        onMonthChange={filters.applyMonthFilter}
+        onMonthShift={(delta) => {
+          const base = filters.monthInputValue || filters.currentMonthKey();
+          filters.applyMonthFilter(shiftMonthKey(base, delta));
+        }}
+        onTodayClick={filters.applyTodayFilter}
+        isTodayActive={filters.dateFilter === filters.currentDateKey()}
+        showClearDates={Boolean(filters.monthFilter || filters.dateFilter)}
+        onClearDates={filters.clearDateFilters}
+        hasListFilters={filters.hasListFilters}
+        onResetFilters={filters.resetListFilters}
+        filteredCount={filters.filteredRooms.length}
+        totalCount={rooms.length}
+        page={filters.page}
+        totalPages={filters.totalPages}
+        showPagination={filters.showPagination}
+        countLabel="туров"
+      />
 
-      {filteredRooms.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 py-12 text-center">
-          <p className="text-lg font-bold text-gray-800">Туры не найдены</p>
-          <p className="mt-1 text-sm text-gray-600">Измените поиск или фильтр по статусу</p>
+      {rooms.length > 0 && filters.filteredRooms.length === 0 ? (
+        <div className="rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 p-10 text-center">
+          <p className="mb-4 text-lg font-black text-gray-800">Нет туров по выбранным фильтрам</p>
+          <button
+            type="button"
+            onClick={filters.resetListFilters}
+            className="font-bold text-emerald-700 underline hover:text-emerald-800"
+          >
+            Сбросить фильтры
+          </button>
         </div>
       ) : null}
 
-      {filteredRooms.map((room) => {
+      {filters.paginatedRooms.map((room) => {
         const lifecycle = roomTourLifecycle(room);
 
         return (
@@ -215,6 +195,15 @@ export default function GuideToursList({ rooms }: GuideToursListProps) {
           </div>
         );
       })}
+
+      {filters.filteredRooms.length > 0 && filters.showPagination ? (
+        <GuideTourRoomsPagination
+          accent="emerald"
+          page={filters.page}
+          totalPages={filters.totalPages}
+          onPageChange={filters.setPage}
+        />
+      ) : null}
     </div>
   );
 }
