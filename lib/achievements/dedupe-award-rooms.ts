@@ -1,52 +1,59 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-/** Строка комнаты для страницы выдачи достижений (до дедупликации). */
+/** Строка комнаты для списков гида (до дедупликации). */
 export type AwardRoomDedupeInput = {
   id: string;
   tour_id: string;
   tour_session_id?: string | null;
+  guide_id?: string | null;
   is_active: boolean;
   created_at: string;
   participants_count: number;
   session_start_at?: string | null;
 };
 
+function roomDedupeKey(room: AwardRoomDedupeInput): string {
+  if (room.tour_session_id) {
+    return `session:${room.tour_session_id}`;
+  }
+  if (room.session_start_at) {
+    return `departure:${room.tour_id}:${room.session_start_at}`;
+  }
+  return `room:${room.id}`;
+}
+
+function roomRank(r: AwardRoomDedupeInput) {
+  return [
+    r.participants_count,
+    r.is_active ? 1 : 0,
+    new Date(r.created_at).getTime(),
+  ] as const;
+}
+
+function pickBetterRoom<T extends AwardRoomDedupeInput>(a: T, b: T): T {
+  const ra = roomRank(a);
+  const rb = roomRank(b);
+  if (ra[0] > rb[0]) return a;
+  if (ra[0] < rb[0]) return b;
+  if (ra[1] > rb[1]) return a;
+  if (ra[1] < rb[1]) return b;
+  return ra[2] >= rb[2] ? a : b;
+}
+
 /**
- * Схлопывает только настоящие дубли одного выезда (один tour_session_id).
- * Разные комнаты/выезды одного тура без session_id не объединяются.
+ * Одна карточка на выезд: по tour_session_id, иначе tour_id + start_at,
+ * иначе одна legacy-комната на tour + guide.
  */
 export function dedupeAwardRooms<T extends AwardRoomDedupeInput>(rooms: T[]): T[] {
-  const bestBySession = new Map<string, T>();
-  const passthrough: T[] = [];
+  const bestByKey = new Map<string, T>();
 
   for (const room of rooms) {
-    if (!room.tour_session_id) {
-      passthrough.push(room);
-      continue;
-    }
-
-    const key = room.tour_session_id;
-    const existing = bestBySession.get(key);
-    if (!existing) {
-      bestBySession.set(key, room);
-      continue;
-    }
-
-    const rank = (r: T) =>
-      [r.participants_count, r.is_active ? 1 : 0, new Date(r.created_at).getTime()] as const;
-
-    const a = rank(room);
-    const b = rank(existing);
-    if (
-      a[0] > b[0] ||
-      (a[0] === b[0] && a[1] > b[1]) ||
-      (a[0] === b[0] && a[1] === b[1] && a[2] > b[2])
-    ) {
-      bestBySession.set(key, room);
-    }
+    const key = roomDedupeKey(room);
+    const existing = bestByKey.get(key);
+    bestByKey.set(key, existing ? pickBetterRoom(room, existing) : room);
   }
 
-  return [...passthrough, ...bestBySession.values()].sort((a, b) => {
+  return [...bestByKey.values()].sort((a, b) => {
     const aTs = a.session_start_at
       ? new Date(a.session_start_at).getTime()
       : new Date(a.created_at).getTime();
@@ -109,6 +116,77 @@ export async function enrichRoomsWithSessionDates<
     if (!session) return room;
     return {
       ...room,
+      session_start_at: session.start_at,
+      session_end_at: session.end_at,
+    };
+  });
+}
+
+/** Привязка комнат без session_id к слотам гида в tour_sessions (1:1 по порядку). */
+export async function assignOrphanRoomsToGuideSessions<
+  T extends {
+    id: string;
+    tour_id: string;
+    tour_session_id?: string | null;
+    guide_id?: string | null;
+    created_at: string;
+    session_start_at?: string | null;
+    session_end_at?: string | null;
+  },
+>(serviceClient: SupabaseClient, rooms: T[]): Promise<T[]> {
+  const orphans = rooms.filter(
+    (r) => !r.tour_session_id && !r.session_start_at && r.guide_id
+  );
+  if (orphans.length === 0) return rooms;
+
+  const tourIds = [...new Set(orphans.map((r) => r.tour_id))];
+  const guideIds = [...new Set(orphans.map((r) => String(r.guide_id)))];
+
+  const { data, error } = await serviceClient
+    .from('tour_sessions')
+    .select('id, tour_id, guide_id, start_at, end_at')
+    .in('tour_id', tourIds)
+    .in('guide_id', guideIds)
+    .eq('status', 'active')
+    .order('start_at', { ascending: true });
+
+  if (error) {
+    console.error('[guide-tour-rooms] orphan session assign:', error.message);
+    return rooms;
+  }
+
+  type SessionRow = { id: string; tour_id: string; guide_id: string; start_at: string; end_at: string | null };
+  const sessionsByTourGuide = new Map<string, SessionRow[]>();
+  for (const row of (data ?? []) as SessionRow[]) {
+    const bucketKey = `${row.tour_id}:${row.guide_id}`;
+    const bucket = sessionsByTourGuide.get(bucketKey) ?? [];
+    bucket.push(row);
+    sessionsByTourGuide.set(bucketKey, bucket);
+  }
+
+  const sessionByRoomId = new Map<string, SessionRow>();
+
+  for (const orphan of orphans) {
+    const bucketKey = `${orphan.tour_id}:${orphan.guide_id}`;
+    const sessions = sessionsByTourGuide.get(bucketKey) ?? [];
+    if (sessions.length === 0) continue;
+
+    const sortedOrphans = orphans
+      .filter((r) => `${r.tour_id}:${r.guide_id}` === bucketKey)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const orphanIndex = sortedOrphans.findIndex((r) => r.id === orphan.id);
+    if (orphanIndex < 0) continue;
+
+    const session = sessions[Math.min(orphanIndex, sessions.length - 1)];
+    sessionByRoomId.set(orphan.id, session);
+  }
+
+  return rooms.map((room) => {
+    const session = sessionByRoomId.get(room.id);
+    if (!session) return room;
+    return {
+      ...room,
+      tour_session_id: session.id,
       session_start_at: session.start_at,
       session_end_at: session.end_at,
     };

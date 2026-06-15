@@ -3,7 +3,6 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import AwardAchievementsList from '@/components/admin/AwardAchievementsList';
 import { Award } from 'lucide-react';
 import { canIssueOfflineAchievementsInAnyRoom } from '@/lib/achievements/offline-issue-access';
-import { dedupeAwardRooms } from '@/lib/achievements/dedupe-award-rooms';
 import { loadGuideTourRooms } from '@/lib/admin/guide-tour-room-rows';
 
 export const metadata = {
@@ -35,12 +34,10 @@ export default async function AwardAchievementsPage() {
 
   const canBrowseAllRooms = canIssueOfflineAchievementsInAnyRoom(userRole);
 
-  const roomsRaw = await loadGuideTourRooms(serviceClient, {
+  const rooms = await loadGuideTourRooms(serviceClient, {
     guideId: canBrowseAllRooms ? undefined : user.id,
     limit: canBrowseAllRooms ? 200 : 100,
   });
-
-  const rooms = dedupeAwardRooms(roomsRaw);
 
   return (
     <div>

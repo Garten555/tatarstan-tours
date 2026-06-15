@@ -1,5 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import {
+  assignOrphanRoomsToGuideSessions,
+  dedupeAwardRooms,
   enrichRoomsWithSessionDates,
   parseEmbeddedSession,
 } from '@/lib/achievements/dedupe-award-rooms';
@@ -156,5 +158,7 @@ export async function loadGuideTourRooms(
   }
 
   const mapped = mapGuideTourRooms(data as RawGuideRoomRow[]);
-  return enrichRoomsWithSessionDates(serviceClient, mapped);
+  const enriched = await enrichRoomsWithSessionDates(serviceClient, mapped);
+  const backfilled = await assignOrphanRoomsToGuideSessions(serviceClient, enriched);
+  return dedupeAwardRooms(backfilled);
 }
