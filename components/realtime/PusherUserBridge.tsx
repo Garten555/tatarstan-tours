@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase/client';
 import { resolveAuthUserForUi } from '@/lib/supabase/auth-quick-client';
 import { disconnectPusherSafely } from '@/lib/pusher/safe-teardown';
 import { dispatchPusherBridge } from '@/lib/pusher/user-bridge-events';
+import type { UserNotificationRow } from '@/lib/pusher/user-notification';
 import {
   ADMIN_SYNC_PUSHER_EVENT,
   adminSyncChannelName,
@@ -92,8 +93,12 @@ export default function PusherUserBridge() {
 
       const chNotif = pusher.subscribe(`notifications-${user.id}`);
       channelNotificationsRef.current = chNotif;
-      chNotif.bind('new-notification', () => {
-        dispatchPusherBridge({ channel: 'notifications', event: 'new-notification' });
+      chNotif.bind('new-notification', (payload: { notification?: UserNotificationRow }) => {
+        dispatchPusherBridge({
+          channel: 'notifications',
+          event: 'new-notification',
+          notification: payload?.notification,
+        });
       });
 
       const chAch = pusher.subscribe(`achievements-${user.id}`);

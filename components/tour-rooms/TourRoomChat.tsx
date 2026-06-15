@@ -110,7 +110,16 @@ export function TourRoomChat({ roomId, variant = 'default' }: TourRoomChatProps)
         const exists = prev.some((msg) => msg.id === data.message.id);
         if (exists) return prev;
         if (data.message.user_id !== currentUserIdRef.current) {
-          playNotificationSound('message');
+          if (document.visibilityState === 'visible') {
+            void fetch(`/api/tour-rooms/${roomId}/viewing`, {
+              method: 'POST',
+              credentials: 'include',
+            }).then(() => {
+              window.dispatchEvent(new Event('notifications:update'));
+            });
+          } else {
+            playNotificationSound('message');
+          }
         }
         if (nearBottomRef.current || data.message.user_id === currentUserIdRef.current) {
           autoScrollNextRef.current = true;

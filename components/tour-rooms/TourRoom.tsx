@@ -13,6 +13,7 @@ import { canBanUserAsAdmin } from '@/lib/admin/can-ban-user';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import toast from 'react-hot-toast';
 import { formatDayMonthYearRu } from '@/lib/date/format-ru';
+import TourRoomViewingHeartbeat from '@/components/tour-rooms/TourRoomViewingHeartbeat';
 
 interface TourRoomProps {
   roomId: string;
@@ -183,6 +184,7 @@ export function TourRoom({
 
   return (
     <div className="fixed inset-x-0 bottom-0 top-14 z-40 flex min-h-0 flex-col bg-[#bfcbd4] sm:top-16 md:flex-row lg:top-20">
+      <TourRoomViewingHeartbeat roomId={room.id} />
       {/* Левая колонка вкладок — только desktop; ширина под короткие подписи */}
       <aside className="hidden shrink-0 flex-col items-stretch gap-1.5 border-r border-gray-400/30 bg-[#dce4ea] px-2 py-3 md:flex md:w-[108px] lg:w-[118px]">
         <div className="mb-1 px-0.5 text-center text-[10px] font-bold uppercase leading-tight tracking-wide text-gray-600">

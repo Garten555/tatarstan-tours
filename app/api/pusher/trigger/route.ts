@@ -6,6 +6,14 @@ import { sanitizeText } from '@/lib/utils/sanitize';
 import { publishUserNotification } from '@/lib/pusher/user-notification';
 import { resolveTourRoomMessageRecipients } from '@/lib/notifications/tour-room-message-recipients';
 import { requireTourRoomAccess } from '@/lib/tour-rooms/room-access';
+import {
+  getRelatedRoomIds,
+  getRoomScope,
+} from '@/lib/tour-rooms/merged-room-participants';
+import {
+  isUserViewingTourDeparture,
+  pruneStaleTourRoomViewing,
+} from '@/lib/tour-rooms/viewing-presence';
 import { rateLimit } from '@/lib/security/rate-limit';
 
 const pusher = new Pusher({
@@ -179,7 +187,17 @@ export async function POST(request: NextRequest) {
         roomId,
         user.id
       );
-      if (recipients.length > 0) {
+
+      pruneStaleTourRoomViewing();
+      const scope = await getRoomScope(serviceClient, roomId);
+      const departureRoomIds = scope
+        ? await getRelatedRoomIds(serviceClient, scope)
+        : [roomId];
+      const filteredRecipients = recipients.filter(
+        (uid) => !isUserViewingTourDeparture(uid, departureRoomIds)
+      );
+
+      if (filteredRecipients.length > 0) {
         const body = [
           `${senderLabel}: ${preview}`,
           `sender_username:${senderProfile?.username || senderLabel}`,
@@ -190,7 +208,7 @@ export async function POST(request: NextRequest) {
         const { data: notifRows, error: notifErr } = await serviceClient
           .from('notifications')
           .insert(
-            recipients.map((uid) => ({
+            filteredRecipients.map((uid) => ({
               user_id: uid,
               title: 'Новое сообщение в комнате тура',
               body,

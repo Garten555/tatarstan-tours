@@ -17,6 +17,7 @@ import {
   getNotificationHref,
   isNotificationClickable,
 } from '@/lib/notifications/notification-navigation';
+import { isViewingTourRoom } from '@/lib/tour-rooms/client-viewing';
 
 type Notification = {
   id: string;
@@ -93,6 +94,19 @@ export default function NotificationBell() {
     const onPusherBridge = (ev: Event) => {
       const d = (ev as CustomEvent<PusherBridgeDetail>).detail;
       if (!d || d.channel !== 'notifications' || d.event !== 'new-notification') return;
+
+      const notif = d.notification;
+      if (notif?.type === 'tour_room_message') {
+        const { roomId } = parseNotificationBodyMeta(notif.body);
+        if (isViewingTourRoom(roomId)) {
+          if (notif.id) {
+            void deleteNotificationRemote(notif.id);
+          }
+          window.dispatchEvent(new Event('notifications:update'));
+          return;
+        }
+      }
+
       playNotificationSound('notification');
       void loadNotifications();
     };
