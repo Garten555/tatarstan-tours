@@ -12,7 +12,7 @@ export const metadata = {
 
 export default async function AwardAchievementsPage() {
   const supabase = await createClient();
-  const serviceClient = await createServiceClient();
+  const serviceClient = createServiceClient();
 
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -37,6 +37,7 @@ export default async function AwardAchievementsPage() {
   const rooms = await loadGuideTourRooms(serviceClient, {
     guideId: canBrowseAllRooms ? undefined : user.id,
     limit: canBrowseAllRooms ? 200 : 100,
+    resolveCanonical: true,
   });
 
   return (

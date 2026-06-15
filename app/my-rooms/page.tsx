@@ -80,26 +80,12 @@ export default function MyRoomsPage() {
   const [loading, setLoading] = useState(true);
   const [roleFilter, setRoleFilter] = useState<'all' | 'guide' | 'participant'>('all');
 
-  const loadUnreadRoomMessages = useCallback(async () => {
-    try {
-      const response = await fetch('/api/notifications?mode=summary', {
-        credentials: 'include',
-      });
-      if (!response.ok) return;
-      const data = await response.json();
-      if (!data?.success) return;
-      setUnreadByRoom(data?.summary?.room_counts || {});
-    } catch {
-      // ignore
-    }
-  }, []);
-
   const loadRooms = useCallback(async () => {
     try {
       setLoading(true);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
       const response = await fetch('/api/user/rooms', {
         signal: controller.signal,
@@ -116,7 +102,7 @@ export default function MyRoomsPage() {
 
       if (data.success) {
         setRooms(data.rooms || []);
-        await loadUnreadRoomMessages();
+        setUnreadByRoom(data.unread_by_room || {});
       } else {
         console.error('Ошибка загрузки комнат:', data.error);
         alert(data.error || 'Не удалось загрузить комнаты');
@@ -131,7 +117,7 @@ export default function MyRoomsPage() {
     } finally {
       setLoading(false);
     }
-  }, [loadUnreadRoomMessages]);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

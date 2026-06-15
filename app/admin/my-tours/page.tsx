@@ -10,7 +10,7 @@ export const metadata = {
 
 export default async function MyToursPage() {
   const supabase = await createClient();
-  const serviceClient = await createServiceClient();
+  const serviceClient = createServiceClient();
 
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -30,7 +30,10 @@ export default async function MyToursPage() {
     redirect('/');
   }
 
-  const rooms = await loadGuideTourRooms(serviceClient, { guideId: user.id });
+  const rooms = await loadGuideTourRooms(serviceClient, {
+    guideId: user.id,
+    resolveCanonical: false,
+  });
 
   return (
     <div className="space-y-8">

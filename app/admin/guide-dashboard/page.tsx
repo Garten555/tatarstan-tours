@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Calendar, Users, MessageSquare, MapPin, Clock } from 'lucide-react';
 import { loadGuideTourRooms } from '@/lib/admin/guide-tour-room-rows';
 import { roomTourLifecycle } from '@/lib/achievements/dedupe-award-rooms';
+import { getTourRoomNotificationSummary } from '@/lib/notifications/tour-room-notification-summary';
 
 export const metadata = {
   title: 'Панель гида - Админ панель',
@@ -22,29 +23,19 @@ export default async function GuideDashboard() {
     redirect('/admin');
   }
 
-  const rooms = await loadGuideTourRooms(supabase, { guideId: viewer.userId });
+  const [rooms, notificationSummary] = await Promise.all([
+    loadGuideTourRooms(supabase, { guideId: viewer.userId, resolveCanonical: false }),
+    getTourRoomNotificationSummary(supabase, viewer.userId),
+  ]);
 
   const activeRooms = rooms.filter((room) => roomTourLifecycle(room) === 'ongoing');
   const upcomingRooms = rooms.filter((room) => roomTourLifecycle(room) === 'upcoming');
   const completedRooms = rooms.filter((room) => roomTourLifecycle(room) === 'ended');
 
-  const roomIds = rooms.map((r) => r.id);
   const totalParticipants = rooms.reduce(
     (sum, room) => sum + (room.participants_count ?? 0),
     0
   );
-
-  // Получаем количество непрочитанных сообщений
-  let unreadMessages = 0;
-  if (roomIds.length > 0) {
-    const { count } = await supabase
-      .from('tour_room_messages')
-      .select('*', { count: 'exact', head: true })
-      .in('room_id', roomIds)
-      .eq('is_read', false)
-      .neq('user_id', viewer.userId);
-    unreadMessages = count || 0;
-  }
 
   const stats = {
     totalRooms: rooms.length,
@@ -52,12 +43,11 @@ export default async function GuideDashboard() {
     upcomingRooms: upcomingRooms.length,
     completedRooms: completedRooms.length,
     totalParticipants,
-    unreadMessages,
+    unreadMessages: notificationSummary.tour_room_message,
   };
 
   return (
     <div className="space-y-4 sm:space-y-6 md:space-y-8">
-      {/* Заголовок */}
       <div>
         <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">Панель гида</h1>
         <p className="mt-1 sm:mt-2 text-sm sm:text-base text-gray-600">
@@ -65,7 +55,6 @@ export default async function GuideDashboard() {
         </p>
       </div>
 
-      {/* Статистика */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
         <div className="bg-white rounded-lg shadow p-4 sm:p-6">
           <div className="flex items-center justify-between">
@@ -140,7 +129,6 @@ export default async function GuideDashboard() {
         </div>
       </div>
 
-      {/* Быстрые действия */}
       <div className="bg-white rounded-lg shadow p-4 sm:p-6">
         <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4">Быстрые действия</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -169,6 +157,3 @@ export default async function GuideDashboard() {
     </div>
   );
 }
-
-
-
