@@ -1,5 +1,4 @@
 import { redirect } from 'next/navigation';
-import { createServiceClient } from '@/lib/supabase/server';
 import BookingsList from '@/components/admin/BookingsList';
 import { Calendar } from 'lucide-react';
 import { getAdminViewer } from '@/lib/admin/get-admin-viewer';
@@ -19,41 +18,8 @@ export default async function BookingsPage() {
     redirect('/admin');
   }
 
-  const serviceClient = createServiceClient();
-
-  const { data: bookings, error } = await serviceClient
-    .from('bookings')
-    .select(`
-      *,
-      departure_start_at,
-      departure_end_at,
-      schedule_superseded_at,
-      user:profiles!bookings_user_id_fkey(
-        id,
-        first_name,
-        last_name,
-        email
-      ),
-      tour_session:tour_sessions!bookings_session_id_fkey(
-        start_at,
-        end_at
-      ),
-      tour:tours!bookings_tour_id_fkey(
-        id,
-        title,
-        slug,
-        start_date,
-        end_date,
-        status,
-        price_per_person
-      )
-    `)
-    .order('created_at', { ascending: false })
-    .limit(500);
-
   return (
     <div>
-      {/* Заголовок в стиле главной страницы */}
       <div className="mb-8 py-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="px-3 py-1.5 bg-blue-100/50 border border-blue-200/50 rounded-xl">
@@ -69,27 +35,7 @@ export default async function BookingsPage() {
         </p>
       </div>
 
-      <BookingsList 
-        bookings={bookings || []} 
-        error={error}
-      />
+      <BookingsList />
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

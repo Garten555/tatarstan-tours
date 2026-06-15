@@ -1,22 +1,15 @@
 'use client';
 
-import { useState } from 'react';
-import { 
-  Calendar, 
-  User, 
-  MapPin, 
-  Coins, 
-  CreditCard, 
-  Banknote, 
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Calendar,
+  CreditCard,
+  Banknote,
   QrCode,
-  CheckCircle2,
   XCircle,
-  Clock,
   Search,
-  Filter,
-  MoreVertical,
   Eye,
-  Edit
+  Loader2,
 } from 'lucide-react';
 import Link from 'next/link';
 import {
@@ -25,6 +18,7 @@ import {
 } from '@/lib/bookings/review-eligibility';
 import { canCancelBooking } from '@/lib/bookings/booking-cancellation';
 import { getTourPageHrefForBooking } from '@/lib/tours/booking-tour-link';
+import { GuideTourRoomsPagination } from '@/components/admin/GuideTourRoomsFiltersBar';
 
 interface Booking {
   id: string;
@@ -58,6 +52,13 @@ interface Booking {
   tour_session?: { start_at?: string | null; end_at?: string | null } | null;
 }
 
+type BookingsSummary = {
+  total: number;
+  pending: number;
+  confirmed: number;
+  paid: number;
+};
+
 function bookingForStatus(b: Booking): BookingForReview {
   const tour_session = Array.isArray(b.tour_session)
     ? b.tour_session[0] ?? null
@@ -77,45 +78,72 @@ function effectiveStatus(b: Booking): string {
   return getEffectiveBookingStatus(bookingForStatus(b));
 }
 
-interface BookingsListProps {
-  bookings: Booking[];
-  error: any;
-}
-
 type BookingStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded';
 
-export default function BookingsList({ bookings, error }: BookingsListProps) {
+const BOOKINGS_PER_PAGE = 20;
+
+export default function BookingsList() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<BookingStatus | 'all'>('all');
   const [paymentFilter, setPaymentFilter] = useState<PaymentStatus | 'all'>('all');
+  const [page, setPage] = useState(1);
+  const [items, setItems] = useState<Booking[]>([]);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [summary, setSummary] = useState<BookingsSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-  const [items, setItems] = useState<Booking[]>(bookings);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
 
-  if (error) {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <p className="text-red-800">Ошибка загрузки бронирований: {error.message}</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, paymentFilter]);
 
-  // Фильтрация бронирований
-  const filteredBookings = items.filter((booking) => {
-    const matchesSearch = 
-      booking.user?.first_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      booking.user?.last_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      booking.user?.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      booking.tour?.title?.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesStatus = statusFilter === 'all' || effectiveStatus(booking) === statusFilter;
-    const matchesPayment = paymentFilter === 'all' || booking.payment_status === paymentFilter;
+  const loadBookings = useCallback(async () => {
+    try {
+      setLoading(true);
+      setFetchError(null);
+      const params = new URLSearchParams({
+        page: String(page),
+        limit: String(BOOKINGS_PER_PAGE),
+        search: debouncedSearch,
+        status: statusFilter,
+        payment_status: paymentFilter,
+        summary: page === 1 ? '1' : '0',
+      });
+      const response = await fetch(`/api/admin/bookings/list?${params}`);
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || 'Не удалось загрузить бронирования');
+      }
+      setItems((data.bookings ?? []) as Booking[]);
+      setTotal(data.total ?? 0);
+      setTotalPages(data.totalPages ?? 0);
+      if (data.summary) {
+        setSummary(data.summary as BookingsSummary);
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки бронирований:', error);
+      setFetchError((error as Error).message || 'Ошибка загрузки');
+      setItems([]);
+      setTotal(0);
+      setTotalPages(0);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, debouncedSearch, statusFilter, paymentFilter]);
 
-    return matchesSearch && matchesStatus && matchesPayment;
-  });
+  useEffect(() => {
+    void loadBookings();
+  }, [loadBookings]);
 
-  // Форматирование даты
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('ru-RU', {
@@ -127,7 +155,6 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
     });
   };
 
-  // Получение цвета статуса
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       pending: 'bg-yellow-100 text-yellow-800',
@@ -138,7 +165,6 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
 
-  // Получение цвета статуса оплаты
   const getPaymentStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       pending: 'bg-yellow-100 text-yellow-800',
@@ -149,7 +175,6 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
     return colors[status] || 'bg-gray-100 text-gray-800';
   };
 
-  // Получение иконки способа оплаты
   const getPaymentIcon = (method: string) => {
     switch (method) {
       case 'card':
@@ -163,7 +188,6 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
     }
   };
 
-  // Получение названия способа оплаты
   const getPaymentMethodLabel = (method: string) => {
     const methods: Record<string, string> = {
       card: 'Карта',
@@ -173,7 +197,6 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
     return methods[method] || method;
   };
 
-  // Получение названия статуса
   const getStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
       pending: 'Ожидает',
@@ -184,7 +207,6 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
     return labels[status] || status;
   };
 
-  // Получение названия статуса оплаты
   const getPaymentStatusLabel = (status: string) => {
     const labels: Record<string, string> = {
       pending: 'Ожидает оплаты',
@@ -223,12 +245,22 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
     }
   };
 
+  const showPagination = totalPages > 1;
+  const hasFilters =
+    Boolean(debouncedSearch) || statusFilter !== 'all' || paymentFilter !== 'all';
+
+  if (fetchError && !loading && items.length === 0) {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <p className="text-red-800">Ошибка загрузки бронирований: {fetchError}</p>
+      </div>
+    );
+  }
+
   return (
     <div>
-      {/* Фильтры и поиск */}
       <div className="bg-white border-b border-gray-100 mb-8 py-6 px-4 md:px-6 lg:px-8 -mx-4 md:-mx-6 lg:-mx-8 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] lg:w-[calc(100%+4rem)]">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Поиск */}
           <div className="relative">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-6 h-6 text-gray-400" />
             <input
@@ -239,8 +271,6 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
               className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-base"
             />
           </div>
-
-          {/* Фильтр по статусу */}
           <div>
             <select
               value={statusFilter}
@@ -254,8 +284,6 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
               <option value="completed">Завершено</option>
             </select>
           </div>
-
-          {/* Фильтр по оплате */}
           <div>
             <select
               value={paymentFilter}
@@ -272,166 +300,185 @@ export default function BookingsList({ bookings, error }: BookingsListProps) {
         </div>
       </div>
 
-      {/* Статистика */}
       <div className="bg-white border-b border-gray-100 mb-8 py-6 px-4 md:px-6 lg:px-8 -mx-4 md:-mx-6 lg:-mx-8 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] lg:w-[calc(100%+4rem)]">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm p-6 hover:shadow-xl hover:border-blue-400 transition-all duration-200">
             <div className="text-sm font-bold text-gray-600 uppercase tracking-wide mb-2">Всего бронирований</div>
-            <div className="text-4xl font-black text-gray-900">{items.length}</div>
+            <div className="text-4xl font-black text-gray-900">{summary?.total ?? '—'}</div>
           </div>
           <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm p-6 hover:shadow-xl hover:border-yellow-400 transition-all duration-200">
             <div className="text-sm font-bold text-gray-600 uppercase tracking-wide mb-2">Ожидают подтверждения</div>
-            <div className="text-4xl font-black text-yellow-600">
-              {items.filter((b) => effectiveStatus(b) === 'pending').length}
-            </div>
+            <div className="text-4xl font-black text-yellow-600">{summary?.pending ?? '—'}</div>
           </div>
           <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm p-6 hover:shadow-xl hover:border-green-400 transition-all duration-200">
             <div className="text-sm font-bold text-gray-600 uppercase tracking-wide mb-2">Подтверждено</div>
-            <div className="text-4xl font-black text-green-600">
-              {items.filter((b) => effectiveStatus(b) === 'confirmed').length}
-            </div>
+            <div className="text-4xl font-black text-green-600">{summary?.confirmed ?? '—'}</div>
           </div>
           <div className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm p-6 hover:shadow-xl hover:border-emerald-400 transition-all duration-200">
             <div className="text-sm font-bold text-gray-600 uppercase tracking-wide mb-2">Оплачено</div>
-            <div className="text-4xl font-black text-emerald-600">
-              {items.filter(b => b.payment_status === 'paid').length}
-            </div>
+            <div className="text-4xl font-black text-emerald-600">{summary?.paid ?? '—'}</div>
           </div>
         </div>
       </div>
 
-      {/* Список бронирований */}
       <div className="bg-white border-b border-gray-100 py-6 px-4 md:px-6 lg:px-8 -mx-4 md:-mx-6 lg:-mx-8 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] lg:w-[calc(100%+4rem)]">
-        {filteredBookings.length === 0 ? (
+        {loading ? (
+          <div className="flex items-center justify-center py-16 gap-3 text-gray-600">
+            <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            <span className="text-lg font-semibold">Загрузка бронирований...</span>
+          </div>
+        ) : items.length === 0 ? (
           <div className="text-center py-12">
             <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-xl font-black text-gray-900">Бронирования не найдены</p>
+            <p className="text-xl font-black text-gray-900">
+              {hasFilters ? 'Бронирования не найдены по фильтрам' : 'Бронирования не найдены'}
+            </p>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border-2 border-gray-200">
-            <table className="w-full">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
-                    Пользователь
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
-                    Тур
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
-                    Дата бронирования
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
-                    Участники
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
-                    Сумма
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
-                    Оплата
-                  </th>
-                  <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
-                    Статус
-                  </th>
-                  <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 uppercase tracking-wider">
-                    Действия
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {filteredBookings.map((booking) => (
-                  <tr key={booking.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-base font-semibold text-gray-900">
-                          {booking.user?.first_name} {booking.user?.last_name}
-                        </div>
-                        <div className="text-sm text-gray-600">{booking.user?.email}</div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Link
-                        href={getTourPageHrefForBooking({
-                          ...bookingForStatus(booking),
-                          id: booking.id,
-                          schedule_superseded_at: booking.schedule_superseded_at,
-                          tour: booking.tour,
-                        })}
-                        className="text-base text-emerald-600 hover:text-emerald-700 font-bold transition-colors"
-                      >
-                        {booking.tour?.title}
-                      </Link>
-                      <div className="text-sm text-gray-600 mt-1">
-                        {booking.departure_start_at
-                          ? formatDate(booking.departure_start_at)
-                          : formatDate(booking.tour?.start_date || '')}
-                        {booking.schedule_superseded_at && (
-                          <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-xs font-semibold">
-                            прошлый выезд
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-base text-gray-700">
-                      {formatDate(booking.created_at)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-base font-bold text-gray-900">
-                      {booking.num_people}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-base font-black text-gray-900">
-                        {parseFloat(booking.total_price.toString()).toLocaleString('ru-RU')} ₽
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center gap-2">
-                        <div className="text-emerald-600">
-                          {getPaymentIcon(booking.payment_method)}
-                        </div>
+          <>
+            <div className="overflow-x-auto rounded-xl border-2 border-gray-200">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
+                      Пользователь
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
+                      Тур
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
+                      Дата бронирования
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
+                      Участники
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
+                      Сумма
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
+                      Оплата
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-bold text-gray-700 uppercase tracking-wider">
+                      Статус
+                    </th>
+                    <th className="px-6 py-4 text-right text-sm font-bold text-gray-700 uppercase tracking-wider">
+                      Действия
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {items.map((booking) => (
+                    <tr key={booking.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
                         <div>
                           <div className="text-base font-semibold text-gray-900">
-                            {getPaymentMethodLabel(booking.payment_method)}
+                            {booking.user?.first_name} {booking.user?.last_name}
                           </div>
-                          <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-bold ${getPaymentStatusColor(booking.payment_status)}`}>
-                            {getPaymentStatusLabel(booking.payment_status)}
-                          </span>
+                          <div className="text-sm text-gray-600">{booking.user?.email}</div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-bold ${getStatusColor(effectiveStatus(booking))}`}>
-                        {getStatusLabel(effectiveStatus(booking))}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right">
-                      <div className="flex items-center justify-end gap-3">
+                      </td>
+                      <td className="px-6 py-4">
                         <Link
-                          href={`/admin/bookings/${booking.id}`}
-                          className="text-emerald-600 hover:text-emerald-700 inline-flex items-center gap-2 font-bold text-base transition-colors"
+                          href={getTourPageHrefForBooking({
+                            ...bookingForStatus(booking),
+                            id: booking.id,
+                            schedule_superseded_at: booking.schedule_superseded_at,
+                            tour: booking.tour,
+                          })}
+                          className="text-base text-emerald-600 hover:text-emerald-700 font-bold transition-colors"
                         >
-                          <Eye className="w-5 h-5" />
-                          Подробнее
+                          {booking.tour?.title}
                         </Link>
-                        {canCancelBooking(bookingForStatus(booking)) && (
-                          <button
-                            onClick={() => handleCancel(booking.id)}
-                            disabled={cancellingId === booking.id}
-                            className="text-rose-600 hover:text-rose-700 inline-flex items-center gap-2 font-bold text-base disabled:opacity-50 transition-colors"
+                        <div className="text-sm text-gray-600 mt-1">
+                          {booking.departure_start_at
+                            ? formatDate(booking.departure_start_at)
+                            : formatDate(booking.tour?.start_date || '')}
+                          {booking.schedule_superseded_at && (
+                            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-xs font-semibold">
+                              прошлый выезд
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-base text-gray-700">
+                        {formatDate(booking.created_at)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-base font-bold text-gray-900">
+                        {booking.num_people}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-base font-black text-gray-900">
+                          {parseFloat(booking.total_price.toString()).toLocaleString('ru-RU')} ₽
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-2">
+                          <div className="text-emerald-600">
+                            {getPaymentIcon(booking.payment_method)}
+                          </div>
+                          <div>
+                            <div className="text-base font-semibold text-gray-900">
+                              {getPaymentMethodLabel(booking.payment_method)}
+                            </div>
+                            <span
+                              className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-bold ${getPaymentStatusColor(booking.payment_status)}`}
+                            >
+                              {getPaymentStatusLabel(booking.payment_status)}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center px-3 py-1.5 rounded-lg text-sm font-bold ${getStatusColor(effectiveStatus(booking))}`}
+                        >
+                          {getStatusLabel(effectiveStatus(booking))}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <div className="flex items-center justify-end gap-3">
+                          <Link
+                            href={`/admin/bookings/${booking.id}`}
+                            className="text-emerald-600 hover:text-emerald-700 inline-flex items-center gap-2 font-bold text-base transition-colors"
                           >
-                            <XCircle className="w-5 h-5" />
-                            {cancellingId === booking.id ? 'Отмена...' : 'Отменить'}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                            <Eye className="w-5 h-5" />
+                            Подробнее
+                          </Link>
+                          {canCancelBooking(bookingForStatus(booking)) && (
+                            <button
+                              onClick={() => handleCancel(booking.id)}
+                              disabled={cancellingId === booking.id}
+                              className="text-rose-600 hover:text-rose-700 inline-flex items-center gap-2 font-bold text-base disabled:opacity-50 transition-colors"
+                            >
+                              <XCircle className="w-5 h-5" />
+                              {cancellingId === booking.id ? 'Отмена...' : 'Отменить'}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {showPagination ? (
+              <div className="mt-8 flex flex-col items-center gap-3">
+                <p className="text-sm text-gray-600">
+                  Показано {(page - 1) * BOOKINGS_PER_PAGE + 1}–
+                  {Math.min(page * BOOKINGS_PER_PAGE, total)} из {total}
+                </p>
+                <GuideTourRoomsPagination
+                  accent="emerald"
+                  page={page}
+                  totalPages={totalPages}
+                  onPageChange={setPage}
+                />
+              </div>
+            ) : null}
+          </>
         )}
       </div>
     </div>
   );
 }
-

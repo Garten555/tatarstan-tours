@@ -1,15 +1,17 @@
 // API для получения всех комнат туров (для админов)
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { listAdminTourRooms } from '@/lib/admin/admin-tour-rooms-list';
+import type { GuideTourLifecycleFilter } from '@/lib/admin/guide-tour-rooms-filters';
 
 // GET /api/admin/tour-rooms
-// Получить все комнаты туров (только для админов)
+// Получить комнаты туров с фильтрами и пагинацией (только для админов)
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const serviceClient = await createServiceClient();
-    
-    // Проверка авторизации
+    const serviceClient = createServiceClient();
+    const searchParams = request.nextUrl.searchParams;
+
     const {
       data: { user },
       error: authError,
@@ -22,7 +24,6 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Проверяем права админа
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
@@ -44,76 +45,29 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Получаем комнаты с данными туров, слотов и гидов (без лишних полей)
-    const { data: rooms, error: roomsError } = await serviceClient
-      .from('tour_rooms')
-      .select(`
-        id,
-        tour_id,
-        tour_session_id,
-        guide_id,
-        is_active,
-        created_at,
-        tour:tours(
-          id,
-          slug,
-          title,
-          start_date,
-          end_date,
-          cover_image,
-          city:cities(name)
-        ),
-        session:tour_sessions!tour_rooms_tour_session_id_fkey(
-          id,
-          start_at,
-          end_at
-        ),
-        guide:profiles!tour_rooms_guide_id_fkey(
-          id,
-          first_name,
-          last_name,
-          email
-        ),
-        participants:tour_room_participants(count)
-      `)
-      .order('created_at', { ascending: false })
-      .limit(500);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(Math.max(1, parseInt(searchParams.get('limit') || '10', 10)), 50);
+    const search = searchParams.get('search') || '';
+    const lifecycle = (searchParams.get('lifecycle') || 'all') as GuideTourLifecycleFilter | 'all';
+    const month = searchParams.get('month') || '';
+    const date = searchParams.get('date') || '';
+    const guide = (searchParams.get('guide') || 'all') as 'all' | 'assigned' | 'none';
+    const participants = (searchParams.get('participants') || 'all') as 'all' | 'with' | 'empty';
 
-    if (roomsError) {
-      console.error('Ошибка получения комнат:', roomsError);
-      return NextResponse.json(
-        { error: 'Не удалось получить комнаты' },
-        { status: 500 }
-      );
-    }
-
-    interface RoomData {
-      id: string;
-      [key: string]: unknown;
-    }
-
-    // Добавляем счетчики к комнатам
-    const roomsWithCounts = (rooms || []).map((room: RoomData) => {
-      const rawSession = (room as { session?: unknown }).session;
-      const session = Array.isArray(rawSession) ? rawSession[0] ?? null : rawSession;
-      const rawParticipants = (room as { participants?: { count?: unknown }[] | null }).participants;
-      let participants_count = 0;
-      if (Array.isArray(rawParticipants) && rawParticipants.length > 0) {
-        const n = rawParticipants[0]?.count;
-        participants_count =
-          typeof n === 'number' ? n : typeof n === 'string' ? parseInt(n, 10) || 0 : 0;
-      }
-      const { participants: _drop, ...rest } = room as RoomData & { participants?: unknown };
-      return {
-        ...rest,
-        session,
-        participants_count,
-      };
+    const result = await listAdminTourRooms(serviceClient, {
+      page,
+      limit,
+      search,
+      lifecycle,
+      month,
+      date,
+      guide,
+      participants,
     });
 
     return NextResponse.json({
       success: true,
-      rooms: roomsWithCounts,
+      ...result,
     });
   } catch (error) {
     console.error('Ошибка получения комнат:', error);
@@ -129,7 +83,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const serviceClient = await createServiceClient();
+    const serviceClient = createServiceClient();
     
     // Проверка авторизации
     const {

@@ -1,7 +1,7 @@
 // Страница управления комнатами туров и назначения гидов
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { 
   Users, 
@@ -87,8 +87,12 @@ function tourPublicViewHref(room: TourRoom): string {
 export default function TourRoomsPage() {
   const [rooms, setRooms] = useState<TourRoom[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filteredTotal, setFilteredTotal] = useState(0);
+  const [catalogTotal, setCatalogTotal] = useState(0);
+  const [serverTotalPages, setServerTotalPages] = useState(0);
   const [guideFilter, setGuideFilter] = useState<'all' | 'assigned' | 'none'>('all');
   const [participantsFilter, setParticipantsFilter] = useState<'all' | 'with' | 'empty'>('all');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedRoom, setSelectedRoom] = useState<string | null>(null);
   const [assigningGuide, setAssigningGuide] = useState(false);
   interface User {
@@ -114,42 +118,52 @@ export default function TourRoomsPage() {
   const [confirmDialog, setConfirmDialog] = useState<TourRoomsConfirm>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
 
-  const roomsForFilters = useMemo(
-    () =>
-      rooms.map((room) => ({
-        ...room,
-        session_start_at: room.session?.start_at ?? null,
-        session_end_at: room.session?.end_at ?? null,
-      })),
-    [rooms]
-  );
+  const filters = useGuideTourRoomsFilters([], ROOMS_PER_PAGE);
 
-  const postFilter = useCallback(
-    (list: typeof roomsForFilters) =>
-      list.filter((room) => {
-        const count = room.participants_count ?? 0;
-        if (guideFilter === 'assigned' && !room.guide_id) return false;
-        if (guideFilter === 'none' && room.guide_id) return false;
-        if (participantsFilter === 'with' && count === 0) return false;
-        if (participantsFilter === 'empty' && count > 0) return false;
-        return true;
-      }),
-    [guideFilter, participantsFilter]
-  );
+  const loadRooms = useCallback(async (opts?: { silent?: boolean }) => {
+    try {
+      if (!opts?.silent) setLoading(true);
+      const params = new URLSearchParams({
+        page: String(filters.page),
+        limit: String(ROOMS_PER_PAGE),
+        search: debouncedSearch,
+        lifecycle: filters.lifecycleFilter,
+        guide: guideFilter,
+        participants: participantsFilter,
+      });
+      if (filters.dateFilter) {
+        params.set('date', filters.dateFilter);
+      } else if (filters.monthFilter) {
+        params.set('month', filters.monthFilter);
+      }
+      const response = await fetch(`/api/admin/tour-rooms?${params}`);
+      const data = await response.json();
 
-  const searchExtra = useCallback((room: TourRoom, q: string) => {
-    const guideEmail = room.guide?.email?.toLowerCase() ?? '';
-    return (
-      (room.guide?.first_name.toLowerCase().includes(q) ?? false) ||
-      (room.guide?.last_name.toLowerCase().includes(q) ?? false) ||
-      guideEmail.includes(q)
-    );
-  }, []);
+      if (data.success) {
+        setRooms(data.rooms || []);
+        setFilteredTotal(data.total ?? 0);
+        setCatalogTotal(data.catalogTotal ?? data.total ?? 0);
+        setServerTotalPages(data.totalPages ?? 0);
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки комнат:', error);
+    } finally {
+      if (!opts?.silent) setLoading(false);
+    }
+  }, [
+    filters.page,
+    filters.lifecycleFilter,
+    filters.monthFilter,
+    filters.dateFilter,
+    debouncedSearch,
+    guideFilter,
+    participantsFilter,
+  ]);
 
-  const filters = useGuideTourRoomsFilters(roomsForFilters, ROOMS_PER_PAGE, {
-    postFilter,
-    searchExtra,
-  });
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(filters.filterSearch.trim()), 300);
+    return () => clearTimeout(t);
+  }, [filters.filterSearch]);
 
   useEffect(() => {
     filters.setPage(1);
@@ -157,7 +171,7 @@ export default function TourRoomsPage() {
 
   useEffect(() => {
     void loadRooms();
-  }, []);
+  }, [loadRooms]);
 
   useBodyScrollLock(showUserSelect || showCreateRoom);
 
@@ -169,22 +183,6 @@ export default function TourRoomsPage() {
     } finally {
       setConfirmBusy(false);
       setConfirmDialog(null);
-    }
-  };
-
-  const loadRooms = async (opts?: { silent?: boolean }) => {
-    try {
-      if (!opts?.silent) setLoading(true);
-      const response = await fetch('/api/admin/tour-rooms');
-      const data = await response.json();
-      
-      if (data.success) {
-        setRooms(data.rooms || []);
-      }
-    } catch (error) {
-      console.error('Ошибка загрузки комнат:', error);
-    } finally {
-      if (!opts?.silent) setLoading(false);
     }
   };
 
@@ -239,12 +237,7 @@ export default function TourRoomsPage() {
       const data = await response.json();
       
       if (data.success) {
-        if (data.room) {
-          const nr = data.room as TourRoom;
-          setRooms((prev) => [...prev, { ...nr, participants_count: nr.participants_count ?? 0 }]);
-        } else {
-          await loadRooms({ silent: true });
-        }
+        await loadRooms({ silent: true });
         setShowCreateRoom(false);
         setSelectedTourId(null);
       } else {
@@ -322,7 +315,7 @@ export default function TourRoomsPage() {
           }
 
           if ((data as { success?: boolean }).success) {
-            setRooms((prev) => prev.filter((r) => r.id !== roomId));
+            await loadRooms({ silent: true });
             toast.success('Комната удалена');
           } else {
             toast.error((data as { error?: string }).error || 'Не удалось удалить комнату');
@@ -407,9 +400,7 @@ export default function TourRoomsPage() {
     });
   };
 
-  const filteredRooms = filters.filteredRooms;
-  const paginatedRooms = filters.paginatedRooms;
-  const totalFiltered = filteredRooms.length;
+  const showPagination = filteredTotal > ROOMS_PER_PAGE && serverTotalPages > 1;
   const hasModeratorFilters = guideFilter !== 'all' || participantsFilter !== 'all';
 
   const resetAllFilters = () => {
@@ -527,11 +518,11 @@ export default function TourRoomsPage() {
         onClearDates={filters.clearDateFilters}
         hasListFilters={filters.hasListFilters || hasModeratorFilters}
         onResetFilters={resetAllFilters}
-        filteredCount={filteredRooms.length}
-        totalCount={rooms.length}
+        filteredCount={filteredTotal}
+        totalCount={catalogTotal}
         page={filters.page}
-        totalPages={filters.totalPages}
-        showPagination={filters.showPagination}
+        totalPages={Math.max(1, serverTotalPages)}
+        showPagination={showPagination}
         countLabel="комнат"
       />
       <div className="bg-white border-b border-gray-100 mb-8 py-4 px-4 md:px-6 lg:px-8 -mx-4 md:-mx-6 lg:-mx-8 w-[calc(100%+2rem)] md:w-[calc(100%+3rem)] lg:w-[calc(100%+4rem)]">
@@ -596,7 +587,7 @@ export default function TourRoomsPage() {
               />
             ))}
           </div>
-        ) : filteredRooms.length === 0 ? (
+        ) : filteredTotal === 0 ? (
           <div className="text-center py-12">
             <DoorOpen className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-xl font-black text-gray-900">
@@ -608,7 +599,7 @@ export default function TourRoomsPage() {
         ) : (
           <>
           <div className="space-y-4">
-            {paginatedRooms.map((room) => (
+            {rooms.map((room) => (
               <div key={room.id} className="bg-white rounded-2xl border-2 border-gray-200 shadow-sm hover:shadow-xl hover:border-emerald-400 p-6 transition-all duration-200">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="flex min-w-0 flex-1 gap-4">
@@ -714,12 +705,12 @@ export default function TourRoomsPage() {
             ))}
           </div>
 
-          {totalFiltered > 0 && filters.showPagination ? (
+          {showPagination ? (
             <div className="mt-8">
               <GuideTourRoomsPagination
                 accent="emerald"
                 page={filters.page}
-                totalPages={filters.totalPages}
+                totalPages={Math.max(1, serverTotalPages)}
                 onPageChange={filters.setPage}
               />
             </div>
