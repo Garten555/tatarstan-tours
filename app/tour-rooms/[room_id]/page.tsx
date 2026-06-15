@@ -2,6 +2,7 @@
 import { TourRoom } from '@/components/tour-rooms/TourRoom';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import { getTourRoomAccess } from '@/lib/tour-rooms/room-access';
 
 interface TourRoomPageProps {
   params: Promise<{ room_id: string }>;
@@ -48,30 +49,16 @@ export default async function TourRoomPage({ params }: TourRoomPageProps) {
     );
   }
 
-  // Проверяем доступ: участник, гид или админ
-  const { data: participant } = await serviceClient
-    .from('tour_room_participants')
-    .select('id')
-    .eq('room_id', room_id)
-    .eq('user_id', user.id)
-    .single();
-
-  // Проверяем права админа
   const { data: profile } = await supabase
     .from('profiles')
     .select('role')
     .eq('id', user.id)
     .single();
 
-  const isAdmin =
-    profile?.role === 'tour_admin' ||
-    profile?.role === 'super_admin' ||
-    profile?.role === 'support_admin';
-  const isGuide = (room as any).guide_id === user.id;
-  const isParticipant = !!participant;
+  const viewerRole = (profile as { role?: string } | null)?.role ?? 'user';
+  const access = await getTourRoomAccess(serviceClient, room_id, user.id, viewerRole);
 
-  // Если не участник, не гид и не админ - доступ запрещен
-  if (!isParticipant && !isGuide && !isAdmin) {
+  if (!access?.isParticipant && !access?.isGuide && !access?.isAdmin) {
     return (
       <div className="flex min-h-below-header items-center justify-center bg-[#f0f2f5] px-4 py-16 pt-site-header box-border">
         <div className="max-w-md rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
@@ -81,10 +68,12 @@ export default async function TourRoomPage({ params }: TourRoomPageProps) {
     );
   }
 
+  const isGuide = access.isGuide;
+  const isAdmin = access.isAdmin;
+
   const guideRel = (room as { guide?: { id?: string; role?: string | null; is_banned?: boolean | null } | { id?: string; role?: string | null; is_banned?: boolean | null }[] })
     .guide;
   const guideProfile = Array.isArray(guideRel) ? guideRel[0] : guideRel;
-  const viewerRole = (profile as { role?: string } | null)?.role ?? 'user';
 
   return (
     <TourRoom

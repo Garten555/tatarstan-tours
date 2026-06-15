@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { S3_CONFIG } from '@/lib/s3/client';
+import { requireTourRoomAccess } from '@/lib/tour-rooms/room-access';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -53,30 +54,16 @@ export async function GET(
 
     const { room_id, media_id } = await params;
 
-    const { data: room } = await serviceClient
-      .from('tour_rooms')
-      .select('guide_id')
-      .eq('id', room_id)
-      .single();
-
-    const { data: participant } = await serviceClient
-      .from('tour_room_participants')
-      .select('id')
-      .eq('room_id', room_id)
-      .eq('user_id', user.id)
-      .maybeSingle();
-
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
 
-    const isAdmin =
-      profile?.role === 'tour_admin' ||
-      profile?.role === 'super_admin' ||
-      profile?.role === 'support_admin';
-    const isGuide = room?.guide_id === user.id;
-    const isParticipant = !!participant;
-
-    if (!isParticipant && !isGuide && !isAdmin) {
-      return NextResponse.json({ error: 'У вас нет доступа к этой комнате' }, { status: 403 });
+    const accessCheck = await requireTourRoomAccess(
+      serviceClient,
+      room_id,
+      user.id,
+      profile?.role
+    );
+    if (!accessCheck.allowed) {
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
     }
 
     const { data: media, error: mediaError } = await serviceClient

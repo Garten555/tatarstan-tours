@@ -5,6 +5,7 @@ import { syncGuideRoomParticipant } from '@/lib/tour-rooms/sync-guide-participan
 import { canBypassRoomParticipantCheck } from '@/lib/achievements/offline-issue-access';
 import { dedupeParticipantsByUserId } from '@/lib/tour-rooms/dedupe-participants';
 import { fetchMergedRoomParticipants } from '@/lib/tour-rooms/merged-room-participants';
+import { requireTourRoomAccess } from '@/lib/tour-rooms/room-access';
 
 // GET /api/tour-rooms/[room_id]/participants
 export async function GET(
@@ -35,13 +36,6 @@ export async function GET(
       return NextResponse.json({ error: 'Комната не найдена' }, { status: 404 });
     }
 
-    const { data: participant } = await serviceClient
-      .from('tour_room_participants')
-      .select('id')
-      .eq('room_id', scope.id)
-      .eq('user_id', user.id)
-      .maybeSingle();
-
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
@@ -50,11 +44,15 @@ export async function GET(
 
     const canViewAllParticipants =
       canBypassRoomParticipantCheck(profile?.role) || profile?.role === 'support_admin';
-    const isGuide = scope.guide_id === user.id;
-    const isParticipant = !!participant;
 
-    if (!isParticipant && !isGuide && !canViewAllParticipants) {
-      return NextResponse.json({ error: 'У вас нет доступа к этой комнате' }, { status: 403 });
+    const accessCheck = await requireTourRoomAccess(
+      serviceClient,
+      room_id,
+      user.id,
+      profile?.role
+    );
+    if (!accessCheck.allowed && !canViewAllParticipants) {
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
     }
 
     let participantsList = mergedParticipants;

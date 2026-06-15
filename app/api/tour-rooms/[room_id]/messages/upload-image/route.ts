@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { uploadFileToS3, generateUniqueFileName } from '@/lib/s3/upload';
+import { requireTourRoomAccess } from '@/lib/tour-rooms/room-access';
 
 // Максимальный размер файла
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -36,16 +37,11 @@ export async function POST(
     }
     console.log('[Message Image Upload] User authenticated:', user.id);
 
-    // Проверяем доступ к комнате
-    const [roomResult, participantResult, profileResult] = await Promise.all([
-      serviceClient.from('tour_rooms').select('guide_id').eq('id', room_id).maybeSingle(),
-      serviceClient.from('tour_room_participants').select('id').eq('room_id', room_id).eq('user_id', user.id).maybeSingle(),
-      supabase.from('profiles').select('role, is_banned, ban_until, ban_reason').eq('id', user.id).maybeSingle(),
-    ]);
-
-    const room = roomResult.data;
-    const participant = participantResult.data;
-    const profile = profileResult.data;
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, is_banned, ban_until, ban_reason')
+      .eq('id', user.id)
+      .maybeSingle();
 
     const isAdmin =
       profile?.role === 'tour_admin' ||
@@ -74,14 +70,17 @@ export async function POST(
       }
     }
 
-    const isGuide = room?.guide_id === user.id;
-    const isParticipant = !!participant;
-
-    if (!isParticipant && !isGuide && !isAdmin) {
+    const accessCheck = await requireTourRoomAccess(
+      serviceClient,
+      room_id,
+      user.id,
+      profile?.role
+    );
+    if (!accessCheck.allowed) {
       console.error('[Message Image Upload] Access denied');
       return NextResponse.json(
-        { error: 'У вас нет доступа к этой комнате' },
-        { status: 403 }
+        { error: accessCheck.error },
+        { status: accessCheck.status }
       );
     }
 

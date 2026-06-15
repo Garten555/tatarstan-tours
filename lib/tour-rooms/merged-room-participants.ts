@@ -18,6 +18,8 @@ type RoomScope = {
   guide_id: string | null;
 };
 
+export type { RoomScope };
+
 export async function getRoomScope(
   serviceClient: SupabaseClient,
   roomId: string

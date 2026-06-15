@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { uploadFileToS3, generateUniqueFileName } from '@/lib/s3/upload';
+import { requireTourRoomAccess } from '@/lib/tour-rooms/room-access';
 
 // Максимальный размер файла
 const MAX_FILE_SIZE = {
@@ -40,39 +41,22 @@ export async function GET(
       );
     }
 
-    // Получаем комнату для проверки guide_id
-    const { data: room } = await serviceClient
-      .from('tour_rooms')
-      .select('guide_id')
-      .eq('id', room_id)
-      .single();
-
-    // Проверяем доступ к комнате: участник, гид или админ
-    const { data: participant } = await serviceClient
-      .from('tour_room_participants')
-      .select('id')
-      .eq('room_id', room_id)
-      .eq('user_id', user.id)
-      .single();
-
-    // Проверяем права админа
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    const isAdmin =
-      profile?.role === 'tour_admin' ||
-      profile?.role === 'super_admin' ||
-      profile?.role === 'support_admin';
-    const isGuide = room?.guide_id === user.id;
-    const isParticipant = !!participant;
-
-    if (!isParticipant && !isGuide && !isAdmin) {
+    const accessCheck = await requireTourRoomAccess(
+      serviceClient,
+      room_id,
+      user.id,
+      profile?.role
+    );
+    if (!accessCheck.allowed) {
       return NextResponse.json(
-        { error: 'У вас нет доступа к этой комнате' },
-        { status: 403 }
+        { error: accessCheck.error },
+        { status: accessCheck.status }
       );
     }
 
@@ -177,43 +161,31 @@ export async function POST(
     }
     console.log('[Media Upload] User authenticated:', user.id);
 
-    // Получаем комнату для проверки guide_id
     const { data: room } = await serviceClient
       .from('tour_rooms')
       .select('guide_id, tour:tours(id, end_date)')
       .eq('id', room_id)
       .single();
 
-    // Проверяем доступ к комнате: участник, гид или админ
-    const { data: participant } = await serviceClient
-      .from('tour_room_participants')
-      .select('id')
-      .eq('room_id', room_id)
-      .eq('user_id', user.id)
-      .single();
-
-    // Проверяем права админа
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    const isAdmin =
-      profile?.role === 'tour_admin' ||
-      profile?.role === 'super_admin' ||
-      profile?.role === 'support_admin';
-    const isGuide = room?.guide_id === user.id;
-    const isParticipant = !!participant;
-
-    if (!isParticipant && !isGuide && !isAdmin) {
+    const accessCheck = await requireTourRoomAccess(
+      serviceClient,
+      room_id,
+      user.id,
+      profile?.role
+    );
+    if (!accessCheck.allowed) {
       return NextResponse.json(
-        { error: 'У вас нет доступа к этой комнате' },
-        { status: 403 }
+        { error: accessCheck.error },
+        { status: accessCheck.status }
       );
     }
 
-    // room уже получен выше, используем его
     if (!room) {
       return NextResponse.json(
         { error: 'Комната не найдена' },

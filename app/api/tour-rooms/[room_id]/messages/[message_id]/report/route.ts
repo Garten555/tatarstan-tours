@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { publishAdminModerationChanged } from '@/lib/pusher/data-sync';
+import { requireTourRoomAccess } from '@/lib/tour-rooms/room-access';
 
 function isMissingReportsTable(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
@@ -64,20 +65,11 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const reason = typeof body?.reason === 'string' ? body.reason.trim() : null;
 
-    const [roomResult, participantResult, profileResult, messageLookup] = await Promise.all([
-      serviceClient.from('tour_rooms').select('guide_id').eq('id', room_id).single(),
-      serviceClient
-        .from('tour_room_participants')
-        .select('id')
-        .eq('room_id', room_id)
-        .eq('user_id', user.id)
-        .maybeSingle(),
+    const [profileResult, messageLookup] = await Promise.all([
       supabase.from('profiles').select('role').eq('id', user.id).single(),
       loadMessageInRoom(serviceClient, room_id, message_id),
     ]);
 
-    const { data: room } = roomResult;
-    const { data: participant } = participantResult;
     const { data: profile } = profileResult;
     const { data: messageRow, error: messageError } = messageLookup;
 
@@ -93,15 +85,14 @@ export async function POST(
       return NextResponse.json({ error: 'Сообщение не найдено' }, { status: 404 });
     }
 
-    const isAdmin =
-      profile?.role === 'tour_admin' ||
-      profile?.role === 'super_admin' ||
-      profile?.role === 'support_admin';
-    const isGuide = room?.guide_id === user.id;
-    const isParticipant = !!participant;
-
-    if (!isParticipant && !isGuide && !isAdmin) {
-      return NextResponse.json({ error: 'У вас нет доступа к этой комнате' }, { status: 403 });
+    const accessCheck = await requireTourRoomAccess(
+      serviceClient,
+      room_id,
+      user.id,
+      profile?.role
+    );
+    if (!accessCheck.allowed) {
+      return NextResponse.json({ error: accessCheck.error }, { status: accessCheck.status });
     }
 
     if (messageRow.user_id === user.id) {

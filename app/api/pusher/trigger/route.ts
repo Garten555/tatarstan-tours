@@ -5,6 +5,7 @@ import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
 import { publishUserNotification } from '@/lib/pusher/user-notification';
 import { resolveTourRoomMessageRecipients } from '@/lib/notifications/tour-room-message-recipients';
+import { requireTourRoomAccess } from '@/lib/tour-rooms/room-access';
 import { rateLimit } from '@/lib/security/rate-limit';
 
 const pusher = new Pusher({
@@ -56,37 +57,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Проверяем доступ к комнате
-    const { data: room } = await serviceClient
-      .from('tour_rooms')
-      .select('guide_id')
-      .eq('id', roomId)
-      .single();
-
-    const { data: participant } = await serviceClient
-      .from('tour_room_participants')
-      .select('id')
-      .eq('room_id', roomId)
-      .eq('user_id', user.id)
-      .single();
-
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    const isAdmin =
-      profile?.role === 'tour_admin' ||
-      profile?.role === 'super_admin' ||
-      profile?.role === 'support_admin';
-    const isGuide = room?.guide_id === user.id;
-    const isParticipant = !!participant;
-
-    if (!isParticipant && !isGuide && !isAdmin) {
+    const accessCheck = await requireTourRoomAccess(
+      serviceClient,
+      roomId,
+      user.id,
+      profile?.role
+    );
+    if (!accessCheck.allowed) {
       return NextResponse.json(
-        { error: 'У вас нет доступа к этой комнате' },
-        { status: 403 }
+        { error: accessCheck.error },
+        { status: accessCheck.status }
       );
     }
 
