@@ -2,6 +2,23 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { sanitizeText } from '@/lib/utils/sanitize';
 import { getEffectiveBookingStatus, type BookingForReview } from '@/lib/bookings/review-eligibility';
 
+const BOOKING_SUMMARY_SELECT = `
+  status,
+  payment_status,
+  departure_start_at,
+  departure_end_at,
+  schedule_superseded_at,
+  tour_session:tour_sessions!bookings_session_id_fkey(
+    start_at,
+    end_at
+  ),
+  tour:tours!bookings_tour_id_fkey(
+    status,
+    start_date,
+    end_date
+  )
+`;
+
 const BOOKING_SELECT = `
   *,
   departure_start_at,
@@ -181,28 +198,59 @@ export async function listAdminBookings(
   };
 }
 
+function normalizeSummaryRow(row: Record<string, unknown>): BookingForReview {
+  const tour = Array.isArray(row.tour) ? row.tour[0] : row.tour;
+  const tour_session = Array.isArray(row.tour_session) ? row.tour_session[0] : row.tour_session;
+  return {
+    status: String(row.status ?? ''),
+    departure_start_at: row.departure_start_at as string | null | undefined,
+    departure_end_at: row.departure_end_at as string | null | undefined,
+    schedule_superseded_at: row.schedule_superseded_at as string | null | undefined,
+    tour_session: tour_session as BookingForReview['tour_session'],
+    tour: tour as BookingForReview['tour'],
+  };
+}
+
 export async function getAdminBookingsSummary(serviceClient: SupabaseClient) {
-  const [{ count: total }, { count: pending }, { count: confirmed }, { count: paid }] =
-    await Promise.all([
-      serviceClient.from('bookings').select('*', { count: 'exact', head: true }),
-      serviceClient
-        .from('bookings')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending'),
-      serviceClient
-        .from('bookings')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'confirmed'),
-      serviceClient
-        .from('bookings')
-        .select('*', { count: 'exact', head: true })
-        .eq('payment_status', 'paid'),
-    ]);
+  const [{ count: total }, { count: paid }] = await Promise.all([
+    serviceClient.from('bookings').select('*', { count: 'exact', head: true }),
+    serviceClient
+      .from('bookings')
+      .select('*', { count: 'exact', head: true })
+      .eq('payment_status', 'paid'),
+  ]);
+
+  let pending = 0;
+  let confirmed = 0;
+  const batchSize = 250;
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await serviceClient
+      .from('bookings')
+      .select(BOOKING_SUMMARY_SELECT)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + batchSize - 1);
+
+    if (error) throw error;
+
+    const batch = (data ?? []) as Record<string, unknown>[];
+    if (batch.length === 0) break;
+
+    for (const row of batch) {
+      const effective = getEffectiveBookingStatus(normalizeSummaryRow(row));
+      if (effective === 'pending') pending += 1;
+      if (effective === 'confirmed') confirmed += 1;
+    }
+
+    offset += batchSize;
+    if (batch.length < batchSize) break;
+  }
 
   return {
     total: total ?? 0,
-    pending: pending ?? 0,
-    confirmed: confirmed ?? 0,
+    pending,
+    confirmed,
     paid: paid ?? 0,
   };
 }
