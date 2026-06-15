@@ -24,6 +24,8 @@ type TourScheduleBookingProps = {
   sessions?: TourSessionOption[];
   shareTitle?: string;
   viewerUserId?: string | null;
+  /** Слоты, где viewer — назначенный гид (из tour_sessions и tour_rooms) */
+  viewerGuideSessionIds?: string[];
   /** Для тура без слотов в БД — гид назначен на комнату/слот */
   viewerBlockedLegacyTourGuide?: boolean;
 };
@@ -39,6 +41,7 @@ export default function TourScheduleBooking({
   sessions: sessionsProp,
   shareTitle,
   viewerUserId = null,
+  viewerGuideSessionIds = [],
   viewerBlockedLegacyTourGuide = false,
 }: TourScheduleBookingProps) {
   const ctx = useTourSessions();
@@ -92,7 +95,8 @@ export default function TourScheduleBooking({
     Boolean(viewerUserId) &&
     (isLegacyTourSessionId(selected.id)
       ? viewerBlockedLegacyTourGuide
-      : selected.guide_id === viewerUserId);
+      : viewerGuideSessionIds.includes(selected.id) ||
+        selected.guide_id === viewerUserId);
 
   const dateBlock =
     validSessions.length === 1 ? (
@@ -129,7 +133,11 @@ export default function TourScheduleBooking({
         >
           {validSessions.map((s) => {
             const spots = sessionAvailableSpots(s);
-            const disabled = spots <= 0;
+            const isOwnGuideSlot =
+              Boolean(viewerUserId) &&
+              !isLegacyTourSessionId(s.id) &&
+              (viewerGuideSessionIds.includes(s.id) || s.guide_id === viewerUserId);
+            const disabled = spots <= 0 || isOwnGuideSlot;
             const active = s.id === selected.id;
             const label = formatSessionShort(s.start_at);
             return (
@@ -152,7 +160,9 @@ export default function TourScheduleBooking({
                 >
                   <span className="font-bold text-gray-900">{label}</span>
                   <span className="mt-1 block text-xs text-gray-600 leading-snug">
-                    {spots > 0 ? (
+                    {isOwnGuideSlot ? (
+                      <span className="font-semibold text-amber-800">Вы гид этого выезда</span>
+                    ) : spots > 0 ? (
                       <>
                         Свободно:{' '}
                         <span className="font-semibold text-emerald-700">{spots}</span> из{' '}

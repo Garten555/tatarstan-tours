@@ -26,7 +26,10 @@ import {
 import { syncSessionCurrentParticipants } from '@/lib/tour/session-participants';
 import { formatDateTimeShortRu } from '@/lib/date/format-ru';
 import { isBookingDeparturePast } from '@/lib/bookings/booking-completion';
-import { isUserAssignedGuideForBooking } from '@/lib/bookings/guide-own-tour';
+import {
+  getUserGuidedSessionIdsForTour,
+  isUserAssignedGuideForBooking,
+} from '@/lib/bookings/guide-own-tour';
 
 interface TourPageProps {
   params: Promise<{ slug: string }>;
@@ -464,6 +467,10 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
     : tourDurationLabel(t.start_date, t.end_date ?? null);
 
   const hasLegacyBookingSession = tourSessions.some((s) => isLegacyTourSessionId(s.id));
+  const viewerGuideSessionIds =
+    user && !showBookingSidebar
+      ? await getUserGuidedSessionIdsForTour(supabase, user.id, t.id)
+      : [];
   const viewerBlockedLegacyTourGuide =
     user && hasLegacyBookingSession && !showBookingSidebar
       ? await isUserAssignedGuideForBooking(supabase, user.id, t.id, null)
@@ -500,6 +507,7 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
                 tourCurrentParticipants={t.current_participants || 0}
                 shareTitle={t.title}
                 viewerUserId={user?.id ?? null}
+                viewerGuideSessionIds={viewerGuideSessionIds}
                 viewerBlockedLegacyTourGuide={viewerBlockedLegacyTourGuide}
               />
             )}

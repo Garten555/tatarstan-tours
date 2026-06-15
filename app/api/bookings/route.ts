@@ -138,10 +138,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (await isUserAssignedGuideForBooking(serviceClient, user.id, tour_id, session_id)) {
-      return NextResponse.json({ error: GUIDE_OWN_TOUR_ERROR }, { status: 400 });
-    }
-
     const { data: userActiveBookingsRaw, error: userBookingsError } = await serviceClient
       .from('bookings')
       .select(USER_SCHEDULE_BOOKING_SELECT)
@@ -272,6 +268,18 @@ export async function POST(request: NextRequest) {
           );
         }
       }
+    }
+
+    const bookingSessionId = sessionRow?.id ?? (tourHasSessions ? session_id : null);
+    if (
+      await isUserAssignedGuideForBooking(
+        serviceClient,
+        user.id,
+        tour_id,
+        bookingSessionId
+      )
+    ) {
+      return NextResponse.json({ error: GUIDE_OWN_TOUR_ERROR }, { status: 400 });
     }
 
     const departureStartAt = sessionRow
