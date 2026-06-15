@@ -89,27 +89,27 @@ function participantCountFromEmbed(raw: RawGuideRoomRow['participants']): number
 }
 
 export function mapGuideTourRooms(rawRows: RawGuideRoomRow[] | null | undefined): MappedGuideTourRoom[] {
-  return (rawRows ?? [])
-    .map((room) => {
-      const tour =
-        Array.isArray(room.tour) && room.tour.length > 0
-          ? room.tour[0]
-          : room.tour && !Array.isArray(room.tour)
-            ? room.tour
-            : null;
+  return (rawRows ?? []).flatMap((room): MappedGuideTourRoom[] => {
+    const tour =
+      Array.isArray(room.tour) && room.tour.length > 0
+        ? room.tour[0]
+        : room.tour && !Array.isArray(room.tour)
+          ? room.tour
+          : null;
 
-      if (!tour) return null;
+    if (!tour) return [];
 
-      const sessionEmbed = parseEmbeddedSession(room.session);
-      const city = tour.city
-        ? Array.isArray(tour.city) && tour.city.length > 0
-          ? { name: String(tour.city[0].name) }
-          : !Array.isArray(tour.city)
-            ? { name: String(tour.city.name) }
-            : undefined
-        : undefined;
+    const sessionEmbed = parseEmbeddedSession(room.session);
+    const city = tour.city
+      ? Array.isArray(tour.city) && tour.city.length > 0
+        ? { name: String(tour.city[0].name) }
+        : !Array.isArray(tour.city)
+          ? { name: String(tour.city.name) }
+          : undefined
+      : undefined;
 
-      return {
+    return [
+      {
         id: String(room.id),
         tour_id: String(room.tour_id),
         tour_session_id: room.tour_session_id ? String(room.tour_session_id) : null,
@@ -127,9 +127,9 @@ export function mapGuideTourRooms(rawRows: RawGuideRoomRow[] | null | undefined)
           cover_image: tour.cover_image ? String(tour.cover_image) : null,
           city,
         },
-      };
-    })
-    .filter((room): room is MappedGuideTourRoom => room !== null);
+      },
+    ];
+  });
 }
 
 export async function loadGuideTourRooms(
