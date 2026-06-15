@@ -747,23 +747,10 @@ export default function UserMenu() {
               </Link>
             </div>
             
-            {/* Админ-панель (для админов и гидов) */}
+            {/* Админ-панель (отдельно от «Мои комнаты» в разделе Социальные) */}
             {(isAdmin || showGuidePanel) && (
               <div className="header-user-dropdown-section">
                 <div className="header-user-dropdown-section-title">Администрирование</div>
-                {/* Комнаты туров только для гидов (не админов), так как у админов есть админ-панель */}
-                {showGuidePanel && !isAdmin && (
-                  <Link
-                    href="/admin/tour-rooms"
-                    onClick={() => setIsOpen(false)}
-                    className="header-user-dropdown-item header-user-dropdown-item-admin"
-                  >
-                    <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
-                      <DoorOpen className="header-user-dropdown-icon header-user-dropdown-icon-emerald" />
-                    </div>
-                    <span className="header-user-dropdown-text">Комнаты туров</span>
-                  </Link>
-                )}
                 <Link
                   href="/admin"
                   prefetch={false}
@@ -773,7 +760,9 @@ export default function UserMenu() {
                   <div className="header-user-dropdown-icon-wrapper header-user-dropdown-icon-wrapper-emerald">
                     <Shield className="header-user-dropdown-icon header-user-dropdown-icon-emerald" />
                   </div>
-                  <span className="header-user-dropdown-text">Админ-панель</span>
+                  <span className="header-user-dropdown-text">
+                    {showGuidePanel && !isAdmin ? 'Панель гида' : 'Админ-панель'}
+                  </span>
                 </Link>
               </div>
             )}

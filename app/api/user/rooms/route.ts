@@ -1,32 +1,23 @@
 // API для получения всех комнат пользователя (как участника и как гида)
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { loadGuideTourRooms } from '@/lib/admin/guide-tour-room-rows';
 
 export async function GET(request: NextRequest) {
   try {
-    console.log('[User Rooms API] Request received');
     const supabase = await createClient();
-    const serviceClient = createServiceClient();
-    
-    // Проверка авторизации
+    const serviceClient = await createServiceClient();
+
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      console.error('[User Rooms API] Auth error:', authError);
-      return NextResponse.json(
-        { error: 'Необходима авторизация' },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: 'Необходима авторизация' }, { status: 401 });
     }
 
-    console.log('[User Rooms API] User authenticated:', user.id);
-
-    // Получаем комнаты параллельно
-    const [participantResult, guideResult] = await Promise.all([
-      // Участник: сначала получаем room_id
+    const [participantResult, guideRoomsLoaded] = await Promise.all([
       serviceClient
         .from('tour_room_participants')
         .select('room_id')
@@ -35,7 +26,7 @@ export async function GET(request: NextRequest) {
           if (result.error || !result.data || result.data.length === 0) {
             return { data: [], error: result.error };
           }
-          const roomIds = result.data.map((p: any) => p.room_id);
+          const roomIds = result.data.map((p: { room_id: string }) => p.room_id);
           const roomsResult = await serviceClient
             .from('tour_rooms')
             .select(`
@@ -48,149 +39,140 @@ export async function GET(request: NextRequest) {
               guide:profiles!tour_rooms_guide_id_fkey(id, first_name, last_name, avatar_url)
             `)
             .in('id', roomIds);
-          
-          // Загружаем города отдельно для оптимизации
+
           if (roomsResult.data) {
-            const tourIds = roomsResult.data.map((r: any) => r.tour?.id).filter(Boolean);
+            const tourIds = (roomsResult.data as { tour?: { id?: string } | { id?: string }[] | null }[])
+              .map((r) => {
+                const t = r.tour;
+                if (Array.isArray(t)) return t[0]?.id;
+                return t?.id;
+              })
+              .filter(Boolean) as string[];
             if (tourIds.length > 0) {
               const { data: toursWithCities } = await serviceClient
                 .from('tours')
                 .select('id, city:cities(name)')
                 .in('id', tourIds);
-              
+
               if (toursWithCities) {
-                const cityMap = new Map(toursWithCities.map((t: any) => [t.id, t.city]));
-                roomsResult.data.forEach((room: any) => {
-                  if (room.tour) {
+                const cityMap = new Map(
+                  toursWithCities.map((t: { id: string; city?: unknown }) => [t.id, t.city])
+                );
+                for (const room of roomsResult.data as { tour?: { id?: string; city?: unknown } | null }[]) {
+                  if (room.tour && !Array.isArray(room.tour) && room.tour.id) {
                     room.tour.city = cityMap.get(room.tour.id);
                   }
-                });
+                }
               }
             }
           }
-          return { data: roomsResult.data?.map((r: any) => ({ room_id: r.id, room: r })) || [], error: roomsResult.error };
+
+          return {
+            data:
+              roomsResult.data?.map((r: { id: string }) => ({
+                room_id: r.id,
+                room: r,
+              })) || [],
+            error: roomsResult.error,
+          };
         }),
-      // Гид: получаем комнаты напрямую
-      serviceClient
-        .from('tour_rooms')
-        .select(`
-          id,
-          tour_id,
-          guide_id,
-          is_active,
-          created_at,
-          tour:tours(id, title, slug, start_date, end_date, cover_image),
-          guide:profiles!tour_rooms_guide_id_fkey(id, first_name, last_name, avatar_url)
-        `)
-        .eq('guide_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(50)
-        .then(async (result) => {
-          // Загружаем города отдельно
-          if (result.data) {
-            const tourIds = result.data.map((r: any) => r.tour?.id).filter(Boolean);
-            if (tourIds.length > 0) {
-              const { data: toursWithCities } = await serviceClient
-                .from('tours')
-                .select('id, city:cities(name)')
-                .in('id', tourIds);
-              
-              if (toursWithCities) {
-                const cityMap = new Map(toursWithCities.map((t: any) => [t.id, t.city]));
-                result.data.forEach((room: any) => {
-                  if (room.tour) {
-                    room.tour.city = cityMap.get(room.tour.id);
-                  }
-                });
-              }
-            }
-          }
-          return result;
-        }),
+      loadGuideTourRooms(serviceClient, { guideId: user.id, limit: 100 }),
     ]);
 
     const participantRooms = participantResult.data || [];
-    const participantError = participantResult.error;
-    const guideRooms = guideResult.data || [];
-    const guideError = guideResult.error;
+    const roomsMap = new Map<string, Record<string, unknown>>();
 
-    if (participantError) {
-      console.error('[User Rooms API] Participant rooms error:', participantError);
-    }
-    if (guideError) {
-      console.error('[User Rooms API] Guide rooms error:', guideError);
-    }
-
-    // Продолжаем даже если есть ошибки (может быть просто нет комнат)
-    console.log('[User Rooms API] Participant rooms found:', participantRooms?.length || 0);
-    console.log('[User Rooms API] Guide rooms found:', guideRooms?.length || 0);
-
-    // Объединяем комнаты и убираем дубликаты
-    const roomsMap = new Map<string, any>();
-    
-    // Добавляем комнаты где пользователь участник
-    if (participantRooms && Array.isArray(participantRooms)) {
-      participantRooms.forEach((pr: any) => {
-        if (pr && pr.room && pr.room.id) {
-          roomsMap.set(pr.room.id, {
-            ...pr.room,
-            role: 'participant',
-          });
-        }
-      });
-    }
-    
-    // Добавляем комнаты где пользователь гид (перезаписывает если уже есть)
-    if (guideRooms && Array.isArray(guideRooms)) {
-      guideRooms.forEach((gr: any) => {
-        if (gr && gr.id) {
-          roomsMap.set(gr.id, {
-            ...gr,
-            role: 'guide',
-          });
-        }
-      });
-    }
-
-    // Получаем счетчики участников для всех комнат
-    const roomIds = Array.from(roomsMap.keys());
-    let participantsCounts: Record<string, number> = {};
-    
-    if (roomIds.length > 0) {
-      const { data: participantsData } = await serviceClient
-        .from('tour_room_participants')
-        .select('room_id')
-        .in('room_id', roomIds);
-      
-      if (participantsData) {
-        participantsData.forEach((p: any) => {
-          participantsCounts[p.room_id] = (participantsCounts[p.room_id] || 0) + 1;
+    for (const pr of participantRooms) {
+      const row = pr as { room?: Record<string, unknown> & { id?: string } };
+      if (row?.room?.id) {
+        roomsMap.set(String(row.room.id), {
+          ...row.room,
+          role: 'participant',
         });
       }
     }
 
-    // Формируем финальный список комнат
+    for (const gr of guideRoomsLoaded) {
+      roomsMap.set(gr.id, {
+        id: gr.id,
+        tour_id: gr.tour_id,
+        guide_id: gr.guide_id,
+        is_active: gr.is_active,
+        created_at: gr.created_at,
+        session_start_at: gr.session_start_at,
+        session_end_at: gr.session_end_at,
+        tour: {
+          ...gr.tour,
+          slug: (gr.tour as { slug?: string }).slug ?? '',
+        },
+        guide: null,
+        role: 'guide',
+        participants_count: gr.participants_count,
+      });
+    }
+
+    const roomIds = Array.from(roomsMap.keys());
+    let participantsCounts: Record<string, number> = {};
+
+    if (roomIds.length > 0) {
+      const needsCount = [...roomsMap.values()].some(
+        (r) => typeof r.participants_count !== 'number'
+      );
+      if (needsCount) {
+        const { data: participantsData } = await serviceClient
+          .from('tour_room_participants')
+          .select('room_id')
+          .in('room_id', roomIds);
+
+        if (participantsData) {
+          for (const p of participantsData as { room_id: string }[]) {
+            participantsCounts[p.room_id] = (participantsCounts[p.room_id] || 0) + 1;
+          }
+        }
+      }
+    }
+
     const rooms = Array.from(roomsMap.values())
-      .filter((room: any) => room && room.id) // Фильтруем валидные комнаты
-      .map((room: any) => ({
-        id: room.id,
-        tour_id: room.tour_id,
-        guide_id: room.guide_id,
-        is_active: room.is_active,
-        created_at: room.created_at || new Date().toISOString(),
-        role: room.role, // 'participant' или 'guide'
-        tour: room.tour,
-        guide: room.guide,
-        participants_count: participantsCounts[room.id] || 0,
-      }));
+      .filter((room) => room && room.id)
+      .map((room) => {
+        const id = String(room.id);
+        const tour = room.tour as Record<string, unknown> | null | undefined;
+        const sessionStart = room.session_start_at as string | null | undefined;
+        const displayStart =
+          sessionStart ||
+          (tour?.start_date ? String(tour.start_date) : null);
+
+        return {
+          id,
+          tour_id: room.tour_id,
+          guide_id: room.guide_id ?? null,
+          is_active: room.is_active,
+          created_at: room.created_at || new Date().toISOString(),
+          role: room.role,
+          tour: tour
+            ? {
+                ...tour,
+                start_date: displayStart ?? tour.start_date,
+              }
+            : null,
+          guide: room.guide ?? null,
+          participants_count:
+            typeof room.participants_count === 'number'
+              ? room.participants_count
+              : participantsCounts[id] || 0,
+          session_start_at: sessionStart ?? null,
+        };
+      });
 
     const sortedRooms = rooms.sort((a, b) => {
-      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
-      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
-      return dateB - dateA;
+      const aStart = a.tour?.start_date
+        ? new Date(String(a.tour.start_date)).getTime()
+        : new Date(String(a.created_at)).getTime();
+      const bStart = b.tour?.start_date
+        ? new Date(String(b.tour.start_date)).getTime()
+        : new Date(String(b.created_at)).getTime();
+      return bStart - aStart;
     });
-
-    console.log('[User Rooms API] Returning rooms:', sortedRooms.length);
 
     return NextResponse.json({
       success: true,
@@ -198,10 +180,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('Ошибка получения комнат пользователя:', error);
-    return NextResponse.json(
-      { error: 'Внутренняя ошибка сервера' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Внутренняя ошибка сервера' }, { status: 500 });
   }
 }
-

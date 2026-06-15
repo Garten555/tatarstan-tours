@@ -44,6 +44,7 @@ interface Room {
     avatar_url: string | null;
   } | null;
   participants_count: number;
+  session_start_at?: string | null;
 }
 
 export default function MyRoomsPage() {
@@ -206,7 +207,8 @@ export default function MyRoomsPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {rooms.map((room) => {
-              const daysUntil = room.tour ? getDaysUntil(room.tour.start_date) : null;
+              const tourStart = room.session_start_at || room.tour?.start_date;
+              const daysUntil = tourStart ? getDaysUntil(tourStart) : null;
               const isUpcoming = daysUntil !== null && daysUntil > 0;
               const isToday = daysUntil === 0;
               const isPast = daysUntil !== null && daysUntil < 0;
@@ -283,7 +285,14 @@ export default function MyRoomsPage() {
                         )}
                         <div className="flex items-center gap-2 text-gray-700 text-base">
                           <Calendar className="w-5 h-5 text-emerald-600" />
-                          <span className="font-semibold">{formatDate(room.tour.start_date)}</span>
+                          <span className="font-semibold">
+                            {formatDate(tourStart || room.tour.start_date)}
+                          </span>
+                          {room.session_start_at ? (
+                            <span className="rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-800">
+                              Выезд
+                            </span>
+                          ) : null}
                         </div>
                         {room.tour.end_date && (
                           <div className="flex items-center gap-2 text-gray-600 text-sm ml-7">
