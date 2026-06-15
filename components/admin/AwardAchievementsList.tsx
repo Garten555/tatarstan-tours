@@ -1,7 +1,18 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { Award, Users, Calendar, MapPin, Loader2, Search, ChevronDown } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Award,
+  Users,
+  Calendar,
+  MapPin,
+  Loader2,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  X,
+} from 'lucide-react';
 import toast from 'react-hot-toast';
 import { escapeHtml } from '@/lib/utils/sanitize';
 import { formatDateTimeShortRu } from '@/lib/date/format-ru';
@@ -54,6 +65,26 @@ interface AwardAchievementsListProps {
 
 type TourLifecycle = 'ongoing' | 'upcoming' | 'ended';
 
+const ROOMS_PER_PAGE = 6;
+
+function tourStartMonthKey(iso: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Moscow',
+    year: 'numeric',
+    month: '2-digit',
+  }).format(new Date(iso));
+}
+
+function shiftMonthKey(key: string, delta: number): string {
+  const [y, m] = key.split('-').map(Number);
+  const d = new Date(Date.UTC(y, m - 1 + delta, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function currentMonthKey(): string {
+  return tourStartMonthKey(new Date().toISOString());
+}
+
 function tourLifecycle(room: Room): TourLifecycle {
   const ended = room.tour.end_date ? new Date(room.tour.end_date) < new Date() : false;
   const started = new Date(room.tour.start_date) <= new Date();
@@ -75,24 +106,45 @@ export default function AwardAchievementsList({
   const [awarding, setAwarding] = useState(false);
   const [filterSearch, setFilterSearch] = useState('');
   const [lifecycleFilter, setLifecycleFilter] = useState<'all' | TourLifecycle>('all');
+  const [monthFilter, setMonthFilter] = useState('');
+  const [page, setPage] = useState(1);
 
   const filteredRooms = useMemo(() => {
     const q = filterSearch.trim().toLowerCase();
     return rooms.filter((room) => {
       if (lifecycleFilter !== 'all' && tourLifecycle(room) !== lifecycleFilter) return false;
+      if (monthFilter && tourStartMonthKey(room.tour.start_date) !== monthFilter) return false;
       if (!q) return true;
       const title = room.tour.title.toLowerCase();
       const city = (room.tour.city?.name ?? '').toLowerCase();
       return title.includes(q) || city.includes(q);
     });
-  }, [rooms, filterSearch, lifecycleFilter]);
+  }, [rooms, filterSearch, lifecycleFilter, monthFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredRooms.length / ROOMS_PER_PAGE));
+
+  const paginatedRooms = useMemo(() => {
+    const safePage = Math.min(Math.max(1, page), totalPages);
+    const start = (safePage - 1) * ROOMS_PER_PAGE;
+    return filteredRooms.slice(start, start + ROOMS_PER_PAGE);
+  }, [filteredRooms, page, totalPages]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filterSearch, lifecycleFilter, monthFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   const hasListFilters =
-    Boolean(filterSearch.trim()) || lifecycleFilter !== 'all';
+    Boolean(filterSearch.trim()) || lifecycleFilter !== 'all' || Boolean(monthFilter);
 
   const resetListFilters = () => {
     setFilterSearch('');
     setLifecycleFilter('all');
+    setMonthFilter('');
+    setPage(1);
   };
 
   const formatDate = formatDateTimeShortRu;
@@ -206,23 +258,23 @@ export default function AwardAchievementsList({
             </button>
           )}
         </div>
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-          <label className="relative flex-1 min-w-0">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:flex-wrap">
+          <label className="relative flex-1 min-w-0 lg:min-w-[14rem]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
             <input
               type="search"
               value={filterSearch}
               onChange={(e) => setFilterSearch(e.target.value)}
               placeholder="Поиск по названию тура или городу…"
-              className="w-full rounded-xl border-2 border-gray-200 py-3 pl-11 pr-4 text-base outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30"
+              className="w-full rounded-xl border-2 border-gray-200 py-3 pl-11 pr-4 text-base outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
             />
           </label>
-          <label className="flex w-full flex-col gap-1 text-sm lg:w-56">
+          <label className="flex w-full flex-col gap-1 text-sm lg:w-48">
             <span className="font-bold text-gray-700">Статус тура</span>
             <select
               value={lifecycleFilter}
               onChange={(e) => setLifecycleFilter(e.target.value as 'all' | TourLifecycle)}
-              className="rounded-xl border-2 border-gray-200 px-4 py-3 text-base font-semibold outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/30"
+              className="rounded-xl border-2 border-gray-200 px-4 py-3 text-base font-semibold outline-none transition focus:border-amber-500 focus:ring-2 focus:ring-amber-500/30"
             >
               <option value="all">Все</option>
               <option value="ongoing">Идёт сейчас</option>
@@ -230,17 +282,76 @@ export default function AwardAchievementsList({
               <option value="ended">Завершены</option>
             </select>
           </label>
+          <div className="flex w-full flex-col gap-1 text-sm lg:w-auto">
+            <span className="font-bold text-gray-700">Месяц выезда (МСК)</span>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const base = monthFilter || currentMonthKey();
+                  setMonthFilter(shiftMonthKey(base, -1));
+                }}
+                className="inline-flex items-center justify-center rounded-xl border-2 border-gray-200 bg-white px-3 py-2.5 text-gray-700 shadow-sm transition hover:border-amber-400 hover:text-amber-800"
+                aria-label="Предыдущий месяц"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+              <input
+                type="month"
+                value={monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value)}
+                className="min-w-[10.5rem] rounded-xl border-2 border-gray-200 bg-white px-3 py-2.5 text-base font-bold text-gray-900 shadow-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/30"
+                aria-label="Месяц тура"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const base = monthFilter || currentMonthKey();
+                  setMonthFilter(shiftMonthKey(base, 1));
+                }}
+                className="inline-flex items-center justify-center rounded-xl border-2 border-gray-200 bg-white px-3 py-2.5 text-gray-700 shadow-sm transition hover:border-amber-400 hover:text-amber-800"
+                aria-label="Следующий месяц"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setMonthFilter(currentMonthKey())}
+                className="rounded-xl border-2 border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-bold text-amber-900 transition hover:bg-amber-100"
+              >
+                Сегодня
+              </button>
+              {monthFilter ? (
+                <button
+                  type="button"
+                  onClick={() => setMonthFilter('')}
+                  className="inline-flex items-center gap-1 rounded-xl border-2 border-gray-200 px-3 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50"
+                >
+                  <X className="h-4 w-4" />
+                  Все месяцы
+                </button>
+              ) : null}
+            </div>
+          </div>
         </div>
-        {hasListFilters && (
-          <p className="mt-3 text-sm font-semibold text-gray-600">
-            Показано:{' '}
-            <span className="tabular-nums text-gray-900">{filteredRooms.length}</span> из{' '}
-            <span className="tabular-nums text-gray-900">{rooms.length}</span>
-          </p>
-        )}
+        <p className="mt-3 text-sm font-semibold text-gray-600">
+          {hasListFilters ? (
+            <>
+              Найдено:{' '}
+              <span className="tabular-nums font-black text-gray-900">{filteredRooms.length}</span>
+              {' · '}
+            </>
+          ) : null}
+          Страница{' '}
+          <span className="tabular-nums font-black text-gray-900">{Math.min(page, totalPages)}</span> /{' '}
+          <span className="tabular-nums font-black text-gray-900">{totalPages}</span>
+          {' · '}
+          всего комнат:{' '}
+          <span className="tabular-nums font-black text-gray-900">{rooms.length}</span>
+        </p>
       </div>
 
-      {filteredRooms.map((room) => {
+      {paginatedRooms.map((room) => {
         const isExpanded = expandedRooms.has(room.id);
         const isTourEnded = room.tour.end_date 
           ? new Date(room.tour.end_date) < new Date()
@@ -430,12 +541,61 @@ export default function AwardAchievementsList({
           <button
             type="button"
             onClick={resetListFilters}
-            className="font-bold text-emerald-600 underline hover:text-emerald-700"
+            className="font-bold text-amber-700 underline hover:text-amber-800"
           >
             Сбросить фильтры
           </button>
         </div>
       )}
+
+      {filteredRooms.length > 0 && totalPages > 1 ? (
+        <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => setPage(Math.max(1, page - 1))}
+            disabled={page <= 1}
+            className="flex items-center gap-2 rounded-xl border-2 border-gray-200 px-5 py-2.5 text-base font-bold transition-all hover:border-amber-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <ChevronLeft className="h-5 w-5" />
+            Назад
+          </button>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum: number;
+              if (totalPages <= 5) pageNum = i + 1;
+              else if (page <= 3) pageNum = i + 1;
+              else if (page >= totalPages - 2) pageNum = totalPages - 4 + i;
+              else pageNum = page - 2 + i;
+              return (
+                <button
+                  key={pageNum}
+                  type="button"
+                  onClick={() => setPage(pageNum)}
+                  className={`h-11 w-11 rounded-xl text-base font-black transition-all ${
+                    page === pageNum
+                      ? 'bg-amber-500 text-white shadow-lg'
+                      : 'border-2 border-gray-200 bg-white text-gray-700 hover:border-amber-500'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+          </div>
+          <span className="px-2 text-base font-bold text-gray-700">
+            {Math.min(page, totalPages)} / {totalPages}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage(Math.min(totalPages, page + 1))}
+            disabled={page >= totalPages}
+            className="flex items-center gap-2 rounded-xl border-2 border-gray-200 px-5 py-2.5 text-base font-bold transition-all hover:border-amber-500 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            Вперёд
+            <ChevronRight className="h-5 w-5" />
+          </button>
+        </div>
+      ) : null}
 
       <IssueAchievementFormModal
         open={showAchievementModal && selectedParticipant != null}
