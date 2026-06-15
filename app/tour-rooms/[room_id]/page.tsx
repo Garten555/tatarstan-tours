@@ -32,11 +32,7 @@ export default async function TourRoomPage({ params }: TourRoomPageProps) {
       *,
       tour:tours(id, title, start_date, end_date, cover_image, city:cities(name)),
       session:tour_sessions!tour_rooms_tour_session_id_fkey(start_at, end_at),
-      guide:profiles!tour_rooms_guide_id_fkey(id, first_name, last_name, avatar_url, role, is_banned),
-      participants:tour_room_participants(
-        id,
-        user:profiles(id, first_name, last_name, avatar_url)
-      )
+      guide:profiles!tour_rooms_guide_id_fkey(id, first_name, last_name, avatar_url, role, is_banned)
     `)
     .eq('id', room_id)
     .single();

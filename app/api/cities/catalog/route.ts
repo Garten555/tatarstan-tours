@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { unstable_cache } from 'next/cache';
 import { createServiceClient } from '@/lib/supabase/server';
-import { fetchActiveCatalogSnapshot } from '@/lib/tours/active-catalog-listing';
+import { getCachedActiveCatalogSnapshot } from '@/lib/tours/catalog-cache';
 
 const getCatalogCityIds = unstable_cache(
   async () => {
-    const supabase = await createServiceClient();
-    const snapshot = await fetchActiveCatalogSnapshot(supabase);
+    const snapshot = await getCachedActiveCatalogSnapshot();
     return [...new Set(snapshot.rows.map((t) => t.city_id).filter(Boolean))] as string[];
   },
-  ['catalog-city-ids'],
-  { revalidate: 60 }
+  ['catalog-city-ids-v1'],
+  { revalidate: 45 }
 );
 
 /** Города, в которых есть хотя бы один активный тур в каталоге. */

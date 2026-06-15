@@ -23,7 +23,6 @@ import {
   filterUpcomingSessions,
   isTourVisibleInPublicCatalog,
 } from '@/lib/tours/tour-public-visibility';
-import { syncSessionCurrentParticipants } from '@/lib/tour/session-participants';
 import { formatDateTimeShortRu } from '@/lib/date/format-ru';
 import { isBookingDeparturePast } from '@/lib/bookings/booking-completion';
 import {
@@ -220,21 +219,6 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
     guide_id?: string | null;
   }[];
 
-  if (tourSessions.length > 0) {
-    await Promise.all(
-      tourSessions.map((s) => syncSessionCurrentParticipants(supabase, s.id))
-    );
-    const refreshed = await supabase
-      .from('tour_sessions')
-      .select('id, start_at, end_at, max_participants, current_participants, guide_id')
-      .eq('tour_id', t.id)
-      .eq('status', 'active')
-      .order('start_at', { ascending: true });
-    if (!refreshed.error && refreshed.data) {
-      tourSessions = refreshed.data as typeof tourSessions;
-    }
-  }
-
   /** Нет слотов в БД — показываем дату/места из строки тура и бронь без session_id (как раньше). */
   if (tourSessions.length === 0 && t.start_date) {
     const { count: sessionRowsCount, error: cntErr } = await supabase
@@ -321,7 +305,8 @@ export default async function TourPage({ params, searchParams }: TourPageProps) 
     .eq('tour_id', t.id)
     .eq('is_published', true)
     .eq('is_approved', true)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(15);
 
   const reviewItemsRaw = (reviewsData as any[]) || [];
   const reviewUserIds = reviewItemsRaw.map((review) => review.user_id);

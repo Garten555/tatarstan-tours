@@ -89,7 +89,8 @@ export async function GET(request: NextRequest) {
         `)
         .or(`and(sender_id.eq.${user1_id},recipient_id.eq.${user2_id}),and(sender_id.eq.${user2_id},recipient_id.eq.${user1_id})`)
         .is('deleted_at', null)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false })
+        .limit(100);
 
       if (error) {
         console.error('Ошибка загрузки сообщений:', error);
@@ -119,16 +120,19 @@ export async function GET(request: NextRequest) {
       }
 
       const readIdSet = new Set(unreadMessageIds.map((id: unknown) => String(id)));
-      const messagesForClient = (messages || []).map((msg: any) => {
-        if (readIdSet.has(String(msg.id))) {
-          return {
-            ...msg,
-            is_read: true,
-            read_at: readAtBatch,
-          };
-        }
-        return msg;
-      });
+      const messagesForClient = (messages || [])
+        .slice()
+        .reverse()
+        .map((msg: any) => {
+          if (readIdSet.has(String(msg.id))) {
+            return {
+              ...msg,
+              is_read: true,
+              read_at: readAtBatch,
+            };
+          }
+          return msg;
+        });
 
       // Сбрасываем счётчик непрочитанных в беседе (иначе бейдж в списке не сбрасывается)
       await serviceClient

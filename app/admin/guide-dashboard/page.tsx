@@ -1,6 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { getAdminViewer } from '@/lib/admin/get-admin-viewer';
 import Link from 'next/link';
 import { Calendar, Users, MessageSquare, MapPin, Clock } from 'lucide-react';
 import { loadGuideTourRooms } from '@/lib/admin/guide-tour-room-rows';
@@ -12,40 +12,27 @@ export const metadata = {
 };
 
 export default async function GuideDashboard() {
-  const supabase = await createServiceClient();
-  const authClient = await createClient();
-
-  // Проверяем авторизацию и роль
-  const { data: { user } } = await authClient.auth.getUser();
-  if (!user) {
+  const supabase = createServiceClient();
+  const viewer = await getAdminViewer();
+  if (!viewer) {
     redirect('/auth');
   }
 
-  const { data: profile } = await authClient
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-
-  if (profile?.role !== 'guide') {
+  if (viewer.role !== 'guide') {
     redirect('/admin');
   }
 
-  const rooms = await loadGuideTourRooms(supabase, { guideId: user.id });
+  const rooms = await loadGuideTourRooms(supabase, { guideId: viewer.userId });
 
   const activeRooms = rooms.filter((room) => roomTourLifecycle(room) === 'ongoing');
   const upcomingRooms = rooms.filter((room) => roomTourLifecycle(room) === 'upcoming');
   const completedRooms = rooms.filter((room) => roomTourLifecycle(room) === 'ended');
 
   const roomIds = rooms.map((r) => r.id);
-  let totalParticipants = 0;
-  if (roomIds.length > 0) {
-    const { count } = await supabase
-      .from('tour_room_participants')
-      .select('*', { count: 'exact', head: true })
-      .in('room_id', roomIds);
-    totalParticipants = count || 0;
-  }
+  const totalParticipants = rooms.reduce(
+    (sum, room) => sum + (room.participants_count ?? 0),
+    0
+  );
 
   // Получаем количество непрочитанных сообщений
   let unreadMessages = 0;
@@ -55,7 +42,7 @@ export default async function GuideDashboard() {
       .select('*', { count: 'exact', head: true })
       .in('room_id', roomIds)
       .eq('is_read', false)
-      .neq('user_id', user.id);
+      .neq('user_id', viewer.userId);
     unreadMessages = count || 0;
   }
 

@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { getAdminViewer } from '@/lib/admin/get-admin-viewer';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import AdminPusherSync from '@/components/admin/AdminPusherSync';
 import AdminBodyScrollLock from '@/components/admin/AdminBodyScrollLock';
@@ -12,27 +12,13 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const supabase = await createClient();
+  const viewer = await getAdminViewer();
 
-  // Проверяем авторизацию
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
+  if (!viewer) {
     redirect('/auth');
   }
 
-  // Получаем роль пользователя и аватар
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role, first_name, last_name, avatar_url')
-    .eq('id', user.id)
-    .single();
-
-  // Явно подстрахуем тип, если генерация типов БД вернула never
-  const typedProfile = (profile ?? null) as
-    | { role?: string | null; first_name?: string | null; last_name?: string | null; avatar_url?: string | null }
-    | null;
-  const userRole = typedProfile?.role || 'user';
+  const userRole = viewer.role;
 
   // Проверяем права доступа
   if (!ADMIN_ROLES.includes(userRole)) {
@@ -42,12 +28,12 @@ export default async function AdminLayout({
   return (
     <div className="admin-shell flex h-dvh min-h-0 overflow-hidden bg-gray-50">
       <AdminBodyScrollLock />
-      <AdminPusherSync userId={user.id} />
+      <AdminPusherSync userId={viewer.userId} />
       {/* Sidebar */}
       <AdminSidebar 
         userRole={userRole}
-        userName={`${typedProfile?.first_name ?? ''} ${typedProfile?.last_name ?? ''}`}
-        avatarUrl={typedProfile?.avatar_url || null}
+        userName={`${viewer.firstName} ${viewer.lastName}`.trim()}
+        avatarUrl={viewer.avatarUrl}
       />
 
       {/* Main content — отдельная прокрутка, не зависит от body.overflow */}

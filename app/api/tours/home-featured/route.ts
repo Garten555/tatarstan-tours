@@ -1,16 +1,12 @@
 import { NextResponse } from 'next/server';
 
-import { createServiceClient } from '@/lib/supabase/server';
-import {
-  fetchActiveCatalogSnapshot,
-  pickHomeFeaturedTours,
-} from '@/lib/tours/active-catalog-listing';
+import { getCachedActiveCatalogSnapshot } from '@/lib/tours/catalog-cache';
+import { pickHomeFeaturedTours } from '@/lib/tours/active-catalog-listing';
 
 /** Публичный JSON для блока «Популярные туры» (клиент + Pusher + таймер по start_at). */
 export async function GET() {
   try {
-    const supabase = createServiceClient();
-    const snapshot = await fetchActiveCatalogSnapshot(supabase);
+    const snapshot = await getCachedActiveCatalogSnapshot();
     const featured = pickHomeFeaturedTours(snapshot.rows);
 
     return NextResponse.json(
@@ -21,7 +17,7 @@ export async function GET() {
       },
       {
         headers: {
-          'Cache-Control': 'no-store, max-age=0',
+          'Cache-Control': 'public, s-maxage=45, stale-while-revalidate=120',
         },
       }
     );

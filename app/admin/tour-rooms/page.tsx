@@ -69,7 +69,6 @@ interface TourRoom {
   participants_count?: number;
 }
 
-const AUTO_CLEANUP_STORAGE_KEY = 'admin-tour-rooms-auto-cleanup-ts';
 const ROOMS_PER_PAGE = 10;
 
 function tourPublicViewHref(room: TourRoom): string {
@@ -157,35 +156,7 @@ export default function TourRoomsPage() {
   }, [guideFilter, participantsFilter, filters.setPage]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const runAutoCleanup = async () => {
-      const last = Number(sessionStorage.getItem(AUTO_CLEANUP_STORAGE_KEY) || 0);
-      if (Date.now() - last < 60 * 60 * 1000) return;
-
-      try {
-        const res = await fetch('/api/admin/cleanup/tour-rooms', { method: 'POST' });
-        const data = await res.json().catch(() => ({}));
-        sessionStorage.setItem(AUTO_CLEANUP_STORAGE_KEY, String(Date.now()));
-        if (cancelled || !res.ok) return;
-        const deleted = (data as { deleted?: number }).deleted ?? 0;
-        if (deleted > 0) {
-          await loadRooms({ silent: true });
-          toast.success(`Автоочистка: удалено комнат — ${deleted}`);
-        }
-      } catch {
-        /* фоновая задача — без шума */
-      }
-    };
-
-    void (async () => {
-      await loadRooms();
-      if (!cancelled) await runAutoCleanup();
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    void loadRooms();
   }, []);
 
   useBodyScrollLock(showUserSelect || showCreateRoom);

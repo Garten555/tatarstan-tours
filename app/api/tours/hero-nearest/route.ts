@@ -1,16 +1,12 @@
 import { NextResponse } from 'next/server';
 
-import { createServiceClient } from '@/lib/supabase/server';
-import {
-  fetchActiveCatalogSnapshot,
-  pickHeroNearestTours,
-} from '@/lib/tours/active-catalog-listing';
+import { getCachedActiveCatalogSnapshot } from '@/lib/tours/catalog-cache';
+import { pickHeroNearestTours } from '@/lib/tours/active-catalog-listing';
 
 /** Публичный JSON для hero «Ближайший выезд» (клиент + Pusher refresh). */
 export async function GET() {
   try {
-    const supabase = createServiceClient();
-    const snapshot = await fetchActiveCatalogSnapshot(supabase);
+    const snapshot = await getCachedActiveCatalogSnapshot();
     const tours = pickHeroNearestTours(snapshot.rows, 5, {
       sessionsByTourId: snapshot.sessionsByTourId,
     });
@@ -19,11 +15,10 @@ export async function GET() {
       { tours, nextVisibilityChangeAt: snapshot.nextVisibilityChangeAt },
       {
         headers: {
-          'Cache-Control': 'no-store, max-age=0',
+          'Cache-Control': 'public, s-maxage=45, stale-while-revalidate=120',
         },
       }
-    );
-  } catch (error) {
+    );  } catch (error) {
     console.error('GET /api/tours/hero-nearest:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }

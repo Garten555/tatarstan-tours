@@ -73,9 +73,11 @@ export async function GET(request: NextRequest) {
           first_name,
           last_name,
           email
-        )
+        ),
+        participants:tour_room_participants(count)
       `)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(500);
 
     if (roomsError) {
       console.error('Ошибка получения комнат:', roomsError);
@@ -85,39 +87,27 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Оптимизация: получаем все счетчики участников одним запросом
     interface RoomData {
       id: string;
       [key: string]: unknown;
-    }
-    interface ParticipantData {
-      room_id: string;
-    }
-    const roomIds = (rooms || []).map((r: RoomData) => r.id);
-    let participantsCounts: Record<string, number> = {};
-    
-    if (roomIds.length > 0) {
-      // Получаем количество участников для всех комнат одним запросом
-      const { data: participantsData } = await serviceClient
-        .from('tour_room_participants')
-        .select('room_id')
-        .in('room_id', roomIds);
-      
-      // Подсчитываем в памяти
-      participantsCounts = (participantsData || []).reduce((acc: Record<string, number>, p: ParticipantData) => {
-        acc[p.room_id] = (acc[p.room_id] || 0) + 1;
-        return acc;
-      }, {});
     }
 
     // Добавляем счетчики к комнатам
     const roomsWithCounts = (rooms || []).map((room: RoomData) => {
       const rawSession = (room as { session?: unknown }).session;
       const session = Array.isArray(rawSession) ? rawSession[0] ?? null : rawSession;
+      const rawParticipants = (room as { participants?: { count?: unknown }[] | null }).participants;
+      let participants_count = 0;
+      if (Array.isArray(rawParticipants) && rawParticipants.length > 0) {
+        const n = rawParticipants[0]?.count;
+        participants_count =
+          typeof n === 'number' ? n : typeof n === 'string' ? parseInt(n, 10) || 0 : 0;
+      }
+      const { participants: _drop, ...rest } = room as RoomData & { participants?: unknown };
       return {
-        ...room,
+        ...rest,
         session,
-        participants_count: participantsCounts[room.id] || 0,
+        participants_count,
       };
     });
 

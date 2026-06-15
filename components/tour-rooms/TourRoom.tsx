@@ -1,11 +1,10 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { TourRoom as TourRoomType } from '@/types';
 import { TourRoomChat } from './TourRoomChat';
-import { TourRoomGallery } from './TourRoomGallery';
-import { TourRoomParticipants } from './TourRoomParticipants';
 import { MessageSquare, Image, Users, ArrowLeft, Loader2, Flag, Shield } from 'lucide-react';
 import ReportReasonModal from '@/components/common/ReportReasonModal';
 import BanUserButton from '@/components/admin/BanUserButton';
@@ -14,6 +13,25 @@ import { escapeHtml } from '@/lib/utils/sanitize';
 import toast from 'react-hot-toast';
 import { formatDayMonthYearRu } from '@/lib/date/format-ru';
 import TourRoomViewingHeartbeat from '@/components/tour-rooms/TourRoomViewingHeartbeat';
+
+const TourRoomGallery = dynamic(() => import('./TourRoomGallery').then((m) => m.TourRoomGallery), {
+  loading: () => (
+    <div className="flex flex-1 items-center justify-center p-8 text-sm text-gray-500">
+      Загрузка медиа…
+    </div>
+  ),
+});
+
+const TourRoomParticipants = dynamic(
+  () => import('./TourRoomParticipants').then((m) => m.TourRoomParticipants),
+  {
+    loading: () => (
+      <div className="flex flex-1 items-center justify-center p-8 text-sm text-gray-500">
+        Загрузка участников…
+      </div>
+    ),
+  }
+);
 
 interface TourRoomProps {
   roomId: string;

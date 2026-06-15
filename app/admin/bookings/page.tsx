@@ -1,9 +1,8 @@
 import { redirect } from 'next/navigation';
-import { createClient, createServiceClient } from '@/lib/supabase/server';
+import { createServiceClient } from '@/lib/supabase/server';
 import BookingsList from '@/components/admin/BookingsList';
 import { Calendar } from 'lucide-react';
-import { completeFinishedActiveTours } from '@/lib/tours/tour-lifecycle-status';
-import { syncPastBookingsToCompleted } from '@/lib/bookings/complete-past-bookings';
+import { getAdminViewer } from '@/lib/admin/get-admin-viewer';
 
 export const metadata = {
   title: 'Бронирования - Админ панель',
@@ -11,33 +10,16 @@ export const metadata = {
 };
 
 export default async function BookingsPage() {
-  const supabase = await createClient();
-  const serviceClient = await createServiceClient();
-
-  // Проверяем авторизацию
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  const viewer = await getAdminViewer();
+  if (!viewer) {
     redirect('/auth/login');
   }
 
-  // Проверяем права (tour_admin или super_admin)
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-
-  const typedProfile = (profile ?? null) as { role?: string | null } | null;
-
-  if (typedProfile?.role !== 'tour_admin' && typedProfile?.role !== 'super_admin') {
+  if (viewer.role !== 'tour_admin' && viewer.role !== 'super_admin') {
     redirect('/admin');
   }
 
-  await completeFinishedActiveTours(serviceClient);
-  await syncPastBookingsToCompleted(serviceClient);
+  const serviceClient = createServiceClient();
 
   const { data: bookings, error } = await serviceClient
     .from('bookings')
@@ -66,7 +48,8 @@ export default async function BookingsPage() {
         price_per_person
       )
     `)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(500);
 
   return (
     <div>

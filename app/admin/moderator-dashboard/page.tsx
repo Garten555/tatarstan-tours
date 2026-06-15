@@ -1,6 +1,6 @@
 import { createServiceClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { getAdminViewer } from '@/lib/admin/get-admin-viewer';
 import Link from 'next/link';
 import { MessageSquare, Users, AlertCircle, Shield, Flag, UserRound } from 'lucide-react';
 
@@ -10,70 +10,59 @@ export const metadata = {
 };
 
 export default async function ModeratorDashboard() {
-  const supabase = await createServiceClient();
-  const authClient = await createClient();
-
-  // Проверяем авторизацию и роль
-  const { data: { user } } = await authClient.auth.getUser();
-  if (!user) {
+  const supabase = createServiceClient();
+  const viewer = await getAdminViewer();
+  if (!viewer) {
     redirect('/auth');
   }
 
-  const { data: profile } = await authClient
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-
-  if (profile?.role !== 'support_admin') {
+  if (viewer.role !== 'support_admin') {
     redirect('/admin');
   }
 
-  // Получаем статистику чата поддержки
-  const { count: totalSessions } = await supabase
-    .from('chat_messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('is_ai', false);
-
-  // Получаем количество активных сессий (сессии с сообщениями за последние 24 часа)
+  // Получаем статистику параллельно
   const yesterday = new Date();
   yesterday.setHours(yesterday.getHours() - 24);
-  const { count: activeSessions } = await supabase
-    .from('chat_messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('is_ai', false)
-    .gte('created_at', yesterday.toISOString());
 
-  // Получаем количество непрочитанных сообщений от пользователей
-  const { count: unreadMessages } = await supabase
-    .from('chat_messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('is_ai', false)
-    .eq('is_support', false)
-    .eq('is_read', false);
-
-  // Получаем количество заблокированных пользователей
-  const { count: bannedUsers } = await supabase
-    .from('profiles')
-    .select('*', { count: 'exact', head: true })
-    .eq('is_banned', true);
-
-  // Получаем количество отзывов на модерации
-  const { count: pendingReviews } = await supabase
-    .from('reviews')
-    .select('*', { count: 'exact', head: true })
-    .eq('is_approved', false);
-
-  // Получаем количество комнат туров
-  const { count: totalRooms } = await supabase
-    .from('tour_rooms')
-    .select('*', { count: 'exact', head: true });
-
-  const { count: reportedTourMessages } = await supabase
-    .from('tour_room_messages')
-    .select('*', { count: 'exact', head: true })
-    .eq('is_reported', true)
-    .is('deleted_at', null);
+  const [
+    { count: totalSessions },
+    { count: activeSessions },
+    { count: unreadMessages },
+    { count: bannedUsers },
+    { count: pendingReviews },
+    { count: totalRooms },
+    { count: reportedTourMessages },
+  ] = await Promise.all([
+    supabase
+      .from('support_sessions')
+      .select('*', { count: 'exact', head: true }),
+    supabase
+      .from('support_sessions')
+      .select('*', { count: 'exact', head: true })
+      .gte('updated_at', yesterday.toISOString()),
+    supabase
+      .from('chat_messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_ai', false)
+      .eq('is_support', false)
+      .eq('is_read', false),
+    supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_banned', true),
+    supabase
+      .from('reviews')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_approved', false),
+    supabase
+      .from('tour_rooms')
+      .select('*', { count: 'exact', head: true }),
+    supabase
+      .from('tour_room_messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_reported', true)
+      .is('deleted_at', null),
+  ]);
 
   const stats = {
     totalSessions: totalSessions || 0,

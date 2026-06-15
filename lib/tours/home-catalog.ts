@@ -1,8 +1,7 @@
 import { cache } from 'react';
 
-import { createServiceClient } from '@/lib/supabase/server';
+import { getCachedActiveCatalogSnapshot } from '@/lib/tours/catalog-cache';
 import {
-  fetchActiveCatalogSnapshot,
   pickHeroNearestTours,
   pickHomeFeaturedTours,
   type HeroPopularTour,
@@ -18,8 +17,7 @@ export type HomeCatalogData = {
 
 /** Один запрос каталога на главную (React cache + ISR на странице). */
 export const getHomeCatalogData = cache(async (): Promise<HomeCatalogData> => {
-  const supabase = createServiceClient();
-  const snapshot = await fetchActiveCatalogSnapshot(supabase);
+  const snapshot = await getCachedActiveCatalogSnapshot();
   const featured = pickHomeFeaturedTours(snapshot.rows);
 
   return {

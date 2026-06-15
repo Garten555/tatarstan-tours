@@ -173,7 +173,7 @@ export const config = {
     '/messenger/:path*',
     '/banned',
     // Исключаем публичные маршруты
-    '/((?!api|_next/|favicon.ico|auth|terms|privacy|contacts|about|tours|$).*)',
+    '/((?!api|_next/|favicon.ico|auth|terms|privacy|contacts|about|tours|my-rooms|tour-rooms|feed|booking|passport|my-blog|my-diaries|friends|users|$).*)',
   ],
 };
 

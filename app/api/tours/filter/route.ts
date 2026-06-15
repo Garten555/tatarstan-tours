@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 import { sanitizeText } from '@/lib/utils/sanitize';
 import { CATALOG_TOURS_PER_PAGE } from '@/lib/tours/catalog-sort';
-import { fetchActiveCatalogSnapshot } from '@/lib/tours/active-catalog-listing';
+import { getCachedActiveCatalogSnapshot } from '@/lib/tours/catalog-cache';
 import { filterCatalogSnapshotRows } from '@/lib/tours/filter-catalog-rows';
-
-export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
@@ -45,7 +43,7 @@ export async function GET(request: NextRequest) {
       cityIdsMatchingSearch = (cities ?? []).map((c) => (c as { id: string }).id);
     }
 
-    const snapshot = await fetchActiveCatalogSnapshot(supabase);
+    const snapshot = await getCachedActiveCatalogSnapshot();
     const catalogTours = filterCatalogSnapshotRows(snapshot.rows, {
       search,
       tourType,

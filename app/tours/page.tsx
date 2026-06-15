@@ -164,7 +164,7 @@ function ToursPageContent() {
     const load = async () => {
       setCatalogCitiesLoading(true);
       try {
-        const response = await fetch('/api/cities/catalog', { cache: 'no-store' });
+        const response = await fetch('/api/cities/catalog');
         const data = await response.json();
         if (!cancelled && response.ok) {
           setCatalogCities(data.cities || []);
