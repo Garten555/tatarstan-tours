@@ -155,6 +155,9 @@ export interface TourRoom {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  session_start_at?: string | null;
+  session_end_at?: string | null;
+  participants_count?: number;
   tour?: Tour;
   guide?: Profile;
   participants?: TourRoomParticipant[];

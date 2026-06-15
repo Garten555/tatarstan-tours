@@ -149,7 +149,17 @@ export function TourRoom({
 
   const formatDate = (d: string) => formatDayMonthYearRu(d);
 
-  const participantCount = Array.isArray((room as any).participants) ? (room as any).participants.length : 0;
+  const displayStart =
+    room.session_start_at ?? room.tour?.start_date ?? null;
+  const displayEnd =
+    room.session_end_at ?? room.tour?.end_date ?? null;
+
+  const participantCount =
+    typeof room.participants_count === 'number'
+      ? room.participants_count
+      : Array.isArray(room.participants)
+        ? room.participants.length
+        : 0;
 
   const effectiveGuideId = guideUserId ?? room.guide_id ?? null;
 
@@ -164,9 +174,9 @@ export function TourRoom({
 
   const subtitleParts: string[] = [];
   if (room.tour?.city?.name) subtitleParts.push(escapeHtml(room.tour.city.name));
-  if (room.tour) {
+  if (displayStart) {
     subtitleParts.push(
-      `${formatDate(room.tour.start_date)}${room.tour.end_date ? ` — ${formatDate(room.tour.end_date)}` : ''}`
+      `${formatDate(displayStart)}${displayEnd ? ` — ${formatDate(displayEnd)}` : ''}`
     );
   }
   if (participantCount > 0) subtitleParts.push(`${participantCount} в группе`);
@@ -290,7 +300,7 @@ export function TourRoom({
               <div className="mx-auto w-full max-w-4xl flex-1 p-4">
                 <TourRoomGallery
                   roomId={room.id}
-                  tourEndDate={room.tour?.end_date || null}
+                  tourEndDate={displayEnd}
                   viewerUserId={viewerUserId}
                   canModerateGallery={galleryCanModerate}
                 />

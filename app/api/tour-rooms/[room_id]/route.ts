@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { requireTourRoomAccess } from '@/lib/tour-rooms/room-access';
+import { loadTourRoomDisplayFields } from '@/lib/tour-rooms/room-display';
 
 // GET /api/tour-rooms/[room_id]
 // Получить комнату по ID
@@ -33,7 +34,8 @@ export async function GET(
       .from('tour_rooms')
       .select(`
         *,
-        tour:tours(id, title, start_date, end_date),
+        tour:tours(id, title, start_date, end_date, cover_image, city:cities(name)),
+        session:tour_sessions!tour_rooms_tour_session_id_fkey(start_at, end_at),
         guide:profiles!tour_rooms_guide_id_fkey(id, first_name, last_name, avatar_url),
         participants:tour_room_participants(
           id,
@@ -69,7 +71,16 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ success: true, room });
+    const displayFields = await loadTourRoomDisplayFields(
+      serviceClient,
+      room_id,
+      (room as { session?: unknown }).session
+    );
+
+    return NextResponse.json({
+      success: true,
+      room: { ...room, ...displayFields },
+    });
   } catch (error) {
     console.error('Ошибка получения комнаты:', error);
     return NextResponse.json(

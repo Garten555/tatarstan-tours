@@ -3,6 +3,7 @@ import { TourRoom } from '@/components/tour-rooms/TourRoom';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { getTourRoomAccess } from '@/lib/tour-rooms/room-access';
+import { loadTourRoomDisplayFields } from '@/lib/tour-rooms/room-display';
 
 interface TourRoomPageProps {
   params: Promise<{ room_id: string }>;
@@ -30,6 +31,7 @@ export default async function TourRoomPage({ params }: TourRoomPageProps) {
     .select(`
       *,
       tour:tours(id, title, start_date, end_date, cover_image, city:cities(name)),
+      session:tour_sessions!tour_rooms_tour_session_id_fkey(start_at, end_at),
       guide:profiles!tour_rooms_guide_id_fkey(id, first_name, last_name, avatar_url, role, is_banned),
       participants:tour_room_participants(
         id,
@@ -75,10 +77,21 @@ export default async function TourRoomPage({ params }: TourRoomPageProps) {
     .guide;
   const guideProfile = Array.isArray(guideRel) ? guideRel[0] : guideRel;
 
+  const displayFields = await loadTourRoomDisplayFields(
+    serviceClient,
+    room_id,
+    (room as { session?: unknown }).session
+  );
+
+  const enrichedRoom = {
+    ...room,
+    ...displayFields,
+  };
+
   return (
     <TourRoom
       roomId={room_id}
-      initialRoom={room}
+      initialRoom={enrichedRoom}
       viewerUserId={user.id}
       viewerRole={viewerRole}
       guideUserId={(room as { guide_id?: string }).guide_id ?? guideProfile?.id}
