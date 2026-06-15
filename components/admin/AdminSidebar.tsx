@@ -71,6 +71,12 @@ export default function AdminSidebar({ userRole, userName, avatarUrl }: AdminSid
       roles: ['guide'],
     },
     {
+      name: 'Комнаты туров',
+      href: '/admin/guide-dashboard#rooms',
+      icon: DoorOpen,
+      roles: ['guide'],
+    },
+    {
       name: 'Расписание',
       href: '/admin/schedule',
       icon: CalendarRange,

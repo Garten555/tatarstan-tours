@@ -33,6 +33,7 @@ export default async function MyToursPage() {
   const rooms = await loadGuideTourRooms(serviceClient, {
     guideId: user.id,
     resolveCanonical: false,
+    skipOrphanAssign: true,
   });
 
   return (

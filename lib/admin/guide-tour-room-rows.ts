@@ -138,7 +138,12 @@ export function mapGuideTourRooms(rawRows: RawGuideRoomRow[] | null | undefined)
 
 export async function loadGuideTourRooms(
   serviceClient: SupabaseClient,
-  options: { guideId?: string; limit?: number; resolveCanonical?: boolean } = {}
+  options: {
+    guideId?: string;
+    limit?: number;
+    resolveCanonical?: boolean;
+    skipOrphanAssign?: boolean;
+  } = {}
 ): Promise<MappedGuideTourRoom[]> {
   let query = serviceClient
     .from('tour_rooms')
@@ -161,8 +166,10 @@ export async function loadGuideTourRooms(
 
   const mapped = mapGuideTourRooms(data as RawGuideRoomRow[]);
   const enriched = await enrichRoomsWithSessionDates(serviceClient, mapped);
-  const backfilled = await assignOrphanRoomsToGuideSessions(serviceClient, enriched);
-  const deduped = dedupeAwardRooms(backfilled);
+  const withSessions = options.skipOrphanAssign
+    ? enriched
+    : await assignOrphanRoomsToGuideSessions(serviceClient, enriched);
+  const deduped = dedupeAwardRooms(withSessions);
 
   if (options.resolveCanonical) {
     return resolveCanonicalGuideRooms(serviceClient, deduped);
