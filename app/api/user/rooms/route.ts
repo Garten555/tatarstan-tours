@@ -2,11 +2,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { loadGuideTourRooms } from '@/lib/admin/guide-tour-room-rows';
+import { parseEmbeddedSession } from '@/lib/achievements/dedupe-award-rooms';
 
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const serviceClient = await createServiceClient();
+    const serviceClient = createServiceClient();
 
     const {
       data: { user },
@@ -32,9 +33,11 @@ export async function GET(request: NextRequest) {
             .select(`
               id,
               tour_id,
+              tour_session_id,
               guide_id,
               is_active,
               created_at,
+              session:tour_sessions!tour_rooms_tour_session_id_fkey(start_at, end_at),
               tour:tours(id, title, slug, start_date, end_date, cover_image),
               guide:profiles!tour_rooms_guide_id_fkey(id, first_name, last_name, avatar_url)
             `)
@@ -83,10 +86,15 @@ export async function GET(request: NextRequest) {
     const roomsMap = new Map<string, Record<string, unknown>>();
 
     for (const pr of participantRooms) {
-      const row = pr as { room?: Record<string, unknown> & { id?: string } };
+      const row = pr as { room?: Record<string, unknown> & { id?: string; session?: unknown } };
       if (row?.room?.id) {
+        const sessionEmbed = parseEmbeddedSession(
+          row.room.session as Parameters<typeof parseEmbeddedSession>[0]
+        );
         roomsMap.set(String(row.room.id), {
           ...row.room,
+          session_start_at: sessionEmbed.start_at,
+          session_end_at: sessionEmbed.end_at,
           role: 'participant',
         });
       }
@@ -138,6 +146,7 @@ export async function GET(request: NextRequest) {
         const id = String(room.id);
         const tour = room.tour as Record<string, unknown> | null | undefined;
         const sessionStart = room.session_start_at as string | null | undefined;
+        const sessionEnd = room.session_end_at as string | null | undefined;
         const displayStart =
           sessionStart ||
           (tour?.start_date ? String(tour.start_date) : null);
@@ -161,6 +170,7 @@ export async function GET(request: NextRequest) {
               ? room.participants_count
               : participantsCounts[id] || 0,
           session_start_at: sessionStart ?? null,
+          session_end_at: sessionEnd ?? null,
         };
       });
 
