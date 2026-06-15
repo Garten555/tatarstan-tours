@@ -22,9 +22,12 @@ import type { GuideIssueAchievement } from '@/lib/achievements/guide-issue-metad
 interface Room {
   id: string;
   tour_id: string;
+  tour_session_id?: string | null;
+  guide_id?: string | null;
   is_active: boolean;
   created_at: string;
-  /** Число участников комнаты (с сервера; до раскрытия списка) */
+  session_start_at?: string | null;
+  session_end_at?: string | null;
   participants_count: number;
   tour: {
     id: string;
@@ -49,6 +52,7 @@ interface Participant {
     last_name: string | null;
     avatar_url: string | null;
     email: string | null;
+    role?: string | null;
   };
   booking?: {
     id: string;
@@ -61,6 +65,19 @@ interface AwardAchievementsListProps {
   rooms: Room[];
   /** super_admin / tour_admin видят все комнаты */
   adminCanBrowseAllRooms?: boolean;
+  viewerUserId?: string;
+  viewerRole?: string;
+}
+
+function participantRoleLabel(role: string | null | undefined): string | null {
+  if (!role) return null;
+  const labels: Record<string, string> = {
+    super_admin: 'Супер админ',
+    tour_admin: 'Админ туров',
+    support_admin: 'Модератор',
+    guide: 'Гид',
+  };
+  return labels[role] ?? null;
 }
 
 type TourLifecycle = 'ongoing' | 'upcoming' | 'ended';
@@ -114,9 +131,12 @@ function tourLifecycle(room: Room): TourLifecycle {
 export default function AwardAchievementsList({
   rooms,
   adminCanBrowseAllRooms = false,
+  viewerUserId,
+  viewerRole,
 }: AwardAchievementsListProps) {
   const [expandedRooms, setExpandedRooms] = useState<Set<string>>(new Set());
   const [participants, setParticipants] = useState<Record<string, Participant[]>>({});
+  const [roomGuideIds, setRoomGuideIds] = useState<Record<string, string | null>>({});
   const [loadingParticipants, setLoadingParticipants] = useState<Record<string, boolean>>({});
   const [availableAchievements, setAvailableAchievements] = useState<Record<string, GuideIssueAchievement[]>>({});
   const [selectedParticipant, setSelectedParticipant] = useState<{ roomId: string; userId: string } | null>(null);
@@ -132,8 +152,8 @@ export default function AwardAchievementsList({
     const q = filterSearch.trim().toLowerCase();
     return rooms.filter((room) => {
       if (lifecycleFilter !== 'all' && tourLifecycle(room) !== lifecycleFilter) return false;
-      if (dateFilter && tourStartDateKey(room.tour.start_date) !== dateFilter) return false;
-      else if (monthFilter && tourStartMonthKey(room.tour.start_date) !== monthFilter) return false;
+      if (dateFilter && tourStartDateKey(room.session_start_at ?? room.tour.start_date) !== dateFilter) return false;
+      else if (monthFilter && tourStartMonthKey(room.session_start_at ?? room.tour.start_date) !== monthFilter) return false;
       if (!q) return true;
       const title = room.tour.title.toLowerCase();
       const city = (room.tour.city?.name ?? '').toLowerCase();
@@ -204,6 +224,10 @@ export default function AwardAchievementsList({
       
       if (data.success) {
         setParticipants(prev => ({ ...prev, [roomId]: data.participants || [] }));
+        setRoomGuideIds(prev => ({
+          ...prev,
+          [roomId]: typeof data.guide_id === 'string' ? data.guide_id : null,
+        }));
       } else {
         toast.error('Не удалось загрузить участников');
       }
@@ -460,9 +484,23 @@ export default function AwardAchievementsList({
                   <div className="flex flex-wrap items-center gap-6 text-base text-gray-700">
                     <div className="flex items-center gap-2">
                       <Calendar className="w-5 h-5 text-emerald-600" />
-                      <span className="font-semibold">{formatDate(room.tour.start_date)}</span>
-                      {room.tour.end_date && (
-                        <span className="text-gray-500"> - {formatDate(room.tour.end_date)}</span>
+                      {room.session_start_at ? (
+                        <>
+                          <span className="font-semibold">{formatDate(room.session_start_at)}</span>
+                          {room.session_end_at && (
+                            <span className="text-gray-500"> - {formatDate(room.session_end_at)}</span>
+                          )}
+                          <span className="rounded-lg bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-800">
+                            Выезд
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-semibold">{formatDate(room.tour.start_date)}</span>
+                          {room.tour.end_date && (
+                            <span className="text-gray-500"> - {formatDate(room.tour.end_date)}</span>
+                          )}
+                        </>
                       )}
                     </div>
                     {room.tour.city && (
@@ -522,9 +560,26 @@ export default function AwardAchievementsList({
                             : participant.user.email || 'Пользователь')
                         : 'Пользователь';
 
+                      const guideId =
+                        roomGuideIds[room.id] ?? room.guide_id ?? null;
+                      const isRoomGuide = Boolean(
+                        guideId && participant.user_id === guideId
+                      );
+                      const profileRole = participant.user?.role ?? null;
+                      const roleLabel = participantRoleLabel(profileRole);
+                      const isViewerSelf =
+                        Boolean(viewerUserId) && participant.user_id === viewerUserId;
+                      const showAdminBadge =
+                        isViewerSelf &&
+                        (adminCanBrowseAllRooms ||
+                          profileRole === 'super_admin' ||
+                          profileRole === 'tour_admin' ||
+                          viewerRole === 'super_admin' ||
+                          viewerRole === 'tour_admin');
+
                       return (
                         <div
-                          key={participant.id}
+                          key={`${room.id}-${participant.user_id}`}
                           className="flex items-center gap-4 p-5 bg-white rounded-xl border-2 border-gray-200 hover:border-amber-400 hover:shadow-lg transition-all duration-200"
                         >
                           {/* Аватар */}
@@ -544,10 +599,25 @@ export default function AwardAchievementsList({
 
                           {/* Информация */}
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
                               <span className="text-lg font-black text-gray-900 truncate">
                                 {fullName}
                               </span>
+                              {isRoomGuide ? (
+                                <span className="shrink-0 rounded-lg bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800">
+                                  Гид
+                                </span>
+                              ) : null}
+                              {showAdminBadge && roleLabel ? (
+                                <span className="shrink-0 rounded-lg bg-red-100 px-2 py-0.5 text-xs font-bold text-red-800">
+                                  {roleLabel}
+                                </span>
+                              ) : null}
+                              {!showAdminBadge && roleLabel && profileRole === 'guide' && !isRoomGuide ? (
+                                <span className="shrink-0 rounded-lg bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">
+                                  {roleLabel}
+                                </span>
+                              ) : null}
                             </div>
                             {participant.user?.email && (
                               <div className="text-base text-gray-600 truncate">

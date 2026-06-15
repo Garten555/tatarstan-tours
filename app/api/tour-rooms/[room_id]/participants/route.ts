@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient, createServiceClient } from '@/lib/supabase/server';
 import { syncGuideRoomParticipant } from '@/lib/tour-rooms/sync-guide-participant';
 import { canBypassRoomParticipantCheck } from '@/lib/achievements/offline-issue-access';
+import { dedupeParticipantsByUserId } from '@/lib/tour-rooms/dedupe-participants';
 
 // GET /api/tour-rooms/[room_id]/participants
 // Получить список участников
@@ -74,7 +75,7 @@ export async function GET(
         user_id,
         booking_id,
         joined_at,
-        user:profiles(id, first_name, last_name, avatar_url, email),
+        user:profiles(id, first_name, last_name, avatar_url, email, role),
         booking:bookings(id, num_people, status)
       `)
       .eq('room_id', room_id)
@@ -89,7 +90,7 @@ export async function GET(
       );
     }
 
-    let participantsList = participants || [];
+    let participantsList = dedupeParticipantsByUserId(participants || []);
 
     if (room?.guide_id) {
       const guideAlreadyListed = participantsList.some(
@@ -112,7 +113,7 @@ export async function GET(
             user_id,
             booking_id,
             joined_at,
-            user:profiles(id, first_name, last_name, avatar_url, email),
+            user:profiles(id, first_name, last_name, avatar_url, email, role),
             booking:bookings(id, num_people, status)
           `)
           .eq('room_id', room_id)
@@ -120,7 +121,7 @@ export async function GET(
           .limit(100);
 
         if (refetched) {
-          participantsList = refetched;
+          participantsList = dedupeParticipantsByUserId(refetched);
         }
       }
     }
@@ -131,7 +132,7 @@ export async function GET(
     ) {
       const { data: selfProfile } = await serviceClient
         .from('profiles')
-        .select('id, first_name, last_name, avatar_url, email')
+        .select('id, first_name, last_name, avatar_url, email, role')
         .eq('id', user.id)
         .maybeSingle();
 
@@ -145,14 +146,20 @@ export async function GET(
           user: selfProfile,
           booking: null,
         };
-        participantsList = [selfRow, ...participantsList] as typeof participantsList;
+        participantsList = dedupeParticipantsByUserId([
+          selfRow,
+          ...participantsList,
+        ] as typeof participantsList);
       }
+    } else {
+      participantsList = dedupeParticipantsByUserId(participantsList);
     }
 
     return NextResponse.json({
       success: true,
       participants: participantsList,
       guide_id: room?.guide_id || null,
+      viewer_role: profile?.role ?? null,
     });
   } catch (error) {
     console.error('Ошибка получения участников:', error);
